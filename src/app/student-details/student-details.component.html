@@ -1,0 +1,218 @@
+<div class="student-details">
+    <div class="container-fluid">
+      <!-- Back Button -->
+      <div class="row mb-4">
+        <div class="col">
+          <button class="btn btn-outline-secondary" (click)="goBack()">
+            <i class="bi bi-arrow-right me-1"></i>
+            العودة للقائمة
+          </button>
+        </div>
+      </div>
+  
+      <!-- Loading State -->
+      <div *ngIf="loading" class="text-center py-5">
+        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+          <span class="visually-hidden">جاري التحميل...</span>
+        </div>
+        <p class="mt-3 text-muted">جاري تحميل بيانات الطالب...</p>
+      </div>
+  
+      <!-- Student Details -->
+      <div *ngIf="!loading && student" class="row">
+        <!-- Student Info Card -->
+        <div class="col-lg-4 mb-4">
+          <div class="card student-profile-card">
+            <div class="card-body text-center">
+              <div class="avatar-lg bg-primary text-white rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center">
+                {{ student.name.charAt(0) }}
+              </div>
+              <h4 class="card-title">{{ student.name }}</h4>
+              <p class="text-muted">الرقم الجامعي: {{ student.studentId }}</p>
+              
+              <div class="student-info">
+                <div class="info-item">
+                  <i class="bi bi-book me-2"></i>
+                  <span>المستوى: {{ student.academicYear }}</span>
+                </div>
+                <div class="info-item" *ngIf="student.parentName">
+                  <i class="bi bi-person me-2"></i>
+                  <span>ولي الأمر: {{ student.parentName }}</span>
+                </div>
+                <div class="info-item" *ngIf="student.parentPhone">
+                  <i class="bi bi-phone me-2"></i>
+                  <span>هاتف ولي الأمر: {{ student.parentPhone }}</span>
+                </div>
+                <div class="info-item" *ngIf="student.birthDate">
+                  <i class="bi bi-calendar me-2"></i>
+                  <span>العمر: {{ calculateAge(student.birthDate) }} سنة</span>
+                </div>
+                <div class="info-item">
+                  <i class="bi bi-calendar-check me-2"></i>
+                  <span>تاريخ التسجيل: {{ student.registrationDate | date:'yyyy/MM/dd' }}</span>
+                </div>
+              </div>
+  
+              <div class="status-badges mt-4">
+                <span [class]="student.hasPaidRegistration ? 'badge bg-success' : 'badge bg-danger'">
+                  {{ student.hasPaidRegistration ? 'رسوم مدفوعة' : 'رسوم غير مدفوعة' }}
+                </span>
+                <span [class]="student.status === 'active' ? 'badge bg-success' : 'badge bg-secondary'" class="ms-2">
+                  {{ student.status === 'active' ? 'نشط' : 'غير نشط' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+  
+        <!-- Details Tabs -->
+        <div class="col-lg-8">
+          <div class="card">
+            <div class="card-header">
+              <ul class="nav nav-tabs card-header-tabs">
+                <li class="nav-item">
+                  <a class="nav-link" [class.active]="activeTab === 'info'" 
+                     (click)="setActiveTab('info')">المعلومات الأساسية</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" [class.active]="activeTab === 'classes'" 
+                     (click)="setActiveTab('classes')">الحصص المسجلة</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" [class.active]="activeTab === 'payments'" 
+                     (click)="setActiveTab('payments')">سجل المدفوعات</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" [class.active]="activeTab === 'attendance'" 
+                     (click)="setActiveTab('attendance')">سجل الحضور</a>
+                </li>
+              </ul>
+            </div>
+  
+            <div class="card-body">
+              <!-- Basic Info Tab -->
+              <div *ngIf="activeTab === 'info'" class="tab-content">
+                <div class="row">
+                  <div class="col-md-6">
+                    <h6>المعلومات الشخصية</h6>
+                    <table class="table table-borderless">
+                      <tr>
+                        <td><strong>الاسم الكامل:</strong></td>
+                        <td>{{ student.name }}</td>
+                      </tr>
+                      <tr *ngIf="student.birthDate">
+                        <td><strong>تاريخ الميلاد:</strong></td>
+                        <td>{{ student.birthDate | date:'yyyy/MM/dd' }}</td>
+                      </tr>
+                      <tr>
+                        <td><strong>المستوى الدراسي:</strong></td>
+                        <td>{{ student.academicYear }}</td>
+                      </tr>
+                    </table>
+                  </div>
+                  <div class="col-md-6">
+                    <h6>معلومات ولي الأمر</h6>
+                    <table class="table table-borderless">
+                      <tr *ngIf="student.parentName">
+                        <td><strong>اسم ولي الأمر:</strong></td>
+                        <td>{{ student.parentName }}</td>
+                      </tr>
+                      <tr *ngIf="student.parentPhone">
+                        <td><strong>هاتف ولي الأمر:</strong></td>
+                        <td>{{ student.parentPhone }}</td>
+                      </tr>
+                    </table>
+                  </div>
+                </div>
+              </div>
+  
+              <!-- Classes Tab -->
+              <div *ngIf="activeTab === 'classes'" class="tab-content">
+                <h6>الحصص المسجلة</h6>
+                <div *ngIf="studentClasses.length === 0" class="text-center py-4">
+                  <i class="bi bi-book display-1 text-muted"></i>
+                  <p class="text-muted mt-3">لا توجد حصص مسجلة لهذا الطالب</p>
+                </div>
+                
+                <div *ngIf="studentClasses.length > 0" class="table-responsive">
+                  <table class="table table-hover">
+                    <thead>
+                      <tr>
+                        <th>اسم الحصة</th>
+                        <th>المادة</th>
+                        <th>المعلم</th>
+                        <th>الجدول</th>
+                        <th>الحالة</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let class of studentClasses">
+                        <td>{{ class.name }}</td>
+                        <td>{{ class.subject }}</td>
+                        <td>{{ class.teacher?.name || '-' }}</td>
+                        <td>
+                          <span *ngFor="let schedule of class.schedule" class="badge bg-light text-dark me-1">
+                            {{ schedule.day }} {{ schedule.time }}
+                          </span>
+                        </td>
+                        <td>
+                          <span class="badge bg-success">نشط</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+  
+              <!-- Payments Tab -->
+              <div *ngIf="activeTab === 'payments'" class="tab-content">
+                <h6>سجل المدفوعات</h6>
+                <div *ngIf="paymentHistory.length === 0" class="text-center py-4">
+                  <i class="bi bi-credit-card display-1 text-muted"></i>
+                  <p class="text-muted mt-3">لا توجد مدفوعات مسجلة</p>
+                </div>
+                
+                <div *ngIf="paymentHistory.length > 0" class="table-responsive">
+                  <table class="table table-hover">
+                    <thead>
+                      <tr>
+                        <th>التاريخ</th>
+                        <th>المبلغ</th>
+                        <th>الشهر</th>
+                        <th>طريقة الدفع</th>
+                        <th>الحالة</th>
+                        <th>رقم الفاتورة</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let payment of paymentHistory">
+                        <td>{{ payment.paymentDate | date:'yyyy/MM/dd' }}</td>
+                        <td>{{ payment.amount }} د.ج</td>
+                        <td>{{ payment.month }}</td>
+                        <td>{{ payment.paymentMethod }}</td>
+                        <td>
+                          <span [class]="payment.status === 'paid' ? 'badge bg-success' : 'badge bg-warning'">
+                            {{ payment.status === 'paid' ? 'مدفوع' : 'معلق' }}
+                          </span>
+                        </td>
+                        <td>{{ payment.invoiceNumber || '-' }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+  
+              <!-- Attendance Tab -->
+              <div *ngIf="activeTab === 'attendance'" class="tab-content">
+                <h6>سجل الحضور</h6>
+                <div class="text-center py-4">
+                  <i class="bi bi-calendar-check display-1 text-muted"></i>
+                  <p class="text-muted mt-3">سيتم إضافة سجل الحضور قريباً</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

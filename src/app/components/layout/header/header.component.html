@@ -1,0 +1,23 @@
+<header class="glass-header">
+    <div class="stats-container">
+      <div class="stat-item">
+        <i class="bi bi-people"></i>
+        <span>{{ studentCount }} طالب</span>
+      </div>
+      <div class="stat-item">
+        <i class="bi bi-person-video3"></i>
+        <span>{{ teacherCount }} أستاذ</span>
+      </div>
+    </div>
+  
+    <div class="user-actions">
+      <div class="notification-badge">
+        <i class="bi bi-bell"></i>
+        <span class="dot">{{ notificationCount }}</span>
+      </div>
+      <div class="profile-pill">
+        <span>{{ userName }}</span>
+        <img [src]="userAvatar" alt="Avatar">
+      </div>
+    </div>
+  </header>

@@ -1,0 +1,80 @@
+<div class="bg-animation"></div>
+
+<div class="login-container">
+  <div class="glass-card animate-fade-up">
+
+    <div class="top-badge">مدرسة الرواد للتعليم و المعارف</div>
+
+    <div class="card-header">
+      <div class="logo-circle">
+        <i class="bi bi-mortarboard-fill"></i>
+      </div>
+      <div class="header-text">
+        <h2 class="title">Ta3limi</h2>
+        <p class="subtitle">{{ getGreeting() }}، نظام الإدارة الذكي</p>
+      </div>
+    </div>
+
+    <form (ngSubmit)="login()" class="login-form">
+      
+      <div class="input-group">
+        <label>اسم المستخدم</label>
+        <div class="input-wrapper">
+          <input 
+            type="text" 
+            [(ngModel)]="username" 
+            name="username" 
+            (keypress)="onUsernameKeyPress($event)"
+            placeholder="أدخل اسم المستخدم" 
+            [disabled]="isLoading" />
+          <i class="bi bi-person-fill"></i>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label>كلمة المرور</label>
+        <div class="input-wrapper">
+          <input 
+            [type]="passwordFieldType" 
+            [(ngModel)]="password" 
+            name="password" 
+            id="password"
+            (keypress)="onPasswordKeyPress($event)"
+            placeholder="••••••••" 
+            [disabled]="isLoading" />
+          <i class="bi" [ngClass]="passwordFieldType === 'password' ? 'bi-eye-slash-fill' : 'bi-eye-fill'" 
+             (click)="togglePasswordVisibility()" 
+             style="cursor: pointer;"></i>
+        </div>
+      </div>
+
+      <div class="form-options">
+        <label class="checkbox-container">
+          <input type="checkbox" [(ngModel)]="rememberMe" name="rememberMe">
+          <span class="checkmark"></span>
+          تذكرني
+        </label>
+        <a (click)="forgotPassword()" class="forgot-link">نسيت كلمة المرور؟</a>
+      </div>
+
+      <div class="button-group">
+        <button type="submit" class="btn-login" [disabled]="isLoading || !isFormValid()">
+          <span *ngIf="!isLoading">دخول النظام</span>
+          <div *ngIf="isLoading" class="spinner"></div>
+        </button>
+      </div>
+
+    </form>
+
+    <div class="divider-line"><span>أو</span></div>
+
+    <button class="btn-new" (click)="navigateToRegister()" [disabled]="isLoading">
+      إنشاء حساب جديد
+    </button>
+
+    <footer class="footer-info">
+      © {{ currentYear }} Redox Club | الإصدار 1.0.3
+    </footer>
+
+  </div>
+</div>

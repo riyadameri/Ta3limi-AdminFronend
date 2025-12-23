@@ -1,0 +1,411 @@
+/* nav-bar.component.css - المحدث */
+
+/* ===== متغيرات التصميم ===== */
+:root {
+  --sidebar-bg: rgba(255, 255, 255, 0.08);
+  --sidebar-border: rgba(255, 255, 255, 0.15);
+  --glass-blur: 20px;
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --accent-color: #ffffff;
+  --hover-bg: rgba(255, 255, 255, 0.2);
+  --active-bg: rgba(255, 255, 255, 0.25);
+  --active-color: #0a66c2;
+  --shadow-color: rgba(0, 0, 0, 0.2);
+  --logout-color: rgba(255, 153, 153, 0.9);
+}
+
+/* ===== النافبار الأساسية ===== */
+.sidebar {
+  width: 100%;
+  height: 100%;
+  background: var(--sidebar-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  border-left: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+  color: var(--text-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+/* ===== زر الإغلاق للجوال ===== */
+.mobile-close-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 1px solid var(--sidebar-border);
+  z-index: 1001;
+}
+
+.mobile-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: rotate(90deg);
+}
+
+/* ===== معلومات المستخدم ===== */
+.user-info-compact {
+  padding: 25px 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--sidebar-border);
+  position: relative;
+  transition: all 0.3s;
+}
+
+.sidebar.collapsed .user-info-compact {
+  padding: 20px 15px;
+  justify-content: center;
+}
+
+.user-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s;
+}
+
+.sidebar.collapsed .user-avatar {
+  width: 40px;
+  height: 40px;
+}
+
+.user-details {
+  flex: 1;
+  overflow: hidden;
+}
+
+.user-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-role {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: block;
+  margin-top: 3px;
+}
+
+.toggle-icon {
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  padding: 5px;
+  border-radius: 8px;
+}
+
+.toggle-icon:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+  transform: rotate(180deg);
+}
+
+.sidebar.collapsed .user-details,
+.sidebar.collapsed .user-role {
+  display: none;
+}
+
+/* ===== القائمة الرئيسية ===== */
+.nav-menu {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.nav-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.nav-item {
+  position: relative;
+  margin: 5px 15px;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: 12px;
+  transition: all 0.3s;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  gap: 15px;
+}
+
+.nav-link:hover:not(.active):not(.logout-btn) {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  border-color: var(--sidebar-border);
+  transform: translateX(-5px);
+  padding-right: 20px;
+}
+
+.nav-link:hover i {
+  transform: scale(1.1);
+}
+
+/* ===== الحالة النشطة ===== */
+.nav-link.active {
+  background: var(--active-bg);
+  color: var(--accent-color);
+  border-color: var(--sidebar-border);
+  font-weight: 600;
+  padding-right: 20px;
+}
+
+.nav-link.active i {
+  color: var(--accent-color);
+  transform: scale(1.1);
+}
+
+/* ===== الأيقونة ===== */
+.nav-icon {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+}
+
+.nav-icon i {
+  font-size: 1.2rem;
+  transition: all 0.3s;
+}
+
+/* ===== شارة الإشعارات ===== */
+.notification-badge {
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  background: #ff6b6b;
+  color: white;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: bold;
+  min-width: 18px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+}
+
+/* ===== نص العنصر ===== */
+.nav-label {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.3s;
+}
+
+.sidebar.collapsed .nav-label {
+  opacity: 0;
+  width: 0;
+}
+
+/* ===== السهم للقوائم الفرعية ===== */
+.arrow {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  transition: transform 0.3s;
+}
+
+.nav-link:hover .arrow {
+  transform: translateX(-3px);
+}
+
+/* ===== القوائم الفرعية ===== */
+.sub-menu {
+  list-style: none;
+  padding: 0;
+  margin: 5px 0 5px 30px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.3s ease-out;
+}
+
+.nav-item:hover .sub-menu {
+  max-height: 300px;
+  transition: max-height 0.3s ease-in;
+}
+
+.sub-menu li {
+  margin: 0;
+}
+
+.sub-menu a {
+  display: block;
+  padding: 10px 15px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.sub-menu a:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  padding-right: 20px;
+}
+
+/* ===== قسم تسجيل الخروج ===== */
+.logout-section {
+  padding: 20px;
+  border-top: 1px solid var(--sidebar-border);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 12px 20px;
+  color: var(--logout-color);
+  text-decoration: none;
+  border-radius: 12px;
+  transition: all 0.3s;
+  cursor: pointer;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.2);
+}
+
+.logout-btn:hover {
+  background: rgba(255, 107, 107, 0.2);
+  color: #ffffff;
+  transform: translateX(-5px);
+}
+
+.logout-btn i {
+  font-size: 1.2rem;
+}
+
+.logout-btn span {
+  flex: 1;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.sidebar.collapsed .logout-btn span {
+  opacity: 0;
+  width: 0;
+}
+
+/* ===== الشعار المصغر ===== */
+.mini-logo {
+  position: absolute;
+  bottom: 20px;
+  right: 50%;
+  transform: translateX(50%);
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.mini-logo:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateX(50%) scale(1.1);
+}
+
+/* ===== تلميحات عند التمرير ===== */
+.nav-link:hover .nav-label.collapsed {
+  position: absolute;
+  right: 70px;
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 8px 15px;
+  border-radius: 8px;
+  white-space: nowrap;
+  opacity: 1;
+  width: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  font-size: 0.9rem;
+}
+
+/* ===== التمرير المخصص ===== */
+.nav-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.nav-menu::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.nav-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.nav-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ===== تصميم الجوال ===== */
+@media (max-width: 768px) {
+  .sidebar {
+    box-shadow: -5px 0 25px rgba(0, 0, 0, 0.3);
+  }
+  
+  .mobile-close-btn {
+    display: flex;
+  }
+  
+  .toggle-icon {
+    display: none;
+  }
+  
+  .sidebar.collapsed {
+    width: 100%;
+  }
+  
+  .nav-link {
+    padding: 12px 15px;
+  }
+}

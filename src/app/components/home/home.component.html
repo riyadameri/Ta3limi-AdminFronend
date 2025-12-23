@@ -1,0 +1,29 @@
+<!-- home.component.html -->
+<div class="app-container">
+    <!-- الهيدر -->
+    <app-header class="app-header"></app-header>
+    
+    <!-- المحتوى الرئيسي -->
+    <div class="main-content">
+        <!-- أيقونة القائمة للجوال فقط -->
+        <div class="mobile-menu-toggle" (click)="toggleSidebar()" *ngIf="isMobile">
+            <i class="bi" [class.bi-list]="!sidebarOpen" [class.bi-x]="sidebarOpen"></i>
+        </div>
+        
+        <!-- النافبار الجانبية -->
+        <app-nav-bar class="app-sidebar" 
+                     [class.sidebar-open]="sidebarOpen" 
+                     [isMobile]="isMobile"
+                     (sidebarClosed)="closeSidebar()"></app-nav-bar>
+        
+        <!-- طبقة التعتيم للجوال -->
+        <div class="mobile-overlay" (click)="closeSidebar()" [class.active]="sidebarOpen && isMobile"></div>
+        
+        <!-- منطقة المحتوى الرئيسية -->
+        <main class="content-area">
+            <div class="page-content">
+                <router-outlet></router-outlet>
+            </div>
+        </main>
+    </div>
+</div>

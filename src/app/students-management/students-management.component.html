@@ -1,0 +1,349 @@
+<!-- students-management.component.html -->
+<div class="students-management">
+  <!-- Header Section -->
+  <header class="header">
+    <div class="header-content">
+      <div class="logo-section">
+        <div class="logo">
+          <i class="bi bi-people-fill"></i>
+        </div>
+        <h1>إدارة الطلاب</h1>
+      </div>
+      
+      <div class="header-actions">
+        <button class="btn-primary" (click)="openRegistrationForm()">
+          <i class="bi bi-person-plus-fill"></i>
+          <span>تسجيل طالب جديد</span>
+        </button>
+        
+        <button class="btn-secondary" (click)="clearSearch()">
+          <i class="bi bi-arrow-clockwise"></i>
+          <span>إعادة تعيين</span>
+        </button>
+        
+        <button class="btn-success" (click)="loadStudents()">
+          <i class="bi bi-cloud-download-fill"></i>
+          <span>تحديث البيانات</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Controls Section -->
+  <div class="controls-section">
+    <div class="search-box">
+      <input 
+        type="text" 
+        placeholder="ابحث عن طالب بالاسم أو الرقم أو ولي الأمر..." 
+        [(ngModel)]="searchTerm" 
+        (input)="filterStudents()"
+      >
+      <i class="bi bi-search"></i>
+    </div>
+    
+    <div class="filter-group">
+      <select 
+        class="form-select" 
+        [(ngModel)]="selectedAcademicYear" 
+        (change)="filterStudents()"
+      >
+        <option value="all">جميع المستويات</option>
+        <option *ngFor="let year of academicYears" [value]="year.value">
+          {{ year.label }}
+        </option>
+      </select>
+    </div>
+    
+    <div class="stats-badge">
+      <span class="badge-count">{{ getDisplayedStudents().length }}</span>
+      <span class="badge-label">طالب</span>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading" class="loading-container">
+    <div class="spinner"></div>
+    <h3>جاري تحميل بيانات الطلاب...</h3>
+    <p>يرجى الانتظار قليلاً</p>
+  </div>
+
+  <!-- Empty State -->
+  <div *ngIf="!loading && getDisplayedStudents().length === 0" class="empty-state">
+    <i class="bi bi-person-x-fill"></i>
+    <h3>لا توجد طلاب</h3>
+    <p>لم يتم العثور على أي طلاب مطابقين لبحثك. جرب مصطلحات بحث مختلفة أو سجل طالباً جديداً.</p>
+    <button class="btn-primary" (click)="openRegistrationForm()">
+      <i class="bi bi-person-plus-fill"></i>
+      <span>تسجيل طالب جديد</span>
+    </button>
+  </div>
+
+  <!-- Students Grid -->
+  <div *ngIf="!loading && getDisplayedStudents().length > 0" class="students-grid">
+    <div *ngFor="let student of getDisplayedStudents()" class="student-card">
+      <div class="student-header">
+<!-- تعديل السطر 86-91 في HTML -->
+      <div class="student-avatar large">
+        <div class="avatar-fallback">
+          {{ student.name.charAt(0).toUpperCase() }}
+        </div>
+      </div>
+              
+        <div class="student-info">
+          <h3>{{ student.name }}</h3>
+          <p class="student-id">رقم الطالب: {{ student.studentId || 'غير محدد' }}</p>
+        </div>
+        
+        <div class="status-badge" [class]="getPaymentStatusClass(student)">
+          {{ getPaymentStatus(student) }}
+        </div>
+      </div>
+      
+      <div class="student-details">
+        <div class="detail-item">
+          <i class="bi bi-mortarboard-fill"></i>
+          <span>المستوى: {{ getAcademicYearName(student.academicYear) }}</span>
+        </div>
+        
+        <div class="detail-item">
+          <i class="bi bi-person-vcard-fill"></i>
+          <span>ولي الأمر: {{ student.parentName || 'غير محدد' }}</span>
+        </div>
+        
+        <div class="detail-item">
+          <i class="bi bi-telephone-fill"></i>
+          <span>رقم الهاتف: {{ student.parentPhone || 'غير محدد' }}</span>
+        </div>
+        
+        <div class="detail-item" *ngIf="student.registrationDate">
+          <i class="bi bi-calendar-check-fill"></i>
+          <span>تاريخ التسجيل: {{ student.registrationDate | date:'dd/MM/yyyy' }}</span>
+        </div>
+        
+        <div class="detail-item" *ngIf="student.birthDate">
+          <i class="bi bi-balloon-fill"></i>
+          <span>تاريخ الميلاد: {{ student.birthDate | date:'dd/MM/yyyy' }}</span>
+        </div>
+      </div>
+      
+      <div class="student-actions">
+        <button class="btn-action btn-view" (click)="viewStudentDetails(student)">
+          <i class="bi bi-eye-fill"></i>
+          <span class="btn-text">عرض التفاصيل</span>
+        </button>
+        
+        <button 
+          class="btn-action btn-payment" 
+          (click)="openPaymentModal(student)"
+          [disabled]="student.hasPaidRegistration"
+        >
+          <i class="bi bi-cash-stack"></i>
+          <span class="btn-text">
+            {{ student.hasPaidRegistration ? 'مدفوع' : 'دفع الرسوم' }}
+          </span>
+        </button>
+        
+        <button class="btn-action btn-edit" (click)="editStudent(student)">
+          <i class="bi bi-pencil-square"></i>
+          <span class="btn-text">تعديل</span>
+        </button>
+        
+        <button class="btn-action btn-delete" (click)="deleteStudent(student)">
+          <i class="bi bi-trash3-fill"></i>
+          <span class="btn-text">حذف</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Registration Modal -->
+  <div *ngIf="showRegistrationForm" class="modal-overlay" (click)="closeRegistrationForm()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>تسجيل طالب جديد</h2>
+        <button class="close-btn" (click)="closeRegistrationForm()">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        <form class="student-form" (submit)="registerStudent(); $event.preventDefault()">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="name">اسم الطالب *</label>
+              <input 
+                type="text" 
+                id="name" 
+                [(ngModel)]="newStudent.name" 
+                name="name" 
+                placeholder="أدخل اسم الطالب الكامل"
+                required
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="academicYear">المستوى الدراسي *</label>
+              <select 
+                id="academicYear" 
+                [(ngModel)]="newStudent.academicYear" 
+                name="academicYear"
+                required
+              >
+                <option value="">اختر المستوى</option>
+                <option *ngFor="let year of academicYears" [value]="year.value">
+                  {{ year.label }}
+                </option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="parentName">اسم ولي الأمر</label>
+              <input 
+                type="text" 
+                id="parentName" 
+                [(ngModel)]="newStudent.parentName" 
+                name="parentName"
+                placeholder="اسم ولي أمر الطالب"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="parentPhone">رقم هاتف ولي الأمر</label>
+              <input 
+                type="tel" 
+                id="parentPhone" 
+                [(ngModel)]="newStudent.parentPhone" 
+                name="parentPhone"
+                placeholder="05X XXX XXXX"
+              >
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="birthDate">تاريخ الميلاد</label>
+              <input 
+                type="date" 
+                id="birthDate" 
+                [(ngModel)]="newStudent.birthDate" 
+                name="birthDate"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label for="registrationDate">تاريخ التسجيل</label>
+              <input 
+                type="date" 
+                id="registrationDate" 
+                [(ngModel)]="newStudent.registrationDate" 
+                name="registrationDate"
+                [value]="newStudent.registrationDate"
+              >
+            </div>
+          </div>
+        </form>
+      </div>
+      
+      <div class="modal-footer">
+        <button class="btn-secondary" (click)="closeRegistrationForm()">
+          <i class="bi bi-x-circle"></i>
+          <span>إلغاء</span>
+        </button>
+        
+        <button class="btn-success" (click)="registerStudent()" [disabled]="loading">
+          <i class="bi bi-check-circle-fill"></i>
+          <span>تسجيل الطالب</span>
+          <span *ngIf="loading" class="spinner-small"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment Modal -->
+  <div *ngIf="showPaymentModal && selectedStudent" class="modal-overlay" (click)="closePaymentModal()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>دفع رسوم التسجيل</h2>
+        <button class="close-btn" (click)="closePaymentModal()">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="payment-info">
+          <div class="student-payment-header">
+            <div class="student-avatar large">
+              <div class="avatar-fallback">
+                {{ selectedStudent.name.charAt(0).toUpperCase() }}
+              </div>
+            </div>
+            
+            <div class="student-payment-details">
+              <h3>{{ selectedStudent.name }}</h3>
+              <p class="student-id">رقم الطالب: {{ selectedStudent.studentId || 'غير محدد' }}</p>
+              <p class="academic-year">المستوى: {{ getAcademicYearName(selectedStudent.academicYear) }}</p>
+            </div>
+          </div>
+          
+          <form class="payment-form" (submit)="processPayment(); $event.preventDefault()">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="amount">المبلغ (دينار جزائري) *</label>
+                <input 
+                  type="number" 
+                  id="amount" 
+                  [(ngModel)]="paymentData.amount" 
+                  name="amount"
+                  min="0"
+                  step="100"
+                  required
+                >
+              </div>
+              
+              <div class="form-group">
+                <label for="paymentMethod">طريقة الدفع *</label>
+                <select 
+                  id="paymentMethod" 
+                  [(ngModel)]="paymentData.paymentMethod" 
+                  name="paymentMethod"
+                  required
+                >
+                  <option value="cash">نقداً</option>
+                  <option value="card">بطاقة ائتمان</option>
+                  <option value="transfer">تحويل بنكي</option>
+                  <option value="check">شيك</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="notes">ملاحظات إضافية</label>
+              <textarea 
+                id="notes" 
+                [(ngModel)]="paymentData.notes" 
+                name="notes"
+                rows="3"
+                placeholder="أي ملاحظات إضافية حول الدفع..."
+              ></textarea>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button class="btn-secondary" (click)="closePaymentModal()">
+          <i class="bi bi-x-circle"></i>
+          <span>إلغاء</span>
+        </button>
+        
+        <button class="btn-success" (click)="processPayment()" [disabled]="loading">
+          <i class="bi bi-cash-stack"></i>
+          <span>تأكيد الدفع</span>
+          <span *ngIf="loading" class="spinner-small"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

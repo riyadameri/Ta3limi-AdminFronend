@@ -2,7 +2,9 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './auth.service';
+
 export interface Student {
+  id?: string;  // Add id as optional property
   _id: string;
   name: string;
   studentId: string;
@@ -72,4 +74,10 @@ export class StudentsService {
       headers: this.authService.getAuthHeaders()
     });
   }
+  enrollStudentMultiple(studentId: string, data: { classIds: string[] }): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/students/${studentId}/enroll-multiple`, data, {
+      headers: this.authService.getAuthHeaders()
+    });
+  }
+  
 }

@@ -2,11 +2,12 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { CountService } from '../../../services/count.service';
 import { forkJoin } from 'rxjs';
+import { FormsModule } from '@angular/forms';
 @Component({
   selector: 'app-header',
   templateUrl: './header.component.html',
   styleUrls: ['./header.component.css'],
-  imports: [CommonModule],
+  imports: [CommonModule,FormsModule],
 })
 export class HeaderComponent implements OnInit {
 
@@ -17,12 +18,13 @@ export class HeaderComponent implements OnInit {
   studentCount: number = 0;
   teacherCount: number = 0;
   lessonCount: number = 0;
-  
   userName: string = 'المستخدم';
   userRole: string = 'الدور';
   userAvatar: string = 'https://ui-avatars.com/api/?name=User&background=random';
   
   notificationCount: number = 3;
+
+  searchTerm : any;
 
   ngOnInit(): void {
     // محاكاة تحميل البيانات

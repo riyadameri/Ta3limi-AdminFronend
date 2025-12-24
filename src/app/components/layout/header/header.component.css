@@ -179,3 +179,108 @@
   font-family: 'Amiri', serif;
 
 }
+
+/* لجوال (أقل من 768px) */
+@media (max-width: 768px) {
+  .glass-header {
+    padding: 0 15px;
+    height: 60px;
+    justify-content: flex-end;
+  }
+  
+  .stats-container {
+    display: none;
+  }
+  
+  .profile-pill {
+    min-width: auto;
+    padding: 4px 4px 4px 12px;
+  }
+  
+  .profile-pill span {
+    display: none;
+  }
+  
+  .profile-pill img {
+    width: 35px;
+    height: 35px;
+  }
+  
+  .user-actions {
+    gap: 15px;
+  }
+  
+  .notification-badge {
+    font-size: 1.2rem;
+  }
+}
+search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  color: var(--deep-blue);
+  padding: 5px 5px 5px 15px;
+  border-radius: 30px;
+  font-weight: 700;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  min-width: 180px;
+
+}
+.search-container input {
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  color: var(--deep-blue);
+  width: 120px;
+  font-weight: bold;
+
+  font-family: 'Amiri', serif;
+  align-items: center;
+
+}
+.search-container i {
+  font-size: 1.2rem;
+  color: var(--deep-blue);
+
+}
+.search-container:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+}
+/* ===== زر قائمة الجوال ===== */
+.mobile-menu-toggle {
+  background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    width: 45px;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .mobile-menu-toggle:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  .mobile-menu-toggle:active {
+    transform: scale(0.95);
+  }
+  
+  @media (max-width: 768px) {
+    .mobile-menu-toggle {
+      display: flex;
+    }
+  }
+/* ===== المحتوى الرئيسي ===== */
+.main-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }

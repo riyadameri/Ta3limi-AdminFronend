@@ -33,4 +33,5 @@ export class LessonsService {
       headers: this.authService.getAuthHeaders()
     });
   }
+  
 }

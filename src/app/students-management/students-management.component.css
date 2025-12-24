@@ -781,3 +781,99 @@ button:hover:not(:disabled) {
     border: 1px solid #ddd !important;
   }
 }
+/* Add to Lessons Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1060;
+  direction: rtl;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 10px;
+  max-width: 900px;
+  width: 95%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+}
+
+.class-card {
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  height: 100%;
+}
+
+.class-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.class-card.selected {
+  border-color: #007bff;
+  background-color: #f0f8ff;
+}
+
+.class-card .form-check-input {
+  width: 1.2em;
+  height: 1.2em;
+  cursor: pointer;
+}
+
+.class-card .form-check-input:checked {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+
+.available-classes-list {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.selected-classes-summary {
+  border: 2px solid #007bff;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .modal-content {
+    width: 98%;
+    margin: 10px;
+  }
+  
+  .class-card {
+    margin-bottom: 15px;
+  }
+  
+  .available-classes-list {
+    max-height: 300px;
+  }
+}
+
+/* Loading Spinner */
+.spinner-border {
+  width: 1rem;
+  height: 1rem;
+  border-width: 0.15em;
+}
+
+/* Badge Styles */
+.badge {
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+}
+
+.bg-success { background-color: #d1f7c4 !important; color: #0d4629 !important; }
+.bg-warning { background-color: #ffeab6 !important; color: #7d4b00 !important; }
+.bg-light { background-color: #f8f9fa !important; color: #495057 !important; }

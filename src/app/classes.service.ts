@@ -24,7 +24,7 @@ export interface Schedule {
   providedIn: 'root'
 })
 export class ClassesService {
-  private apiUrl = 'https://redox-sm.onrender.com/api';
+  private apiUrl = 'http://localhost:3000/api';
 
   constructor(private http: HttpClient, private authService: AuthService) {}
 
@@ -70,8 +70,28 @@ export class ClassesService {
     });
   }
 
-  getAvailableClasses(): Observable<Class[]> {
-    return this.http.get<Class[]>(`${this.apiUrl}/classes/available`, {
+// Update the getAvailableClasses method to accept parameters
+getAvailableClasses(academicYear?: string, studentId?: string): Observable<Class[]> {
+  let url = `${this.apiUrl}/classes/available`;
+  const params: any = {};
+  
+  if (academicYear) params.academicYear = academicYear;
+  if (studentId) params.studentId = studentId;
+  
+  return this.http.get<Class[]>(url, {
+    params: params,
+    headers: this.authService.getAuthHeaders()
+  });
+}
+
+  getAvailableClassesForStudent(academicYear: string, studentId: string): Observable<Class[]> {
+    return this.http.get<Class[]>(`${this.apiUrl}/classes/available/${academicYear}?studentId=${studentId}`, {
+      headers: this.authService.getAuthHeaders()
+    });
+  }
+
+  addStudentToClass(classId: string, studentId: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/classes/${classId}/enroll/${studentId}`, {}, {
       headers: this.authService.getAuthHeaders()
     });
   }

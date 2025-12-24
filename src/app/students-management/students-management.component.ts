@@ -1,7 +1,7 @@
-// students-management.component.ts (المحدث)
+// students-management.component.ts (المحدث والمصحح)
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import {FormsModule} from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { StudentsService, Student } from '../services/students.service';
 import Swal from 'sweetalert2';
@@ -29,6 +29,8 @@ export class StudentsManagementComponent implements OnInit {
   showPaymentModal: boolean = false;
   selectedStudent: StudentWithAvatar | null = null;
 
+
+  
   // New student form
   newStudent = {
     name: '',
@@ -62,6 +64,9 @@ export class StudentsManagementComponent implements OnInit {
     { value: '5AP', label: 'الخامسة ابتدائي' }
   ];
 
+
+
+  
   constructor(
     private studentsService: StudentsService,
     private router: Router
@@ -180,9 +185,16 @@ export class StudentsManagementComponent implements OnInit {
 
   processPayment(): void {
     if (!this.selectedStudent) return;
+    
+    // Get the student ID safely
+    const studentId = this.selectedStudent._id || this.selectedStudent.id;
+    if (!studentId) {
+      Swal.fire('خطأ', 'لا يمكن تحديد هوية الطالب', 'error');
+      return;
+    }
 
     this.loading = true;
-    this.studentsService.payRegistrationFee(this.selectedStudent._id, this.paymentData).subscribe({
+    this.studentsService.payRegistrationFee(studentId, this.paymentData).subscribe({
       next: (response) => {
         Swal.fire('نجاح', 'تم دفع رسوم التسجيل بنجاح', 'success');
         this.closePaymentModal();
@@ -197,8 +209,14 @@ export class StudentsManagementComponent implements OnInit {
   }
 
   viewStudentDetails(student: StudentWithAvatar): void {
-    this.router.navigate(['/home/students-management', student._id]);
-    console.log('View details for student:', student);
+    // Get the student ID safely
+    const studentId = student._id || student.id;
+    if (studentId) {
+      this.router.navigate(['/home/students-management', studentId]);
+    } else {
+      console.error('Cannot navigate: Student ID is undefined');
+      Swal.fire('خطأ', 'لا يمكن عرض تفاصيل الطالب', 'error');
+    }
   }
 
   editStudent(student: StudentWithAvatar): void {
@@ -206,6 +224,13 @@ export class StudentsManagementComponent implements OnInit {
   }
 
   deleteStudent(student: StudentWithAvatar): void {
+    // Get the student ID safely
+    const studentId = student._id || student.id;
+    if (!studentId) {
+      Swal.fire('خطأ', 'لا يمكن تحديد هوية الطالب للحذف', 'error');
+      return;
+    }
+
     Swal.fire({
       title: 'هل أنت متأكد؟',
       text: `سيتم حذف الطالب ${student.name} بشكل دائم`,
@@ -217,7 +242,7 @@ export class StudentsManagementComponent implements OnInit {
       cancelButtonText: 'إلغاء'
     }).then((result) => {
       if (result.isConfirmed) {
-        this.studentsService.deleteStudent(student._id).subscribe({
+        this.studentsService.deleteStudent(studentId).subscribe({
           next: () => {
             Swal.fire('تم الحذف', 'تم حذف الطالب بنجاح', 'success');
             this.loadStudents();
@@ -267,4 +292,6 @@ export class StudentsManagementComponent implements OnInit {
     ];
     return colors[Math.floor(Math.random() * colors.length)];
   }
+
+  
 }

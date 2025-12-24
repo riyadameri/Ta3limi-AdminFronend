@@ -10,6 +10,7 @@ import { CardsManagementComponent } from './cards-management/cards-management.co
 import { LiveClassComponent } from './live-class/live-class.component';
 import { TeachersManagementComponent } from './teachers-management/teachers-management.component';
 import { StudentDetailsComponent } from './student-details/student-details.component';
+import { AddStudentToClassesModalComponent } from './add-student-to-classes-modal/add-student-to-classes-modal.component';
 export const routes: Routes = [
   // المسار الافتراضي - إعادة توجيه إلى login
   { path: '', redirectTo: '/login', pathMatch: 'full' },
@@ -26,7 +27,9 @@ export const routes: Routes = [
       { path: 'lesson-management', component: LessonManagementComponent },
       { path: 'live-class', component: LiveClassComponent },
       { path: 'students-management', component: StudentsManagementComponent },
-      { path: 'students-management/:id', component: StudentDetailsComponent },      { path: 'teachers-management', component: TeachersManagementComponent },
+      { path: 'students-management/:id', component: StudentDetailsComponent },   
+      { path: 'add-student-to-classes-modal/:id', component: AddStudentToClassesModalComponent },
+         { path: 'teachers-management', component: TeachersManagementComponent },
       { path: 'rooms-management', component: RoomsManagementComponentComponent },
       { path: 'payments-management', component: PaymentsManagementComponent },
       { path: 'cards-management', component: CardsManagementComponent },

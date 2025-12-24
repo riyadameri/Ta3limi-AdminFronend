@@ -1,5 +1,6 @@
 /* Global Styles */
 @import url('https://fonts.googleapis.com/css2?family=Amiri&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap');
 
 :root {
     --main-blue: #0a66c2;
@@ -79,3 +80,41 @@ body.no-scroll {
       min-height: 44px; /* الحد الأدنى لحجم اللمس */
     }
   }
+
+  /* في styles.css أو global styles */
+.student-modal-overlay {
+  z-index: 9999 !important;
+}
+
+.modal {
+  z-index: 10000 !important;
+}
+
+/* تأكد من أن المكون الرئيسي لا يغطي المودال */
+app-students-management {
+  position: relative;
+  z-index: 1;
+}
+
+
+
+/* في styles.css أو global styles */
+
+/* إعادة تعيين كامل لـ z-index للمودالات */
+.student-modal-overlay {
+  z-index: 9999999999 !important;
+  position: fixed !important;
+}
+
+.modal {
+  z-index: 10000000000 !important;
+  position: relative !important;
+}
+
+/* إخفاء التمرير عند فتح المودال */
+body.no-scroll {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+  height: 100% !important;
+}

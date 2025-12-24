@@ -13,7 +13,12 @@
       <div class="header-actions">
         <button class="btn-primary" (click)="openRegistrationForm()">
           <i class="bi bi-person-plus-fill"></i>
-          <span>تسجيل طالب جديد</span>
+          <span>طالب جديد</span>
+        </button>
+        
+        <button class="btn-success" (click)="openBulkImportForm()">
+          <i class="bi bi-upload"></i>
+          <span>إضافة جماعية</span>
         </button>
         
         <button class="btn-secondary" (click)="clearSearch()">
@@ -21,7 +26,7 @@
           <span>إعادة تعيين</span>
         </button>
         
-        <button class="btn-success" (click)="loadStudents()">
+        <button class="btn-info" (click)="loadStudents()">
           <i class="bi bi-cloud-download-fill"></i>
           <span>تحديث البيانات</span>
         </button>
@@ -48,7 +53,7 @@
         (change)="filterStudents()"
       >
         <option value="all">جميع المستويات</option>
-        <option *ngFor="let year of academicYears" [value]="year.value">
+        <option *ngFor="let year of academicYears.slice(1)" [value]="year.value">
           {{ year.label }}
         </option>
       </select>
@@ -72,30 +77,62 @@
     <i class="bi bi-person-x-fill"></i>
     <h3>لا توجد طلاب</h3>
     <p>لم يتم العثور على أي طلاب مطابقين لبحثك. جرب مصطلحات بحث مختلفة أو سجل طالباً جديداً.</p>
-    <button class="btn-primary" (click)="openRegistrationForm()">
-      <i class="bi bi-person-plus-fill"></i>
-      <span>تسجيل طالب جديد</span>
-    </button>
+    <div class="empty-state-actions">
+      <button class="btn-primary" (click)="openRegistrationForm()">
+        <i class="bi bi-person-plus-fill"></i>
+        <span>إضافة طالب</span>
+      </button>
+      <button class="btn-success" (click)="openBulkImportForm()">
+        <i class="bi bi-upload"></i>
+        <span>استيراد جماعي</span>
+      </button>
+    </div>
   </div>
 
   <!-- Students Grid -->
   <div *ngIf="!loading && getDisplayedStudents().length > 0" class="students-grid">
     <div *ngFor="let student of getDisplayedStudents()" class="student-card">
       <div class="student-header">
-<!-- تعديل السطر 86-91 في HTML -->
-      <div class="student-avatar large">
-        <div class="avatar-fallback">
-          {{ student.name.charAt(0).toUpperCase() }}
+        <div class="student-avatar large" [style.background]="getAvatarColor(student)">
+          <div class="avatar-fallback">
+            {{ getStudentInitials(student) }}
+          </div>
         </div>
-      </div>
               
         <div class="student-info">
           <h3>{{ student.name }}</h3>
           <p class="student-id">رقم الطالب: {{ student.studentId || 'غير محدد' }}</p>
+          <div class="student-tags">
+            <span class="tag academic-tag">{{ getAcademicYearName(student.academicYear) }}</span>
+            <span class="tag status-tag" [class]="getPaymentStatusClass(student)">
+              {{ getPaymentStatus(student) }}
+            </span>
+          </div>
         </div>
         
-        <div class="status-badge" [class]="getPaymentStatusClass(student)">
-          {{ getPaymentStatus(student) }}
+        <div class="student-actions-dropdown">
+          <button class="dropdown-toggle" (click)="toggleDropdown($event)">
+            <i class="bi bi-three-dots-vertical"></i>
+          </button>
+          <div class="dropdown-menu">
+            <button class="dropdown-item" (click)="viewStudentDetails(student)">
+              <i class="bi bi-eye-fill"></i>
+              <span>عرض التفاصيل</span>
+            </button>
+            <button class="dropdown-item" (click)="editStudent(student)">
+              <i class="bi bi-pencil-square"></i>
+              <span>تعديل البيانات</span>
+            </button>
+            <button class="dropdown-item" (click)="openPaymentModal(student)" [disabled]="student.hasPaidRegistration">
+              <i class="bi bi-cash-stack"></i>
+              <span>{{ student.hasPaidRegistration ? 'رسوم مدفوعة' : 'دفع الرسوم' }}</span>
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item text-danger" (click)="deleteStudent(student)">
+              <i class="bi bi-trash3-fill"></i>
+              <span>حذف الطالب</span>
+            </button>
+          </div>
         </div>
       </div>
       
@@ -142,31 +179,21 @@
             {{ student.hasPaidRegistration ? 'مدفوع' : 'دفع الرسوم' }}
           </span>
         </button>
-        
-        <button class="btn-action btn-edit" (click)="editStudent(student)">
-          <i class="bi bi-pencil-square"></i>
-          <span class="btn-text">تعديل</span>
-        </button>
-        
-        <button class="btn-action btn-delete" (click)="deleteStudent(student)">
-          <i class="bi bi-trash3-fill"></i>
-          <span class="btn-text">حذف</span>
-        </button>
       </div>
     </div>
   </div>
 
-  <!-- Registration Modal -->
-  <div *ngIf="showRegistrationForm" class="modal-overlay" (click)="closeRegistrationForm()">
-    <div class="modal" (click)="$event.stopPropagation()">
-      <div class="modal-header">
-        <h2>تسجيل طالب جديد</h2>
+  <!-- Registration/Edit Modal -->
+  <div *ngIf="showRegistrationForm" class="student-modal-overlay" (click)="closeRegistrationForm()">
+    <div class="student-modal" (click)="$event.stopPropagation()">
+      <div class="student-modal-header">
+        <h2>{{ editMode ? 'تعديل بيانات الطالب' : 'تسجيل طالب جديد' }}</h2>
         <button class="close-btn" (click)="closeRegistrationForm()">
           <i class="bi bi-x-lg"></i>
         </button>
       </div>
       
-      <div class="modal-body">
+      <div class="student-modal-body">
         <form class="student-form" (submit)="registerStudent(); $event.preventDefault()">
           <div class="form-row">
             <div class="form-group">
@@ -190,7 +217,7 @@
                 required
               >
                 <option value="">اختر المستوى</option>
-                <option *ngFor="let year of academicYears" [value]="year.value">
+                <option *ngFor="let year of academicYears.slice(1)" [value]="year.value">
                   {{ year.label }}
                 </option>
               </select>
@@ -239,14 +266,13 @@
                 id="registrationDate" 
                 [(ngModel)]="newStudent.registrationDate" 
                 name="registrationDate"
-                [value]="newStudent.registrationDate"
               >
             </div>
           </div>
         </form>
       </div>
       
-      <div class="modal-footer">
+      <div class="student-modal-footer">
         <button class="btn-secondary" (click)="closeRegistrationForm()">
           <i class="bi bi-x-circle"></i>
           <span>إلغاء</span>
@@ -254,7 +280,155 @@
         
         <button class="btn-success" (click)="registerStudent()" [disabled]="loading">
           <i class="bi bi-check-circle-fill"></i>
-          <span>تسجيل الطالب</span>
+          <span>{{ editMode ? 'تحديث البيانات' : 'تسجيل الطالب' }}</span>
+          <span *ngIf="loading" class="spinner-small"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Import Modal -->
+  <div *ngIf="showBulkImportForm" class="student-modal-overlay" (click)="closeBulkImportForm()">
+    <div class="student-modal student-modal-lg" (click)="$event.stopPropagation()">
+      <div class="student-modal-header">
+        <h2>الإضافة الجماعية للطلاب</h2>
+        <button class="close-btn" (click)="closeBulkImportForm()">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      
+      <div class="student-modal-body">
+        <div class="bulk-import-container">
+          <!-- Import Options -->
+          <div class="import-options">
+            <div class="option-card" (click)="downloadImportTemplate()">
+              <i class="bi bi-file-earmark-arrow-down"></i>
+              <h4>تحميل النموذج</h4>
+              <p>نموذج CSV لملء البيانات</p>
+            </div>
+            
+            <div class="option-card" (click)="importFromText()">
+              <i class="bi bi-text-paragraph"></i>
+              <h4>نسخ البيانات</h4>
+              <p>إدخال البيانات كنص</p>
+            </div>
+            
+            <div class="option-card" (click)="addImportRow()">
+              <i class="bi bi-plus-circle"></i>
+              <h4>إضافة يدوية</h4>
+              <p>إضافة سجلات جديدة</p>
+            </div>
+          </div>
+
+          <!-- Default Academic Year -->
+          <div class="form-group full-width">
+            <label for="defaultAcademicYear">المستوى الافتراضي لجميع الطلاب (اختياري)</label>
+            <select 
+              id="defaultAcademicYear" 
+              [(ngModel)]="bulkImportData.academicYear" 
+              name="defaultAcademicYear"
+            >
+              <option value="">اختر مستوى افتراضي</option>
+              <option *ngFor="let year of academicYears.slice(1)" [value]="year.value">
+                {{ year.label }}
+              </option>
+            </select>
+            <small class="form-text">سيتم تطبيق هذا المستوى على جميع الطلاب ما لم يتم تحديد مستوى مختلف لكل طالب</small>
+          </div>
+
+          <!-- Students Table -->
+          <div class="students-table-container">
+            <div class="table-header">
+              <h4>بيانات الطلاب ({{ bulkImportData.students.length }} طالب)</h4>
+              <button class="btn-sm btn-success" (click)="addImportRow()">
+                <i class="bi bi-plus"></i>
+                إضافة طالب
+              </button>
+            </div>
+            
+            <div class="table-responsive">
+              <table class="students-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>اسم الطالب *</th>
+                    <th>ولي الأمر</th>
+                    <th>رقم الهاتف</th>
+                    <th>المستوى</th>
+                    <th>تاريخ الميلاد</th>
+                    <th>إجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let student of bulkImportData.students; let i = index">
+                    <td>{{ i + 1 }}</td>
+                    <td>
+                      <input 
+                        type="text" 
+                        [(ngModel)]="student.name"
+                        placeholder="اسم الطالب"
+                        required
+                      >
+                    </td>
+                    <td>
+                      <input 
+                        type="text" 
+                        [(ngModel)]="student.parentName"
+                        placeholder="ولي الأمر"
+                      >
+                    </td>
+                    <td>
+                      <input 
+                        type="tel" 
+                        [(ngModel)]="student.parentPhone"
+                        placeholder="05X XXX XXXX"
+                      >
+                    </td>
+                    <td>
+                      <select [(ngModel)]="student.academicYear">
+                        <option value="">اختر مستوى</option>
+                        <option *ngFor="let year of academicYears.slice(1)" [value]="year.value">
+                          {{ year.label }}
+                        </option>
+                      </select>
+                    </td>
+                    <td>
+                      <input 
+                        type="date" 
+                        [(ngModel)]="student.birthDate"
+                      >
+                    </td>
+                    <td>
+                      <button 
+                        class="btn-icon btn-danger" 
+                        (click)="removeImportRow(i)"
+                        [disabled]="bulkImportData.students.length === 1"
+                      >
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="student-modal-footer">
+        <button class="btn-secondary" (click)="closeBulkImportForm()">
+          <i class="bi bi-x-circle"></i>
+          <span>إلغاء</span>
+        </button>
+        
+        <button class="btn-info" (click)="downloadImportTemplate()">
+          <i class="bi bi-download"></i>
+          <span>تحميل النموذج</span>
+        </button>
+        
+        <button class="btn-success" (click)="importStudents()" [disabled]="loading || bulkImportData.students.length === 0">
+          <i class="bi bi-upload"></i>
+          <span>استيراد {{ bulkImportData.students.length }} طالب</span>
           <span *ngIf="loading" class="spinner-small"></span>
         </button>
       </div>
@@ -262,21 +436,21 @@
   </div>
 
   <!-- Payment Modal -->
-  <div *ngIf="showPaymentModal && selectedStudent" class="modal-overlay" (click)="closePaymentModal()">
-    <div class="modal" (click)="$event.stopPropagation()">
-      <div class="modal-header">
+  <div *ngIf="showPaymentModal && selectedStudent" class="student-modal-overlay" (click)="closePaymentModal()">
+    <div class="student-modal" (click)="$event.stopPropagation()">
+      <div class="student-modal-header">
         <h2>دفع رسوم التسجيل</h2>
         <button class="close-btn" (click)="closePaymentModal()">
           <i class="bi bi-x-lg"></i>
         </button>
       </div>
       
-      <div class="modal-body">
+      <div class="student-modal-body">
         <div class="payment-info">
           <div class="student-payment-header">
-            <div class="student-avatar large">
+            <div class="student-avatar large" [style.background]="getAvatarColor(selectedStudent)">
               <div class="avatar-fallback">
-                {{ selectedStudent.name.charAt(0).toUpperCase() }}
+                {{ getStudentInitials(selectedStudent) }}
               </div>
             </div>
             
@@ -332,7 +506,7 @@
         </div>
       </div>
       
-      <div class="modal-footer">
+      <div class="student-modal-footer">
         <button class="btn-secondary" (click)="closePaymentModal()">
           <i class="bi bi-x-circle"></i>
           <span>إلغاء</span>

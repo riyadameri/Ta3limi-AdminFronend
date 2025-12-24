@@ -255,3 +255,68 @@
     max-width: 1600px;
   }
 }
+
+
+
+/* أضف هذا إلى نهاية home.component.css */
+
+/* إصلاح لمشكلة المودالات */
+.content-area {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* عند فتح المودال */
+body.modal-open {
+  overflow: hidden !important;
+}
+
+/* تأكد من أن المودال فوق كل شيء */
+.modal-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 99999 !important; /* أعلى قيمة ممكنة */
+  padding: 20px !important;
+  animation: fadeIn 0.2s ease !important;
+}
+
+.modal {
+  background: white !important;
+  border-radius: 24px !important;
+  width: 100% !important;
+  max-width: 600px !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5) !important;
+  animation: modalScaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+  position: relative !important;
+  z-index: 100000 !important;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-lg {
+  max-width: 900px !important;
+}

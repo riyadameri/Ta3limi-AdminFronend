@@ -15,7 +15,7 @@ export interface Teacher {
   providedIn: 'root'
 })
 export class TeachersService {
-  private apiUrl = 'https://redox-sm.onrender.com/api';
+  private apiUrl = 'http://localhost:3000/api';
 
   constructor(private http: HttpClient, private authService: AuthService) {}
 

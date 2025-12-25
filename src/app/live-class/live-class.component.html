@@ -1,0 +1,453 @@
+<div class="live-class">
+    <!-- Header Section -->
+    <div class="header">
+      <h1>الحصص المباشرة</h1>
+      <div>
+        <button class="btn-primary" (click)="openCreateClassModal()">
+          <i class="fas fa-plus"></i> إنشاء حصة جديدة
+        </button>
+        <button class="btn-secondary" (click)="loadLiveClasses()">
+          <i class="fas fa-sync-alt"></i> تحديث
+        </button>
+      </div>
+    </div>
+  
+    <!-- Filters Section -->
+    <div class="filters">
+      <div class="filter-group">
+        <div class="search-box">
+          <input 
+            type="text" 
+            class="search-input" 
+            [(ngModel)]="searchTerm"
+            (input)="filterLiveClasses()"
+            placeholder="ابحث عن حصة..."
+          >
+          <i class="fas fa-search search-icon"></i>
+        </div>
+        
+        <select class="filter-select" [(ngModel)]="statusFilter" (change)="loadLiveClasses()">
+          <option value="all">جميع الحالات</option>
+          <option value="scheduled">مجدولة</option>
+          <option value="ongoing">جارية</option>
+          <option value="completed">مكتملة</option>
+          <option value="cancelled">ملغية</option>
+        </select>
+        
+        <input 
+          type="date" 
+          class="date-filter" 
+          [(ngModel)]="dateFilter"
+          (change)="loadLiveClasses()"
+        >
+      </div>
+    </div>
+  
+    <!-- Loading State -->
+    <div *ngIf="isLoading" class="loading">
+      <i class="fas fa-spinner fa-spin"></i>
+      <p>جاري تحميل الحصص...</p>
+    </div>
+  
+    <!-- Empty State -->
+    <div *ngIf="!isLoading && filteredLiveClasses.length === 0" class="empty-state">
+      <i class="fas fa-calendar-times"></i>
+      <p>لا توجد حصص لعرضها</p>
+    </div>
+  
+    <!-- Live Classes Grid -->
+    <div *ngIf="!isLoading && filteredLiveClasses.length > 0" class="classes-grid">
+      <div *ngFor="let liveClass of filteredLiveClasses" class="class-card">
+        <!-- Class Header -->
+        <div class="class-header">
+          <div class="class-info">
+            <h3>{{ liveClass.class?.name || 'بدون اسم' }}</h3>
+            <span class="status-badge" [ngClass]="getStatusClass(liveClass.status)">
+              {{ liveClass.status === 'scheduled' ? 'مجدولة' :
+                 liveClass.status === 'ongoing' ? 'جارية' :
+                 liveClass.status === 'completed' ? 'مكتملة' : 'ملغية' }}
+            </span>
+          </div>
+          <div class="class-time">
+            <span><i class="far fa-calendar"></i> {{ formatDate(liveClass.date) }}</span>
+            <span><i class="far fa-clock"></i> {{ formatTime(liveClass.startTime) }}</span>
+          </div>
+        </div>
+  
+        <!-- Class Details -->
+        <div class="class-details">
+          <div class="detail">
+            <span class="label">المادة:</span>
+            <span class="value">{{ liveClass.class?.subject || 'غير محدد' }}</span>
+          </div>
+          <div class="detail">
+            <span class="label">الأستاذ:</span>
+            <span class="value">{{ liveClass.teacher?.name || 'غير محدد' }}</span>
+          </div>
+          <div class="detail">
+            <span class="label">القاعة:</span>
+            <span class="value">{{ liveClass.classroom?.name || 'غير محدد' }}</span>
+          </div>
+          <div *ngIf="liveClass.notes" class="detail">
+            <span class="label">ملاحظات:</span>
+            <span class="value">{{ liveClass.notes }}</span>
+          </div>
+        </div>
+  
+        <!-- Class Actions -->
+        <div class="class-actions">
+          <!-- Attendance Button -->
+          <button 
+            class="btn-attendance"
+            (click)="openAttendanceModal(liveClass)"
+            [disabled]="liveClass.status === 'cancelled'"
+          >
+            <i class="fas fa-users"></i> الحضور
+            <span *ngIf="(liveClass.attendance || []).length > 0">
+              ({{ liveClass.attendance.length }})
+            </span>
+          </button>
+  
+          <!-- Action Buttons based on status -->
+          <div class="action-group">
+            <!-- Scheduled Class Actions -->
+            <ng-container *ngIf="liveClass.status === 'scheduled'">
+              <button class="btn-start" (click)="openStartClassModal(liveClass)">
+                <i class="fas fa-play"></i> بدء
+              </button>
+              <button class="btn-cancel" (click)="openCancelClassModal(liveClass)">
+                <i class="fas fa-times"></i> إلغاء
+              </button>
+            </ng-container>
+  
+            <!-- Ongoing Class Actions -->
+            <ng-container *ngIf="liveClass.status === 'ongoing'">
+              <button class="btn-attendance" (click)="openAttendanceModal(liveClass)">
+                <i class="fas fa-user-plus"></i> تسجيل حضور
+              </button>
+              <button class="btn-end" (click)="openEndClassModal(liveClass)">
+                <i class="fas fa-stop"></i> إنهاء
+              </button>
+            </ng-container>
+  
+            <!-- Completed/Cancelled Class -->
+            <ng-container *ngIf="liveClass.status === 'completed'">
+              <div class="completed-text">
+                <i class="fas fa-check-circle"></i> مكتملة
+              </div>
+            </ng-container>
+  
+            <ng-container *ngIf="liveClass.status === 'cancelled'">
+              <div class="cancelled-text">
+                <i class="fas fa-ban"></i> ملغية
+              </div>
+            </ng-container>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- ========== MODALS ========== -->
+  
+    <!-- Attendance Modal -->
+    <div *ngIf="showAttendanceModal" class="modal-overlay">
+      <div class="give-cards-to-student-modal">
+        <div class="modal-header">
+          <h2>سجل الحضور</h2>
+          <button class="close-btn" (click)="closeAllModals()">&times;</button>
+        </div>
+  
+        <div class="modal-body">
+          <!-- Class Info -->
+          <div class="class-info" *ngIf="selectedLiveClass">
+            <p><strong>{{ selectedLiveClass.class?.name }}</strong></p>
+            <p>{{ selectedLiveClass.class?.subject }} | {{ selectedLiveClass.teacher?.name }}</p>
+            <p>{{ formatDate(selectedLiveClass.date) }} - {{ formatTime(selectedLiveClass.startTime) }}</p>
+          </div>
+  
+          <!-- Attendance Form -->
+          <div class="attendance-form">
+            <h3>تسجيل حضور جديد</h3>
+            
+            <!-- Method Selection -->
+            <div class="method-selector">
+              <button 
+                class="method-btn" 
+                [class.active]="newAttendance.method === 'manual'"
+                (click)="newAttendance.method = 'manual'"
+              >
+                <i class="fas fa-user-edit"></i> يدوي
+              </button>
+              <button 
+                class="method-btn" 
+                [class.active]="newAttendance.method === 'rfid'"
+                [class.scanning]="isScanningRFID"
+                (click)="startRFIDScan()"
+                [disabled]="isScanningRFID"
+              >
+                <i class="fas fa-id-card"></i> 
+                {{ isScanningRFID ? 'جاري المسح...' : 'بطاقة RFID' }}
+              </button>
+            </div>
+  
+            <!-- Scanned RFID Display -->
+            <div *ngIf="scannedRFID" class="scanned-rfid">
+              <i class="fas fa-check-circle"></i> تم مسح البطاقة: {{ scannedRFID }}
+            </div>
+  
+            <!-- Manual Attendance Form -->
+            <div *ngIf="newAttendance.method === 'manual'" class="form-group">
+              <label>اختر الطالب:</label>
+              <select 
+                class="form-select" 
+                [(ngModel)]="newAttendance.studentId"
+                [disabled]="isScanningRFID"
+              >
+                <option value="">-- اختر طالب --</option>
+                <option *ngFor="let student of getClassStudents()" [value]="student._id">
+                  {{ student.name }} ({{ student.studentId }})
+                </option>
+              </select>
+            </div>
+  
+            <div class="form-group">
+              <label>حالة الحضور:</label>
+              <select class="form-select" [(ngModel)]="newAttendance.status">
+                <option value="present">حاضر</option>
+                <option value="late">متأخر</option>
+                <option value="absent">غائب</option>
+              </select>
+            </div>
+  
+            <div class="form-group">
+              <label>ملاحظات:</label>
+              <textarea 
+                class="form-textarea" 
+                [(ngModel)]="newAttendance.notes"
+                rows="3"
+                placeholder="ملاحظات إضافية..."
+              ></textarea>
+            </div>
+  
+            <div class="modal-footer">
+              <button 
+                class="btn-primary"
+                (click)="recordAttendance()"
+                [disabled]="!newAttendance.studentId"
+              >
+                <i class="fas fa-save"></i> حفظ
+              </button>
+              <button class="btn-secondary" (click)="resetAttendanceForm()">
+                <i class="fas fa-redo"></i> إعادة تعيين
+              </button>
+              <button *ngIf="selectedLiveClass?.status === 'ongoing'" 
+                      class="btn-danger"
+                      (click)="autoMarkAbsent()">
+                <i class="fas fa-user-times"></i> وضع غائب تلقائي
+              </button>
+            </div>
+          </div>
+  
+          <!-- Attendance Records -->
+          <div class="attendance-records">
+            <h3>سجل الحضور ({{ attendanceRecords.length }})</h3>
+            
+            <!-- Loading attendance -->
+            <div *ngIf="isLoadingAttendance" class="loading-small">
+              <i class="fas fa-spinner fa-spin"></i> جاري تحميل سجل الحضور...
+            </div>
+  
+            <!-- Empty attendance -->
+            <div *ngIf="!isLoadingAttendance && attendanceRecords.length === 0" class="empty-state-small">
+              <p>لا توجد سجلات حضور</p>
+            </div>
+  
+            <!-- Attendance Table -->
+            <div *ngIf="!isLoadingAttendance && attendanceRecords.length > 0" class="records-table">
+              <div class="record-header">
+                <span>اسم الطالب</span>
+                <span>الحالة</span>
+                <span>الطريقة</span>
+                <span>الوقت</span>
+              </div>
+              
+              <div *ngFor="let record of attendanceRecords" class="record-row">
+                <span class="student-name">{{ record.student?.name || 'غير معروف' }}</span>
+                <span class="attendance-status" [ngClass]="getAttendanceStatusClass(record.status)">
+                  {{ record.status === 'present' ? 'حاضر' :
+                     record.status === 'late' ? 'متأخر' : 'غائب' }}
+                </span>
+                <span class="method">{{ record.method === 'manual' ? 'يدوي' : 'RFID' }}</span>
+                <span class="timestamp">{{ record.timestamp | date:'HH:mm' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Start Class Modal -->
+    <div *ngIf="showStartClassModal" class="modal-overlay">
+      <div class="give-cards-to-student-modal">
+        <div class="modal-header">
+          <h2>بدء الحصة</h2>
+          <button class="close-btn" (click)="closeAllModals()">&times;</button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="class-info" *ngIf="selectedLiveClass">
+            <p>هل تريد بدء حصة <strong>{{ selectedLiveClass.class?.name }}</strong>؟</p>
+            <p>{{ formatDate(selectedLiveClass.date) }} - {{ formatTime(selectedLiveClass.startTime) }}</p>
+            <p>الأستاذ: {{ selectedLiveClass.teacher?.name }}</p>
+          </div>
+          
+          <div class="modal-footer">
+            <button class="btn-primary" (click)="startLiveClass()">
+              <i class="fas fa-check"></i> نعم، بدء الحصة
+            </button>
+            <button class="btn-secondary" (click)="closeAllModals()">
+              <i class="fas fa-times"></i> إلغاء
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- End Class Modal -->
+    <div *ngIf="showEndClassModal" class="modal-overlay">
+      <div class="give-cards-to-student-modal">
+        <div class="modal-header">
+          <h2>إنهاء الحصة</h2>
+          <button class="close-btn" (click)="closeAllModals()">&times;</button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="class-info" *ngIf="selectedLiveClass">
+            <p>هل تريد إنهاء حصة <strong>{{ selectedLiveClass.class?.name }}</strong>؟</p>
+            <p>تاريخ البدء: {{ formatTime(selectedLiveClass.startTime) }}</p>
+            <p>عدد الطلاب الحاضرين: {{ selectedLiveClass.attendance.length || 0 }}</p>
+          </div>
+          
+          <div class="modal-footer">
+            <button class="btn-primary" (click)="endLiveClass()">
+              <i class="fas fa-check"></i> نعم، إنهاء الحصة
+            </button>
+            <button class="btn-secondary" (click)="closeAllModals()">
+              <i class="fas fa-times"></i> إلغاء
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Cancel Class Modal -->
+    <div *ngIf="showCancelClassModal" class="modal-overlay">
+      <div class="give-cards-to-student-modal">
+        <div class="modal-header">
+          <h2>إلغاء الحصة</h2>
+          <button class="close-btn" (click)="closeAllModals()">&times;</button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="class-info" *ngIf="selectedLiveClass">
+            <p>هل تريد إلغاء حصة <strong>{{ selectedLiveClass.class?.name }}</strong>؟</p>
+            <p>{{ formatDate(selectedLiveClass.date) }} - {{ formatTime(selectedLiveClass.startTime) }}</p>
+            <p class="text-danger">هذا الإجراء لا يمكن التراجع عنه</p>
+          </div>
+          
+          <div class="modal-footer">
+            <button class="btn-danger" (click)="cancelLiveClass()">
+              <i class="fas fa-times"></i> نعم، إلغاء الحصة
+            </button>
+            <button class="btn-secondary" (click)="closeAllModals()">
+              <i class="fas fa-undo"></i> إبقاء الحصة
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Create Class Modal -->
+    <div *ngIf="showCreateClassModal" class="modal-overlay">
+      <div class="give-cards-to-student-modal">
+        <div class="modal-header">
+          <h2>إنشاء حصة جديدة</h2>
+          <button class="close-btn" (click)="closeAllModals()">&times;</button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="form-group">
+            <label>اختر الحصة:</label>
+            <select class="form-select" [(ngModel)]="newClass.classId">
+              <option value="">-- اختر حصة --</option>
+              <option *ngFor="let class of classes" [value]="class._id">
+                {{ class.name }} ({{ class.subject }})
+              </option>
+            </select>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>التاريخ:</label>
+              <input type="date" class="form-input" [(ngModel)]="newClass.date">
+            </div>
+            
+            <div class="form-group">
+              <label>وقت البدء:</label>
+              <input type="time" class="form-input" [(ngModel)]="newClass.startTime">
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>وقت الانتهاء:</label>
+              <input type="time" class="form-input" [(ngModel)]="newClass.endTime">
+            </div>
+            
+            <div class="form-group">
+              <label>القاعة:</label>
+              <select class="form-select" [(ngModel)]="newClass.classroomId">
+                <option value="">-- اختر قاعة --</option>
+                <option *ngFor="let room of classrooms" [value]="room._id">
+                  {{ room.name }}
+                </option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>الأستاذ:</label>
+            <select class="form-select" [(ngModel)]="newClass.teacherId">
+              <option value="">-- اختر أستاذا --</option>
+              <option *ngFor="let teacher of teachers" [value]="teacher._id">
+                {{ teacher.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label>ملاحظات:</label>
+            <textarea 
+              class="form-textarea" 
+              [(ngModel)]="newClass.notes"
+              rows="3"
+              placeholder="ملاحظات إضافية للحصة..."
+            ></textarea>
+          </div>
+          
+          <div class="modal-footer">
+            <button 
+              class="btn-primary" 
+              (click)="createLiveClass()"
+              [disabled]="!newClass.classId || !newClass.date || !newClass.startTime"
+            >
+              <i class="fas fa-plus"></i> إنشاء الحصة
+            </button>
+            <button class="btn-secondary" (click)="closeAllModals()">
+              <i class="fas fa-times"></i> إلغاء
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

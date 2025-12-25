@@ -28,8 +28,7 @@ export interface Attendance {
   providedIn: 'root'
 })
 export class LiveClassesService {
-  private apiUrl = 'https://redox-sm.onrender.com/api';
-
+  private apiUrl = 'http://localhost:3000/api';
   constructor(private http: HttpClient, private authService: AuthService) {}
 
   getLiveClasses(filters?: any): Observable<LiveClass[]> {

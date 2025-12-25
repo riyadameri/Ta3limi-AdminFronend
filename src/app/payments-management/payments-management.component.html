@@ -1,1 +1,691 @@
-<p>payments-management works!</p>
+<div class="payments-management">
+    <!-- Loading Overlay -->
+    <div *ngIf="isLoading" class="loading-overlay">
+      <div class="loading-content">
+        <div class="spinner"></div>
+        <p>جاري تحميل بيانات المدفوعات...</p>
+      </div>
+    </div>
+  
+    <!-- Header Section -->
+    <div class="header-section">
+      <div class="header-content">
+        <h1>
+          <i class="fas fa-money-bill-wave"></i>
+          إدارة المدفوعات
+        </h1>
+        <div class="header-actions">
+          <button class="btn btn-primary" (click)="openNewPaymentModal()">
+            <i class="fas fa-plus-circle"></i>
+            تسجيل دفعة جديدة
+          </button>
+          <button class="btn btn-success" (click)="exportToExcel()" [disabled]="isExporting || filteredPayments.length === 0">
+            <i class="fas fa-file-excel" *ngIf="!isExporting"></i>
+            <i class="fas fa-spinner fa-spin" *ngIf="isExporting"></i>
+            {{ isExporting ? 'جاري التصدير...' : 'تصدير Excel' }}
+          </button>
+        </div>
+      </div>
+      
+      <!-- Printer Connection Status -->
+      <div class="printer-status" [class.connected]="isPrinterConnected" [class.disconnected]="!isPrinterConnected">
+        <div class="status-indicator">
+          <div class="status-dot"></div>
+          <span>{{ printerStatusText }}</span>
+        </div>
+        <div class="printer-actions">
+          <button class="btn btn-sm btn-outline" (click)="connectToPrinter()" *ngIf="!isPrinterConnected">
+            <i class="fas fa-plug"></i>
+            الاتصال
+          </button>
+          <button class="btn btn-sm btn-outline" (click)="disconnectPrinter()" *ngIf="isPrinterConnected">
+            <i class="fas fa-plug"></i>
+            قطع الاتصال
+          </button>
+          <button class="btn btn-sm btn-outline" (click)="printTestPage()" [disabled]="!isPrinterConnected">
+            <i class="fas fa-print"></i>
+            اختبار الطباعة
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Statistics Cards -->
+    <div class="statistics-section">
+      <div class="stat-card total-payments">
+        <div class="stat-icon">
+          <i class="fas fa-receipt"></i>
+        </div>
+        <div class="stat-content">
+          <h3>إجمالي المدفوعات</h3>
+          <p class="stat-number">{{ stats.totalPayments }}</p>
+        </div>
+      </div>
+      
+      <div class="stat-card total-amount">
+        <div class="stat-icon">
+          <i class="fas fa-money-bill"></i>
+        </div>
+        <div class="stat-content">
+          <h3>إجمالي المبالغ</h3>
+          <p class="stat-number">{{ stats.totalAmount | number }} د.ج</p>
+        </div>
+      </div>
+      
+      <div class="stat-card paid-amount">
+        <div class="stat-icon">
+          <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="stat-content">
+          <h3>المدفوعات المؤكدة</h3>
+          <p class="stat-number">{{ stats.paidAmount | number }} د.ج</p>
+        </div>
+      </div>
+      
+      <div class="stat-card pending-payments">
+        <div class="stat-icon">
+          <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-content">
+          <h3>المدفوعات المعلقة</h3>
+          <p class="stat-number">{{ stats.pendingPayments }}</p>
+          <p class="stat-subtext">{{ stats.pendingAmount | number }} د.ج</p>
+        </div>
+      </div>
+      
+      <div class="stat-card late-payments">
+        <div class="stat-icon">
+          <i class="fas fa-exclamation-circle"></i>
+        </div>
+        <div class="stat-content">
+          <h3>المدفوعات المتأخرة</h3>
+          <p class="stat-number">{{ stats.latePayments }}</p>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Filters Section -->
+    <div class="filters-section card">
+      <div class="filters-header">
+        <h3><i class="fas fa-filter"></i> فلترة المدفوعات</h3>
+        <button class="btn btn-outline btn-sm" (click)="clearFilters()">
+          <i class="fas fa-times"></i>
+          مسح الفلاتر
+        </button>
+      </div>
+      
+      <div class="filters-grid">
+        <!-- Student Filter -->
+        <div class="filter-group">
+          <label for="filterStudent">
+            <i class="fas fa-user-graduate"></i>
+            الطالب
+          </label>
+          <select id="filterStudent" [(ngModel)]="filters.student" (change)="applyFilters()" class="form-control">
+            <option value="">جميع الطلاب</option>
+            <option *ngFor="let student of students" [value]="student._id">
+              {{ student.name }} - {{ student.studentId }}
+            </option>
+          </select>
+        </div>
+  
+        <!-- Class Filter -->
+        <div class="filter-group">
+          <label for="filterClass">
+            <i class="fas fa-chalkboard-teacher"></i>
+            الحصة
+          </label>
+          <select id="filterClass" [(ngModel)]="filters.class" (change)="applyFilters()" class="form-control">
+            <option value="">جميع الحصص</option>
+            <option *ngFor="let class of classes" [value]="class._id">
+              {{ class.name }}
+            </option>
+          </select>
+        </div>
+  
+        <!-- Month Filter -->
+        <div class="filter-group">
+          <label for="filterMonth">
+            <i class="fas fa-calendar-alt"></i>
+            الشهر
+          </label>
+          <select id="filterMonth" [(ngModel)]="filters.month" (change)="applyFilters()" class="form-control">
+            <option value="">جميع الأشهر</option>
+            <option *ngFor="let month of availableMonths" [value]="month">
+              {{ month }}
+            </option>
+          </select>
+        </div>
+  
+        <!-- Status Filter -->
+        <div class="filter-group">
+          <label for="filterStatus">
+            <i class="fas fa-info-circle"></i>
+            الحالة
+          </label>
+          <select id="filterStatus" [(ngModel)]="filters.status" (change)="applyFilters()" class="form-control">
+            <option value="">جميع الحالات</option>
+            <option value="paid">مدفوع</option>
+            <option value="pending">معلق</option>
+            <option value="late">متأخر</option>
+          </select>
+        </div>
+  
+        <!-- Payment Method Filter -->
+        <div class="filter-group">
+          <label for="filterPaymentMethod">
+            <i class="fas fa-credit-card"></i>
+            طريقة الدفع
+          </label>
+          <select id="filterPaymentMethod" [(ngModel)]="filters.paymentMethod" (change)="applyFilters()" class="form-control">
+            <option value="">جميع طرق الدفع</option>
+            <option value="cash">نقدي</option>
+            <option value="bank">تحويل بنكي</option>
+            <option value="online">دفع إلكتروني</option>
+            <option value="mobile">دفع محمول</option>
+            <option value="check">شيك</option>
+          </select>
+        </div>
+  
+        <!-- Date Range Filters -->
+        <div class="filter-group">
+          <label for="filterStartDate">
+            <i class="fas fa-calendar"></i>
+            من تاريخ
+          </label>
+          <input type="date" id="filterStartDate" [(ngModel)]="filters.startDate" 
+                 (change)="applyFilters()" class="form-control">
+        </div>
+  
+        <div class="filter-group">
+          <label for="filterEndDate">
+            <i class="fas fa-calendar"></i>
+            إلى تاريخ
+          </label>
+          <input type="date" id="filterEndDate" [(ngModel)]="filters.endDate" 
+                 (change)="applyFilters()" class="form-control">
+        </div>
+      </div>
+  
+      <!-- Bulk Actions -->
+      <div class="bulk-actions" *ngIf="selectedPayments.size > 0">
+        <div class="bulk-info">
+          <i class="fas fa-check-circle"></i>
+          {{ selectedPayments.size }} دفعة محددة
+        </div>
+        <div class="bulk-buttons">
+          <button class="btn btn-success btn-sm" (click)="markSelectedAsPaid()" [disabled]="isBulkActionLoading">
+            <i class="fas fa-check" *ngIf="!isBulkActionLoading"></i>
+            <i class="fas fa-spinner fa-spin" *ngIf="isBulkActionLoading"></i>
+            {{ isBulkActionLoading ? 'جاري المعالجة...' : 'تسديد المحدد' }}
+          </button>
+          <button class="btn btn-primary btn-sm" (click)="printSelectedReceipts()">
+            <i class="fas fa-print"></i>
+            طباعة الإيصالات
+          </button>
+          <button class="btn btn-outline btn-sm" (click)="selectedPayments.clear()">
+            <i class="fas fa-times"></i>
+            إلغاء التحديد
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- View Options -->
+    <div class="view-options card">
+      <div class="view-mode">
+        <button class="btn btn-sm" [class.active]="viewMode === 'table'" (click)="viewMode = 'table'">
+          <i class="fas fa-table"></i>
+          جدول
+        </button>
+        <button class="btn btn-sm" [class.active]="viewMode === 'cards'" (click)="viewMode = 'cards'">
+          <i class="fas fa-th-large"></i>
+          بطاقات
+        </button>
+      </div>
+      
+      <div class="sort-options">
+        <span>ترتيب حسب:</span>
+        <select [(ngModel)]="sortField" (change)="applyFilters()" class="form-control-sm">
+          <option value="paymentDate">تاريخ الدفع</option>
+          <option value="student.name">اسم الطالب</option>
+          <option value="class.name">اسم الحصة</option>
+          <option value="amount">المبلغ</option>
+          <option value="month">الشهر</option>
+        </select>
+        <button class="btn btn-sm btn-outline" (click)="sortDirection = sortDirection === 'asc' ? 'desc' : 'asc'; applyFilters()">
+          <i class="fas" [class.fa-sort-up]="sortDirection === 'asc'" [class.fa-sort-down]="sortDirection === 'desc'"></i>
+          {{ sortDirection === 'asc' ? 'تصاعدي' : 'تنازلي' }}
+        </button>
+      </div>
+      
+      <div class="pagination-controls">
+        <span>عرض</span>
+        <select [(ngModel)]="itemsPerPage" (change)="applyFilters()" class="form-control-sm">
+          <option value="10">10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <span>من {{ filteredPayments.length }} دفعة</span>
+      </div>
+    </div>
+  
+    <!-- Payments Table View -->
+    <div *ngIf="viewMode === 'table' && filteredPayments.length > 0" class="table-responsive card">
+      <table class="payments-table">
+        <thead>
+          <tr>
+            <th class="select-column">
+              <input type="checkbox" 
+                     [checked]="selectedPayments.size === filteredPayments.length && filteredPayments.length > 0"
+                     (change)="selectAllPayments()">
+            </th>
+            <th (click)="sort('paymentDate')" class="sortable">
+              تاريخ الدفع
+              <i class="fas" [class.fa-sort-up]="sortField === 'paymentDate' && sortDirection === 'asc'" 
+                 [class.fa-sort-down]="sortField === 'paymentDate' && sortDirection === 'desc'"></i>
+            </th>
+            <th (click)="sort('student.name')" class="sortable">
+              الطالب
+              <i class="fas" [class.fa-sort-up]="sortField === 'student.name' && sortDirection === 'asc'" 
+                 [class.fa-sort-down]="sortField === 'student.name' && sortDirection === 'desc'"></i>
+            </th>
+            <th (click)="sort('class.name')" class="sortable">
+              الحصة
+              <i class="fas" [class.fa-sort-up]="sortField === 'class.name' && sortDirection === 'asc'" 
+                 [class.fa-sort-down]="sortField === 'class.name' && sortDirection === 'desc'"></i>
+            </th>
+            <th (click)="sort('amount')" class="sortable">
+              المبلغ
+              <i class="fas" [class.fa-sort-up]="sortField === 'amount' && sortDirection === 'asc'" 
+                 [class.fa-sort-down]="sortField === 'amount' && sortDirection === 'desc'"></i>
+            </th>
+            <th>الشهر</th>
+            <th>طريقة الدفع</th>
+            <th>الحالة</th>
+            <th>رقم الفاتورة</th>
+            <th>ملاحظات</th>
+            <th>الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let payment of paginatedPayments" [class.selected]="selectedPayments.has(payment._id)">
+            <td class="select-column">
+              <input type="checkbox" 
+                     [checked]="selectedPayments.has(payment._id)"
+                     (change)="togglePaymentSelection(payment._id)">
+            </td>
+            <td>
+              {{ payment.paymentDate ? (payment.paymentDate | date: 'yyyy/MM/dd') : 'غير مدفوع' }}
+            </td>
+            <td class="student-info">
+              <div class="student-name">{{ payment.student?.name || 'غير معروف' }}</div>
+              <div class="student-id">{{ payment.student?.studentId || 'بدون رقم' }}</div>
+            </td>
+            <td>
+              {{ payment.class?.name || 'غير معروف' }}
+              <div class="class-teacher">{{ payment.class?.teacher?.name }}</div>
+            </td>
+            <td class="amount-cell">
+              <span class="amount">{{ payment.amount | number }} د.ج</span>
+            </td>
+            <td>{{ payment.month }}</td>
+            <td>
+              <span class="payment-method" [class]="payment.paymentMethod">
+                {{ getPaymentMethodText(payment.paymentMethod) }}
+              </span>
+            </td>
+            <td>
+              <span class="status-badge" [class]="getStatusClass(payment.status)">
+                {{ getStatusText(payment.status) }}
+              </span>
+            </td>
+            <td class="invoice-cell">
+              <span class="invoice-number">{{ payment.invoiceNumber || 'بدون رقم' }}</span>
+              <button class="btn-icon btn-sm" (click)="printSinglePaymentReceipt(payment)" [disabled]="!isPrinterConnected" title="طباعة الإيصال">
+                <i class="fas fa-print"></i>
+              </button>
+            </td>
+            <td class="notes-cell">
+              {{ payment.notes || 'لا توجد ملاحظات' }}
+            </td>
+            <td class="actions-cell">
+              <div class="action-buttons">
+                <button class="btn-icon btn-success" *ngIf="payment.status !== 'paid'" 
+                        (click)="markPaymentAsPaid(payment)" title="تسديد الدفعة">
+                  <i class="fas fa-check"></i>
+                </button>
+                <button class="btn-icon btn-info" (click)="openEditPaymentModal(payment)" title="تعديل المبلغ">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon btn-warning" *ngIf="payment.status === 'paid'" 
+                        (click)="cancelPayment(payment)" title="إلغاء الدفع">
+                  <i class="fas fa-undo"></i>
+                </button>
+                <button class="btn-icon btn-danger" (click)="deletePayment(payment)" title="حذف الدفعة">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  
+    <!-- Payments Cards View -->
+    <div *ngIf="viewMode === 'cards' && filteredPayments.length > 0" class="cards-grid">
+      <div *ngFor="let payment of paginatedPayments" class="payment-card" [class.selected]="selectedPayments.has(payment._id)">
+        <div class="card-header">
+          <div class="card-checkbox">
+            <input type="checkbox" 
+                   [checked]="selectedPayments.has(payment._id)"
+                   (change)="togglePaymentSelection(payment._id)">
+          </div>
+          <div class="card-title">
+            <h4>{{ payment.student?.name || 'غير معروف' }}</h4>
+            <span class="student-id">{{ payment.student?.studentId || 'بدون رقم' }}</span>
+          </div>
+          <span class="status-badge" [class]="getStatusClass(payment.status)">
+            {{ getStatusText(payment.status) }}
+          </span>
+        </div>
+        
+        <div class="card-body">
+          <div class="card-row">
+            <span class="label">الحصة:</span>
+            <span class="value">{{ payment.class?.name || 'غير معروف' }}</span>
+          </div>
+          <div class="card-row">
+            <span class="label">الشهر:</span>
+            <span class="value">{{ payment.month }}</span>
+          </div>
+          <div class="card-row">
+            <span class="label">المبلغ:</span>
+            <span class="amount-value">{{ payment.amount | number }} د.ج</span>
+          </div>
+          <div class="card-row">
+            <span class="label">تاريخ الدفع:</span>
+            <span class="value">{{ payment.paymentDate ? (payment.paymentDate | date: 'yyyy/MM/dd') : 'غير مدفوع' }}</span>
+          </div>
+          <div class="card-row">
+            <span class="label">طريقة الدفع:</span>
+            <span class="payment-method" [class]="payment.paymentMethod">
+              {{ getPaymentMethodText(payment.paymentMethod) }}
+            </span>
+          </div>
+          <div class="card-row" *ngIf="payment.invoiceNumber">
+            <span class="label">رقم الفاتورة:</span>
+            <span class="value">{{ payment.invoiceNumber }}</span>
+          </div>
+          <div class="card-row" *ngIf="payment.notes">
+            <span class="label">ملاحظات:</span>
+            <span class="value notes">{{ payment.notes }}</span>
+          </div>
+        </div>
+        
+        <div class="card-footer">
+          <div class="card-actions">
+            <button class="btn btn-sm btn-success" *ngIf="payment.status !== 'paid'" 
+                    (click)="markPaymentAsPaid(payment)">
+              <i class="fas fa-check"></i>
+              تسديد
+            </button>
+            <button class="btn btn-sm btn-info" (click)="openEditPaymentModal(payment)">
+              <i class="fas fa-edit"></i>
+              تعديل
+            </button>
+            <button class="btn btn-sm btn-warning" *ngIf="payment.status === 'paid'" 
+                    (click)="cancelPayment(payment)">
+              <i class="fas fa-undo"></i>
+              إلغاء
+            </button>
+            <button class="btn btn-sm btn-danger" (click)="deletePayment(payment)">
+              <i class="fas fa-trash"></i>
+              حذف
+            </button>
+            <button class="btn btn-sm btn-primary" (click)="printSinglePaymentReceipt(payment)" [disabled]="!isPrinterConnected">
+              <i class="fas fa-print"></i>
+              طباعة
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- No Results -->
+    <div *ngIf="filteredPayments.length === 0 && !isLoading" class="no-results card">
+      <div class="no-results-content">
+        <i class="fas fa-search"></i>
+        <h3>لا توجد مدفوعات</h3>
+        <p>لم يتم العثور على مدفوعات تطابق معايير البحث الخاصة بك</p>
+        <button class="btn btn-primary" (click)="clearFilters()">
+          <i class="fas fa-times"></i>
+          مسح الفلاتر
+        </button>
+      </div>
+    </div>
+  
+    <!-- Pagination -->
+    <div class="pagination-section">
+        <div class="pagination-info">
+          عرض {{ getPaginatedInfo().start }} إلى {{ getPaginatedInfo().end }} من {{ filteredPayments.length }}
+        </div>
+        
+        <div class="pagination-controls">
+          <button class="btn btn-sm btn-outline" (click)="currentPage = 1" [disabled]="currentPage === 1">
+            <i class="fas fa-angle-double-right"></i>
+            الأول
+          </button>
+          <button class="btn btn-sm btn-outline" (click)="currentPage = currentPage - 1" [disabled]="currentPage === 1">
+            <i class="fas fa-angle-right"></i>
+            السابق
+          </button>
+          
+          <div class="page-numbers">
+            <ng-container *ngFor="let page of getPageNumbers()">
+              <span *ngIf="typeof page === 'number'" 
+                    class="page-number" 
+                    [class.active]="page === currentPage"
+                    (click)="currentPage = page">
+                {{ page }}
+              </span>
+              <span *ngIf="typeof page === 'string'" class="page-ellipsis">
+                {{ page }}
+              </span>
+            </ng-container>
+          </div>
+          
+          <button class="btn btn-sm btn-outline" (click)="currentPage = currentPage + 1" [disabled]="currentPage === totalPages">
+            التالي
+            <i class="fas fa-angle-left"></i>
+          </button>
+          <button class="btn btn-sm btn-outline" (click)="currentPage = totalPages" [disabled]="currentPage === totalPages">
+            الأخير
+            <i class="fas fa-angle-double-left"></i>
+          </button>
+        </div>
+      </div>
+        
+    <!-- New Payment Modal -->
+    <div *ngIf="isNewPaymentModalOpen" class="modal-overlay">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h3>
+            <i class="fas fa-money-bill-wave"></i>
+            تسجيل دفعة جديدة
+          </h3>
+          <button class="btn-icon" (click)="closeNewPaymentModal()">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        
+        <form [formGroup]="newPaymentForm" (ngSubmit)="onSubmitNewPayment()">
+          <div class="modal-body">
+            <!-- Student Selection -->
+            <div class="form-group" [class.error]="newPaymentForm.get('studentId')?.invalid && newPaymentForm.get('studentId')?.touched">
+              <label for="studentId">
+                <i class="fas fa-user-graduate"></i>
+                الطالب *
+              </label>
+              <select id="studentId" formControlName="studentId" class="form-control">
+                <option value="">اختر الطالب</option>
+                <option *ngFor="let student of students" [value]="student._id">
+                  {{ student.name }} - {{ student.studentId }} - {{ student.grade || '' }}
+                </option>
+              </select>
+              <div *ngIf="newPaymentForm.get('studentId')?.invalid && newPaymentForm.get('studentId')?.touched" class="error-message">
+                يرجى اختيار طالب
+              </div>
+            </div>
+  
+            <!-- Class Selection -->
+            <div class="form-group" [class.error]="newPaymentForm.get('classId')?.invalid && newPaymentForm.get('classId')?.touched">
+              <label for="classId">
+                <i class="fas fa-chalkboard-teacher"></i>
+                الحصة *
+              </label>
+              <select id="classId" formControlName="classId" class="form-control">
+                <option value="">اختر الحصة</option>
+                <option *ngFor="let class of getStudentClasses(newPaymentForm.get('studentId')?.value || '')" [value]="class._id">
+                  {{ class.name }} - {{ class.teacher?.name }}
+                </option>
+              </select>
+              <div *ngIf="newPaymentForm.get('classId')?.invalid && newPaymentForm.get('classId')?.touched" class="error-message">
+                يرجى اختيار حصة
+              </div>
+            </div>
+  
+            <div class="form-row">
+              <!-- Amount -->
+              <div class="form-group" [class.error]="newPaymentForm.get('amount')?.invalid && newPaymentForm.get('amount')?.touched">
+                <label for="amount">
+                  <i class="fas fa-money-bill"></i>
+                  المبلغ (د.ج) *
+                </label>
+                <input type="number" id="amount" formControlName="amount" class="form-control" min="1" step="100">
+                <div *ngIf="newPaymentForm.get('amount')?.invalid && newPaymentForm.get('amount')?.touched" class="error-message">
+                  يرجى إدخال مبلغ صحيح
+                </div>
+              </div>
+  
+              <!-- Month -->
+              <div class="form-group" [class.error]="newPaymentForm.get('month')?.invalid && newPaymentForm.get('month')?.touched">
+                <label for="month">
+                  <i class="fas fa-calendar-alt"></i>
+                  الشهر *
+                </label>
+                <select id="month" formControlName="month" class="form-control">
+                  <option value="">اختر الشهر</option>
+                  <option *ngFor="let month of availableMonths" [value]="month">
+                    {{ month }}
+                  </option>
+                </select>
+                <div *ngIf="newPaymentForm.get('month')?.invalid && newPaymentForm.get('month')?.touched" class="error-message">
+                  يرجى اختيار شهر
+                </div>
+              </div>
+            </div>
+  
+            <div class="form-row">
+              <!-- Payment Method -->
+              <div class="form-group">
+                <label for="paymentMethod">
+                  <i class="fas fa-credit-card"></i>
+                  طريقة الدفع
+                </label>
+                <select id="paymentMethod" formControlName="paymentMethod" class="form-control">
+                  <option value="cash">نقدي</option>
+                  <option value="bank">تحويل بنكي</option>
+                  <option value="online">دفع إلكتروني</option>
+                  <option value="mobile">دفع محمول</option>
+                  <option value="check">شيك</option>
+                </select>
+              </div>
+  
+              <!-- Payment Date -->
+              <div class="form-group" [class.error]="newPaymentForm.get('paymentDate')?.invalid && newPaymentForm.get('paymentDate')?.touched">
+                <label for="paymentDate">
+                  <i class="fas fa-calendar"></i>
+                  تاريخ الدفع
+                </label>
+                <input type="date" id="paymentDate" formControlName="paymentDate" class="form-control">
+              </div>
+            </div>
+  
+            <!-- Notes -->
+            <div class="form-group">
+              <label for="notes">
+                <i class="fas fa-sticky-note"></i>
+                ملاحظات
+              </label>
+              <textarea id="notes" formControlName="notes" class="form-control" rows="3" 
+                        placeholder="أي ملاحظات إضافية حول الدفعة..."></textarea>
+            </div>
+          </div>
+          
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeNewPaymentModal()">
+              إلغاء
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="newPaymentForm.invalid || isRecordingPayment">
+              <i class="fas fa-save" *ngIf="!isRecordingPayment"></i>
+              <i class="fas fa-spinner fa-spin" *ngIf="isRecordingPayment"></i>
+              {{ isRecordingPayment ? 'جاري التسجيل...' : 'تسجيل الدفعة' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  
+    <!-- Edit Payment Modal -->
+    <div *ngIf="isEditPaymentModalOpen" class="modal-overlay">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h3>
+            <i class="fas fa-edit"></i>
+            تعديل الدفعة
+          </h3>
+          <button class="btn-icon" (click)="isEditPaymentModalOpen = false">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="payment-info">
+            <div class="info-row">
+              <span class="label">الطالب:</span>
+              <span class="value">{{ editingPayment?.student?.name }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">الحصة:</span>
+              <span class="value">{{ editingPayment?.class?.name }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">الشهر:</span>
+              <span class="value">{{ editingPayment?.month }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">الحالة:</span>
+              <span class="status-badge" [class]="getStatusClass(editingPayment?.status || '')">
+                {{ getStatusText(editingPayment?.status || '') }}
+              </span>
+            </div>
+          </div>
+          
+          <div class="edit-actions">
+            <button class="btn btn-primary" (click)="updatePaymentAmount()">
+              <i class="fas fa-money-bill-wave"></i>
+              تعديل المبلغ
+            </button>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" (click)="isEditPaymentModalOpen = false">
+            إغلاق
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>

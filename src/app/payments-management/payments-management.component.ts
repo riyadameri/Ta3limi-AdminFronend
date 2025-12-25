@@ -262,6 +262,42 @@ export class PaymentsManagementComponent implements OnInit {
     return this.filteredPayments.slice(startIndex, endIndex);
   }
   
+  // Pagination helper methods
+  getPaginatedInfo(): { start: number, end: number } {
+    const start = (this.currentPage - 1) * this.itemsPerPage + 1;
+    const end = Math.min(this.currentPage * this.itemsPerPage, this.filteredPayments.length);
+    return { start, end };
+  }
+  
+  getPageNumbers(): number[] {
+    const pages: number[] = [];
+    const maxVisiblePages = 7;
+    
+    if (this.totalPages <= maxVisiblePages) {
+      // Show all pages
+      for (let i = 1; i <= this.totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Show limited pages around current page
+      let startPage = Math.max(1, this.currentPage - 3);
+      let endPage = Math.min(this.totalPages, this.currentPage + 3);
+      
+      // Adjust if at start or end
+      if (this.currentPage <= 4) {
+        endPage = maxVisiblePages;
+      } else if (this.currentPage >= this.totalPages - 3) {
+        startPage = this.totalPages - maxVisiblePages + 1;
+      }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i);
+      }
+    }
+    
+    return pages;
+  }
+  
   // Filter and sort methods
   clearFilters() {
     this.filters = {

@@ -572,6 +572,7 @@ button:hover:not(:disabled) {
   max-height: 85vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  
 }
 
 .modal-lg {
@@ -1590,6 +1591,12 @@ button:hover:not(:disabled) {
   visibility: visible !important;
   height: 100% !important;
   animation: studentModalFadeIn 0.2s ease !important;
+  width: 80% !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: auto !important;
+  border-radius: 20px !important;
+  
 }
 
 .student-modal-overlay.hidden {
@@ -1601,6 +1608,7 @@ button:hover:not(:disabled) {
   z-index: 1001 !important;
   padding: 14px;
   margin: 50px;
+  
 }
 .student-modal-footer {
   padding: 24px 32px;
@@ -1612,4 +1620,25 @@ button:hover:not(:disabled) {
   bottom: 0;
   background: white;
   border-radius: 0 0 20px 20px;
+}
+@keyframes studentModalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes studentModalFadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
 }

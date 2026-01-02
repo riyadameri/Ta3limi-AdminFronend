@@ -1,0 +1,226 @@
+<div class="class-commission-container">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+          <i class="fas fa-calculator me-2"></i>
+          حساب عمولة الأستاذ للحصة الشاملة
+        </h5>
+      </div>
+      
+      <div class="card-body">
+        <!-- نموذج اختيار البيانات -->
+        <div class="row mb-4">
+          <div class="col-md-3">
+            <label class="form-label">اختر الأستاذ</label>
+            <select class="form-control" formControlName="teacherId">
+              <option value="">-- اختر الأستاذ --</option>
+              <option *ngFor="let teacher of teachers" [value]="teacher._id">
+                {{ teacher.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="col-md-3">
+            <label class="form-label">اختر الحصة</label>
+            <select class="form-control" formControlName="classId">
+              <option value="">-- اختر الحصة --</option>
+              <option *ngFor="let class of classes" [value]="class._id">
+                {{ class.name }} - {{ class.subject }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="col-md-2">
+            <label class="form-label">الشهر</label>
+            <input type="month" class="form-control" formControlName="month">
+          </div>
+          
+          <div class="col-md-2">
+            <label class="form-label">الجولة (اختياري)</label>
+            <input type="text" class="form-control" formControlName="round" placeholder="مثال: جولة 1">
+          </div>
+          
+          <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-primary w-100" (click)="calculateCommission()" [disabled]="loading">
+              <i class="fas fa-calculator me-1"></i>
+              حساب العمولة
+            </button>
+          </div>
+        </div>
+  
+        <!-- عرض نتائج العمولة -->
+        <div *ngIf="commissionData" class="commission-results">
+          <div class="row mb-4">
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header bg-info text-white">
+                  <h6 class="mb-0">معلومات العمولة</h6>
+                </div>
+                <div class="card-body">
+                  <table class="table table-sm">
+                    <tr>
+                      <td><strong>الأستاذ:</strong></td>
+                      <td>{{ commissionData.teacher.name }}</td>
+                    </tr>
+                    <tr>
+                      <td><strong>الحصة:</strong></td>
+                      <td>{{ commissionData.class.name }} - {{ commissionData.class.subject }}</td>
+                    </tr>
+                    <tr>
+                      <td><strong>سعر الحصة:</strong></td>
+                      <td>{{ formatCurrency(commissionData.class.price) }}</td>
+                    </tr>
+                    <tr>
+                      <td><strong>عدد الحصص أسبوعياً:</strong></td>
+                      <td>{{ commissionData.class.weeklySessions }}</td>
+                    </tr>
+                    <tr>
+                      <td><strong>الفترة:</strong></td>
+                      <td>{{ commissionData.period.month }}</td>
+                    </tr>
+                  </table>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header bg-success text-white">
+                  <h6 class="mb-0">ملخص العمولة</h6>
+                </div>
+                <div class="card-body">
+                  <table class="table table-sm">
+                    <tr>
+                      <td><strong>عدد الطلاب:</strong></td>
+                      <td>{{ commissionData.summary.totalStudents }}</td>
+                    </tr>
+                    <tr>
+                      <td><strong>إيراد الحصة الكلي:</strong></td>
+                      <td>{{ formatCurrency(commissionData.summary.totalClassRevenue) }}</td>
+                    </tr>
+                    <tr>
+                      <td><strong>نسبة الأستاذ:</strong></td>
+                      <td>{{ commissionData.teacher.commissionPercentage }}%</td>
+                    </tr>
+                    <tr>
+                      <td><strong>عمولة الأستاذ:</strong></td>
+                      <td class="fw-bold text-primary">
+                        {{ formatCurrency(commissionData.summary.calculatedTotal || commissionData.summary.totalTeacherCommission) }}
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+  
+          <!-- جدول الطلاب مع إمكانية التعديل -->
+          <div class="card mb-4">
+            <div class="card-header bg-warning">
+              <h6 class="mb-0">
+                <i class="fas fa-users me-2"></i>
+                قائمة الطلاب المشمولين في العمولة
+                <small class="text-muted">(يمكنك استبعاد طالب من العمولة)</small>
+              </h6>
+            </div>
+            
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="table table-hover">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>اسم الطالب</th>
+                      <th>رقم الطالب</th>
+                      <th>عدد الحضور</th>
+                      <th>النسبة</th>
+                      <th>مبلغ الطالب</th>
+                      <th>حصة الأستاذ</th>
+                      <th>الإجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let student of commissionData.students; let i = index">
+                      <td>{{ i + 1 }}</td>
+                      <td>{{ student.student.name }}</td>
+                      <td>{{ student.student.studentId }}</td>
+                      <td>
+                        <span class="badge" [ngClass]="{
+                          'bg-success': student.attendancePercentage >= 80,
+                          'bg-warning': student.attendancePercentage >= 50 && student.attendancePercentage < 80,
+                          'bg-danger': student.attendancePercentage < 50
+                        }">
+                          {{ student.attendancesCount }}/{{ student.scheduledSessions }}
+                        </span>
+                      </td>
+                      <td>{{ student.attendancePercentage }}%</td>
+                      <td>{{ formatCurrency(student.monthlyFee) }}</td>
+                      <td>{{ formatCurrency(student.teacherShare) }}</td>
+                      <td>
+                        <div class="form-check form-switch">
+                          <input class="form-check-input" type="checkbox" 
+                                 [checked]="!studentAdjustments.find(s => s.studentId === student.student._id)?.removeFromCommission"
+                                 (change)="toggleStudentInclusion(student.student._id)">
+                          <label class="form-check-label">
+                            {{ studentAdjustments.find(s => s.studentId === student.student._id)?.removeFromCommission ? 'مستبعد' : 'مشمول' }}
+                          </label>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr class="table-primary">
+                      <td colspan="6" class="text-end"><strong>المجموع النهائي:</strong></td>
+                      <td colspan="2">
+                        <strong>{{ formatCurrency(commissionData.summary.calculatedTotal || commissionData.summary.totalTeacherCommission) }}</strong>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+  
+          <!-- خيارات الدفع -->
+          <div class="card">
+            <div class="card-header bg-secondary text-white">
+              <h6 class="mb-0">خيارات الدفع</h6>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-4">
+                  <label class="form-label">طريقة الدفع</label>
+                  <select class="form-control" formControlName="paymentMethod">
+                    <option value="cash">نقداً</option>
+                    <option value="bank">تحويل بنكي</option>
+                    <option value="online">دفع إلكتروني</option>
+                  </select>
+                </div>
+                
+                <div class="col-md-6">
+                  <label class="form-label">ملاحظات</label>
+                  <textarea class="form-control" formControlName="notes" rows="2" 
+                            placeholder="ملاحظات إضافية حول عملية الدفع..."></textarea>
+                </div>
+                
+                <div class="col-md-2 d-flex align-items-end">
+                  <button class="btn btn-success w-100" (click)="payCommission()" [disabled]="loading">
+                    <i class="fas fa-money-bill-wave me-1"></i>
+                    دفع العمولة
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+  
+        <!-- حالة التحميل -->
+        <div *ngIf="loading" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">جاري التحميل...</span>
+          </div>
+          <p class="mt-2">جاري حساب العمولة...</p>
+        </div>
+      </div>
+    </div>
+  </div>

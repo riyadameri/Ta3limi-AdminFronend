@@ -1,332 +1,724 @@
-<div class="lesson-management">
-    <!-- Header -->
-    <div class="header">
-      <h2>إدارة الحصص</h2>
-      <div class="stats-grid">
-        <div class="stat-card">
-          <h3>عدد الحصص</h3>
-          <p class="stat-number">{{ stats.totalClasses }}</p>
+<!-- lesson-management.component.html -->
+<div class="lesson-management-container">
+    <!-- Stats Overview -->
+    <div class="stats-overview">
+      <div class="stat-card" (click)="setViewMode('classes')">
+        <div class="stat-icon">📚</div>
+        <div class="stat-info">
+          <h3>{{stats.totalClasses}}</h3>
+          <p>الحصص</p>
         </div>
-        <div class="stat-card">
-          <h3>الطلاب المسجلين</h3>
-          <p class="stat-number">{{ stats.totalStudents }}</p>
+      </div>
+      <div class="stat-card" (click)="setViewMode('liveClasses')">
+        <div class="stat-icon">🎥</div>
+        <div class="stat-info">
+          <h3>{{stats.totalLiveClasses}}</h3>
+          <p>الحصص الحية</p>
         </div>
-        <div class="stat-card">
-          <h3>حصص قادمة</h3>
-          <p class="stat-number">{{ stats.upcomingClasses }}</p>
+      </div>
+      <div class="stat-card" (click)="setViewMode('students')">
+        <div class="stat-icon">👨‍🎓</div>
+        <div class="stat-info">
+          <h3>{{stats.totalStudents}}</h3>
+          <p>الطلاب</p>
         </div>
-        <div class="stat-card">
-          <h3>حصص حية</h3>
-          <p class="stat-number">{{ stats.totalLiveClasses }}</p>
+      </div>
+      <div class="stat-card" (click)="setViewMode('liveClasses')">
+        <div class="stat-icon">📅</div>
+        <div class="stat-info">
+          <h3>{{stats.upcomingClasses}}</h3>
+          <p>حصص قادمة</p>
         </div>
       </div>
     </div>
   
     <!-- Navigation Tabs -->
-    <div class="nav-tabs">
-      <button 
-        [class.active]="viewMode === 'classes'" 
-        (click)="setViewMode('classes')">
-        جميع الحصص
+    <div class="navigation-tabs">
+      <button class="tab-btn" [class.active]="viewMode === 'classes'" 
+              (click)="setViewMode('classes')">
+        📚 إدارة الحصص
       </button>
-      <button 
-        [class.active]="viewMode === 'liveClasses'" 
-        (click)="setViewMode('liveClasses')">
-        الحصص الحية
+      <button class="tab-btn" [class.active]="viewMode === 'liveClasses'" 
+              (click)="setViewMode('liveClasses')">
+        🎥 الحصص الحية
       </button>
-      <button 
-        [class.active]="viewMode === 'attendance'" 
-        (click)="setViewMode('attendance')">
-        الحضور والغياب
+      <button class="tab-btn" [class.active]="viewMode === 'attendance'" 
+              (click)="setViewMode('attendance')">
+        📝 الحضور والغياب
       </button>
-      <button 
-        [class.active]="viewMode === 'students'" 
-        (click)="setViewMode('students')">
-        الطلاب
+      <button class="tab-btn" [class.active]="viewMode === 'students'" 
+              (click)="setViewMode('students')">
+        👨‍🎓 الطلاب
       </button>
     </div>
   
-    <!-- Classes View -->
-    <div *ngIf="viewMode === 'classes'" class="classes-view">
-      <!-- Filters -->
-      <div class="filters">
-        <div class="filter-row">
-          <select [(ngModel)]="classFilter.academicYear">
-            <option value="">جميع السنوات الدراسية</option>
-            <option value="1AS">الأولى ثانوي</option>
-            <option value="2AS">الثانية ثانوي</option>
-            <option value="3AS">الثالثة ثانوي</option>
-            <option value="1MS">الأولى متوسط</option>
-            <option value="2MS">الثانية متوسط</option>
-            <option value="3MS">الثالثة متوسط</option>
-            <option value="4MS">الرابعة متوسط</option>
-            <option value="5MS">الخامسة متوسط</option>
-          </select>
-          
-          <select [(ngModel)]="classFilter.subject">
-            <option value="">جميع المواد</option>
-            <option value="رياضيات">رياضيات</option>
-            <option value="فيزياء">فيزياء</option>
-            <option value="علوم">علوم</option>
-            <option value="لغة عربية">لغة عربية</option>
-            <option value="لغة فرنسية">لغة فرنسية</option>
-            <option value="لغة انجليزية">لغة انجليزية</option>
-          </select>
-          
-          <button (click)="applyClassFilter()">بحث</button>
-          <button (click)="resetClassFilter()" class="secondary">إعادة تعيين</button>
-        </div>
-      </div>
-  
-      <!-- Classes List -->
-      <div class="content-section">
-        <div class="classes-list">
-          <h3>قائمة الحصص</h3>
-          <div class="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>اسم الحصة</th>
-                  <th>المادة</th>
-                  <th>السنة الدراسية</th>
-                  <th>الأستاذ</th>
-                  <th>عدد الطلاب</th>
-                  <th>السعر</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let cls of classes" 
-                    [class.selected]="selectedClass?._id === cls._id"
-                    (click)="selectClass(cls)">
-                  <td>{{ cls.name }}</td>
-                  <td>{{ cls.subject }}</td>
-                  <td>{{ cls.academicYear }}</td>
-                  <td>{{ cls.teacher?.name || 'غير محدد' }}</td>
-                  <td>{{ (cls.students ? cls.students.length : 0) }}</td>
-                  <td>{{ cls.price | number }} د.ج</td>
-                  <td>
-                    <button (click)="selectClass(cls); $event.stopPropagation()">تفاصيل</button>
-                    <button (click)="deleteClass(cls._id); $event.stopPropagation()" class="danger">حذف</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+    <!-- Classes Management Section -->
+    <div class="section-container" *ngIf="viewMode === 'classes'">
+      <!-- Create New Class Form -->
+      <div class="form-section" *ngIf="isCreatingClass">
+        <h2 class="section-title">➕ إنشاء حصة جديدة</h2>
+        <div class="form-card">
+          <!-- Basic Information -->
+          <div class="form-section-header">
+            <h3>معلومات الحصة الأساسية</h3>
           </div>
-        </div>
-  
-        <!-- Class Details -->
-        <div class="class-details" *ngIf="selectedClass">
-          <div class="details-header">
-            <h3>تفاصيل الحصة: {{ selectedClass.name }}</h3>
-            <div class="action-buttons">
-              <button (click)="isEditingClass = !isEditingClass">
-                {{ isEditingClass ? 'إلغاء التعديل' : 'تعديل' }}
-              </button>
-              <button (click)="isCreatingLiveClass = true" class="success">
-                إنشاء حصة حية
-              </button>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="className">اسم الحصة:</label>
+              <input type="text" id="className" [(ngModel)]="newClass.name" 
+                     placeholder="أدخل اسم الحصة">
+            </div>
+            <div class="form-group">
+              <label for="classSubject">المادة:</label>
+              <select id="classSubject" [(ngModel)]="newClass.subject">
+                <option value="">اختر المادة</option>
+                <option value="رياضيات">رياضيات</option>
+                <option value="فيزياء">فيزياء</option>
+                <option value="علوم">علوم</option>
+                <option value="لغة عربية">لغة عربية</option>
+                <option value="لغة فرنسية">لغة فرنسية</option>
+                <option value="لغة انجليزية">لغة انجليزية</option>
+                <option value="تاريخ">تاريخ</option>
+                <option value="جغرافيا">جغرافيا</option>
+                <option value="فلسفة">فلسفة</option>
+                <option value="إعلام آلي">إعلام آلي</option>
+              </select>
             </div>
           </div>
-  
-          <div *ngIf="!isEditingClass">
-            <!-- Display Mode -->
-            <div class="info-grid">
-              <div class="info-item">
-                <strong>المادة:</strong> {{ selectedClass.subject }}
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="academicYear">السنة الدراسية:</label>
+              <select id="academicYear" [(ngModel)]="newClass.academicYear">
+                <option value="">اختر السنة</option>
+                <option value="1AS">الأولى ثانوي</option>
+                <option value="2AS">الثانية ثانوي</option>
+                <option value="3AS">الثالثة ثانوي</option>
+                <option value="1MS">الأولى متوسط</option>
+                <option value="2MS">الثانية متوسط</option>
+                <option value="3MS">الثالثة متوسط</option>
+                <option value="4MS">الرابعة متوسط</option>
+                <option value="5MS">الخامسة متوسط</option>
+                <option value="1AP">الأولى إبتدائي</option>
+                <option value="2AP">الثانية إبتدائي</option>
+                <option value="3AP">الثالثة إبتدائي</option>
+                <option value="4AP">الرابعة إبتدائي</option>
+                <option value="5AP">الخامسة إبتدائي</option>
+                <option value="NS">غير محدد</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="classPrice">السعر (د.ج):</label>
+              <input type="number" id="classPrice" [(ngModel)]="newClass.price" 
+                     placeholder="أدخل سعر الحصة">
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="classTeacher">المعلم:</label>
+              <select id="classTeacher" [(ngModel)]="newClass.teacher">
+                <option value="">اختر المعلم</option>
+                <option *ngFor="let teacher of teachers" [value]="teacher._id">
+                  {{teacher.name}} - {{teacher.subjects?.join(', ')}}
+                </option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-group full-width">
+            <label for="classDescription">وصف الحصة:</label>
+            <textarea id="classDescription" [(ngModel)]="newClass.description" 
+                      placeholder="أدخل وصفاً للحصة" rows="3"></textarea>
+          </div>
+          
+          <!-- Schedule Section -->
+          <div class="form-section-header">
+            <h3>📅 جدول الحصص</h3>
+            <button class="btn btn-secondary" (click)="showScheduleForm = !showScheduleForm">
+              {{showScheduleForm ? 'إخفاء النموذج' : '➕ إضافة جدول'}}
+            </button>
+          </div>
+          
+          <!-- Schedule Form -->
+          <div class="schedule-form" *ngIf="showScheduleForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="scheduleDay">اليوم:</label>
+                <select id="scheduleDay" [(ngModel)]="newScheduleItem.day">
+                  <option value="">اختر اليوم</option>
+                  <option *ngFor="let day of daysOfWeek" [value]="day.value">
+                    {{day.label}}
+                  </option>
+                </select>
               </div>
-              <div class="info-item">
-                <strong>السنة الدراسية:</strong> {{ selectedClass.academicYear }}
-              </div>
-              <div class="info-item">
-                <strong>الأستاذ:</strong> {{ selectedClass.teacher?.name || 'غير محدد' }}
-              </div>
-              <div class="info-item">
-                <strong>السعر:</strong> {{ selectedClass.price | number }} د.ج
+              <div class="form-group">
+                <label for="scheduleTime">الوقت:</label>
+                <select id="scheduleTime" [(ngModel)]="newScheduleItem.time">
+                  <option value="">اختر الوقت</option>
+                  <option *ngFor="let time of timeSlots" [value]="time">
+                    {{time}}
+                  </option>
+                </select>
               </div>
             </div>
-  
-            <!-- Schedule -->
-            <div class="schedule-section" *ngIf="selectedClass.schedule && selectedClass.schedule.length > 0">
-              <h4>الجدول الدراسي</h4>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label for="scheduleClassroom">القاعة:</label>
+                <select id="scheduleClassroom" [(ngModel)]="newScheduleItem.classroom">
+                  <option value="">اختر القاعة</option>
+                  <option *ngFor="let classroom of classrooms" [value]="classroom._id">
+                    {{classroom.name}} (السعة: {{classroom.capacity}})
+                  </option>
+                </select>
+              </div>
+              <div class="form-group">
+                <button class="btn btn-primary" (click)="addScheduleItem()" 
+                        [disabled]="!newScheduleItem.day || !newScheduleItem.time || !newScheduleItem.classroom">
+                  ➕ إضافة إلى الجدول
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Current Schedule Table -->
+          <div class="schedule-table" *ngIf="newClass.schedule && newClass.schedule.length > 0">
+            <h4>📋 الجدول المضاف</h4>
+            <div class="table-container">
               <table>
                 <thead>
                   <tr>
                     <th>اليوم</th>
                     <th>الوقت</th>
                     <th>القاعة</th>
+                    <th>الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let session of selectedClass.schedule">
-                    <td>{{ session.day }}</td>
-                    <td>{{ session.time }}</td>
-                    <td>{{ session || 'غير محدد' }}</td>
+                  <tr *ngFor="let item of newClass.schedule; let i = index">
+                    <td>{{item.day}}</td>
+                    <td>{{item.time}}</td>
+                    <td>
+                      {{getClassroomName(item.classroom)}}
+                    </td>
+                    <td>
+                      <button class="btn-action btn-danger" (click)="removeScheduleItem(i)">
+                        🗑️ حذف
+                      </button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
+          </div>
+          
+          <div class="form-actions">
+            <button class="btn btn-primary" (click)="createClass()">
+              💾 حفظ الحصة
+            </button>
+            <button class="btn btn-secondary" (click)="resetNewClassForm()">
+              🔄 إعادة تعيين
+            </button>
+            <button class="btn btn-warning" (click)="isCreatingClass = false">
+              ❌ إلغاء
+            </button>
+          </div>
+        </div>
+      </div>
   
-            <!-- Students List -->
-            <div class="students-section">
-              <h4>الطلاب المسجلين ({{ (selectedClass.students ? selectedClass.students.length : 0) }})</h4>
-              <div class="students-list" *ngIf="selectedClass.students && selectedClass.students.length > 0">
-                <div *ngFor="let student of selectedClass.students" class="student-item">
-                  <span>{{ getStudentName(student) }}</span>
-                  <button (click)="unenrollStudent(typeof student === 'string' ? student : student._id)" class="danger small">
-                    إزالة
+      <!-- Class List -->
+      <div class="list-section">
+        <div class="section-header">
+          <h2 class="section-title">📋 قائمة الحصص ({{classes.length}})</h2>
+          <button class="btn btn-primary" (click)="isCreatingClass = true">
+            ➕ إنشاء حصة جديدة
+          </button>
+        </div>
+        
+        <!-- Filter Controls -->
+        <div class="filter-section">
+          <div class="filter-row">
+            <div class="filter-group">
+              <label>تصفية حسب:</label>
+              <select [(ngModel)]="classFilter.academicYear">
+                <option value="">جميع السنوات</option>
+                <option value="1AS">الأولى ثانوي</option>
+                <option value="2AS">الثانية ثانوي</option>
+                <option value="3AS">الثالثة ثانوي</option>
+                <option value="1MS">الأولى متوسط</option>
+                <option value="2MS">الثانية متوسط</option>
+                <option value="3MS">الثالثة متوسط</option>
+                <option value="4MS">الرابعة متوسط</option>
+                <option value="5MS">الخامسة متوسط</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <select [(ngModel)]="classFilter.subject">
+                <option value="">جميع المواد</option>
+                <option value="رياضيات">رياضيات</option>
+                <option value="فيزياء">فيزياء</option>
+                <option value="علوم">علوم</option>
+                <option value="لغة عربية">لغة عربية</option>
+                <option value="لغة فرنسية">لغة فرنسية</option>
+                <option value="لغة انجليزية">لغة انجليزية</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <select [(ngModel)]="classFilter.teacher">
+                <option value="">جميع المعلمين</option>
+                <option *ngFor="let teacher of teachers" [value]="teacher._id">
+                  {{teacher.name}}
+                </option>
+              </select>
+            </div>
+            <div class="filter-actions">
+              <button class="btn btn-primary" (click)="applyClassFilter()">
+                🔍 تطبيق التصفية
+              </button>
+              <button class="btn btn-secondary" (click)="resetClassFilter()">
+                ♻️ إعادة تعيين
+              </button>
+            </div>
+          </div>
+        </div>
+  
+        <!-- Classes Grid -->
+        <div class="grid-container">
+          <div class="grid-card" *ngFor="let cls of classes" 
+               [class.selected]="selectedClass?._id === cls._id"
+               (click)="selectClass(cls)">
+            <div class="card-header">
+              <h3>{{cls.name}}</h3>
+              <span class="status-badge" [class.active]="(cls.students && cls.students.length > 0) || false">
+                {{(cls.students && cls.students.length) || 0}} طالب
+              </span>
+            </div>
+            
+            <div class="card-body">
+              <div class="info-row">
+                <span class="label">المادة:</span>
+                <span class="value">{{cls.subject}}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">السنة:</span>
+                <span class="value">{{cls.academicYear}}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">السعر:</span>
+                <span class="value price">{{cls.price}} د.ج</span>
+              </div>
+              <div class="info-row">
+                <span class="label">المعلم:</span>
+                <span class="value">{{getTeacherName(cls.teacher)}}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">الجدول:</span>
+                <span class="value">
+                  {{(cls.schedule && cls.schedule.length) || 0}} جلسة
+                </span>
+              </div>
+            </div>
+            
+            <div class="card-actions">
+              <button class="btn-action" (click)="selectClass(cls); $event.stopPropagation()">
+                👁️ تفاصيل
+              </button>
+              <button class="btn-action btn-danger" 
+                      (click)="deleteClass(cls._id); $event.stopPropagation()">
+                🗑️ حذف
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+  
+      <!-- Selected Class Details -->
+      <div class="detail-section" *ngIf="selectedClass">
+        <h2 class="section-title">📋 تفاصيل الحصة: {{selectedClass.name}}</h2>
+        
+        <div class="detail-card">
+          <div class="detail-header">
+            <div class="header-actions">
+              <button class="btn btn-primary" (click)="isEditingClass = !isEditingClass">
+                ✏️ تعديل
+              </button>
+              <button class="btn btn-success" (click)="isCreatingLiveClass = true" 
+                      *ngIf="!isCreatingLiveClass">
+                🎥 إنشاء حصة حية
+              </button>
+              <button class="btn btn-secondary" (click)="selectedClass = null">
+                ✖️ إغلاق
+              </button>
+            </div>
+          </div>
+          
+          <!-- Edit Form -->
+          <div class="edit-form" *ngIf="isEditingClass">
+            <div class="form-row">
+              <div class="form-group">
+                <label>اسم الحصة:</label>
+                <input type="text" [(ngModel)]="selectedClass.name">
+              </div>
+              <div class="form-group">
+                <label>السعر:</label>
+                <input type="number" [(ngModel)]="selectedClass.price">
+              </div>
+            </div>
+            
+            <div class="form-group full-width">
+              <label>الوصف:</label>
+              <textarea [(ngModel)]="selectedClass.description" rows="3"></textarea>
+            </div>
+            
+            <div class="form-actions">
+              <button class="btn btn-primary" (click)="updateClass()">
+                💾 حفظ التغييرات
+              </button>
+              <button class="btn btn-secondary" (click)="isEditingClass = false">
+                ❌ إلغاء
+              </button>
+            </div>
+          </div>
+          
+          <!-- Class Info -->
+          <div class="detail-body">
+            <div class="info-grid">
+              <div class="info-item">
+                <strong>المادة:</strong> {{selectedClass.subject}}
+              </div>
+              <div class="info-item">
+                <strong>السنة الدراسية:</strong> {{selectedClass.academicYear}}
+              </div>
+              <div class="info-item">
+                <strong>السعر الشهري:</strong> {{selectedClass.price}} د.ج
+              </div>
+              <div class="info-item">
+                <strong>المعلم:</strong> {{getTeacherName(selectedClass.teacher)}}
+              </div>
+              <div class="info-item">
+                <strong>عدد الطلاب:</strong> {{(selectedClass.students && selectedClass.students.length) || 0}} طالب
+              </div>
+            </div>
+            
+            <!-- Schedule Table -->
+            <div class="schedule-section" *ngIf="selectedClass.schedule && selectedClass.schedule.length > 0">
+              <h3>📅 جدول الحصص</h3>
+              <div class="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>اليوم</th>
+                      <th>الوقت</th>
+                      <th>القاعة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let schedule of selectedClass.schedule">
+                      <td>{{schedule.day}}</td>
+                      <td>{{schedule.time}}</td>
+                      <td>{{getClassroomName(schedule.classroom)}}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <!-- Add Student to Class Form -->
+            <div class="add-student-form">
+              <h3>➕ إضافة طالب للحصة</h3>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label>اختر طالباً:</label>
+                  <select [(ngModel)]="selectedStudent">
+                    <option value="">اختر طالباً</option>
+                    <option *ngFor="let student of availableStudents" [ngValue]="student">
+                      {{student.name}} - {{student.academicYear}} - {{student.parentPhone}}
+                    </option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <button class="btn btn-primary" 
+                          (click)="enrollStudent(selectedStudent!)"
+                          [disabled]="!selectedStudent">
+                    ➕ إضافة الطالب
                   </button>
                 </div>
               </div>
-  
-              <!-- Available Students for Enrollment -->
-              <div class="available-students" *ngIf="availableStudents.length > 0">
-                <h5>إضافة طلاب</h5>
-                <div class="available-list">
-                  <div *ngFor="let student of availableStudents" class="student-item">
-                    <span>{{ student.name }} - {{ student.academicYear }}</span>
-                    <button (click)="enrollStudent(student)" class="success small">
-                      تسجيل
-                    </button>
-                  </div>
-                </div>
+            </div>
+            
+            <!-- Students List -->
+            <div class="students-list">
+              <h3>👨‍🎓 الطلاب المسجلين ({{(selectedClass.students && selectedClass.students.length) || 0}})</h3>
+              
+              <div class="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>الاسم</th>
+                      <th>رقم الطالب</th>
+                      <th>السنة</th>
+                      <th>ولي الأمر</th>
+                      <th>الهاتف</th>
+                      <th>الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr *ngFor="let student of selectedClass.students || []">
+                      <td>{{getStudentName(student)}}</td>
+                      <td>{{getStudentId(student)}}</td>
+                      <td>{{getStudentAcademicYear(student)}}</td>
+                      <td>{{getStudentParentName(student)}}</td>
+                      <td>{{getStudentParentPhone(student)}}</td>
+                      <td>
+                        <button class="btn-action btn-danger" 
+                                (click)="unenrollStudent(student._id || student)">
+                          🗑️ إزالة
+                        </button>
+                      </td>
+                    </tr>
+                    <tr *ngIf="(!selectedClass.students || selectedClass.students.length === 0)">
+                      <td colspan="6" class="empty-row">لا يوجد طلاب مسجلين في هذه الحصة</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
-          </div>
-  
-          <!-- Edit Mode -->
-          <div *ngIf="isEditingClass" class="edit-form">
-            <form (ngSubmit)="updateClass()">
-              <div class="form-group">
-                <label>اسم الحصة:</label>
-                <input [(ngModel)]="selectedClass.name" name="name" required>
-              </div>
-              
-              <div class="form-group">
-                <label>المادة:</label>
-                <select [(ngModel)]="selectedClass.subject" name="subject" required>
-                  <option value="رياضيات">رياضيات</option>
-                  <option value="فيزياء">فيزياء</option>
-                  <option value="علوم">علوم</option>
-                  <option value="لغة عربية">لغة عربية</option>
-                  <option value="لغة فرنسية">لغة فرنسية</option>
-                  <option value="لغة انجليزية">لغة انجليزية</option>
-                </select>
-              </div>
-              
-              <div class="form-group">
-                <label>السنة الدراسية:</label>
-                <select [(ngModel)]="selectedClass.academicYear" name="academicYear" required>
-                  <option value="1AS">الأولى ثانوي</option>
-                  <option value="2AS">الثانية ثانوي</option>
-                  <option value="3AS">الثالثة ثانوي</option>
-                  <option value="1MS">الأولى متوسط</option>
-                  <option value="2MS">الثانية متوسط</option>
-                  <option value="3MS">الثالثة متوسط</option>
-                  <option value="4MS">الرابعة متوسط</option>
-                  <option value="5MS">الخامسة متوسط</option>
-                </select>
-              </div>
-              
-              <div class="form-group">
-                <label>السعر (د.ج):</label>
-                <input type="number" [(ngModel)]="selectedClass.price" name="price" required>
-              </div>
-              
-              <div class="form-group">
-                <label>الوصف:</label>
-                <textarea [(ngModel)]="selectedClass.description" name="description" rows="3"></textarea>
-              </div>
-              
-              <div class="form-actions">
-                <button type="submit" class="success">حفظ التغييرات</button>
-                <button type="button" (click)="isEditingClass = false">إلغاء</button>
-              </div>
-            </form>
           </div>
         </div>
       </div>
     </div>
   
-    <!-- Live Classes View -->
-    <div *ngIf="viewMode === 'liveClasses'" class="live-classes-view">
-      <!-- Filters -->
-      <div class="filters">
-        <div class="filter-row">
-          <select [(ngModel)]="liveClassFilter.status">
-            <option value="">جميع الحالات</option>
-            <option value="scheduled">مجدولة</option>
-            <option value="ongoing">جارية</option>
-            <option value="completed">منتهية</option>
-            <option value="cancelled">ملغاة</option>
-          </select>
+    <!-- Live Classes Section -->
+    <div class="section-container" *ngIf="viewMode === 'liveClasses'">
+      <!-- Create Live Class Form -->
+      <div class="form-section" *ngIf="selectedClass && isCreatingLiveClass">
+        <div class="form-header">
+          <h2 class="section-title">➕ إنشاء حصة حية للحصة: {{selectedClass.name}}</h2>
+          <button class="btn btn-secondary" (click)="isCreatingLiveClass = false">
+            ✖️ إلغاء
+          </button>
+        </div>
+        
+        <div class="form-card">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="liveDate">التاريخ:</label>
+              <input type="date" id="liveDate" [(ngModel)]="newLiveClass.date">
+            </div>
+            <div class="form-group">
+              <label for="startTime">وقت البداية:</label>
+              <input type="time" id="startTime" [(ngModel)]="newLiveClass.startTime">
+            </div>
+          </div>
           
-          <input type="date" [(ngModel)]="liveClassFilter.date">
+          <div class="form-group full-width">
+            <label for="liveStatus">الحالة:</label>
+            <select id="liveStatus" [(ngModel)]="newLiveClass.status">
+              <option value="scheduled">مجدولة</option>
+              <option value="ongoing">جارية</option>
+              <option value="completed">منتهية</option>
+            </select>
+          </div>
           
-          <select [(ngModel)]="liveClassFilter.class">
-            <option value="">جميع الحصص</option>
-            <option *ngFor="let cls of classes" [value]="cls._id">
-              {{ cls.name }}
-            </option>
-          </select>
-          
-          <button (click)="applyLiveClassFilter()">بحث</button>
-          <button (click)="resetLiveClassFilter()" class="secondary">إعادة تعيين</button>
+          <div class="form-actions">
+            <button class="btn btn-primary" (click)="createLiveClass()">
+              💾 حفظ الحصة الحية
+            </button>
+            <button class="btn btn-secondary" (click)="resetNewLiveClassForm()">
+              🔄 إعادة تعيين
+            </button>
+          </div>
         </div>
       </div>
   
       <!-- Live Classes List -->
-      <div class="content-section">
-        <div class="live-classes-list">
-          <h3>الحصص الحية</h3>
-          <div class="table-responsive">
+      <div class="list-section">
+        <h2 class="section-title">🎥 الحصص الحية ({{liveClasses.length}})</h2>
+        
+        <!-- Filter Controls -->
+        <div class="filter-section">
+          <div class="filter-row">
+            <div class="filter-group">
+              <label>تصفية حسب:</label>
+              <select [(ngModel)]="liveClassFilter.status">
+                <option value="">جميع الحالات</option>
+                <option value="scheduled">مجدولة</option>
+                <option value="ongoing">جارية</option>
+                <option value="completed">منتهية</option>
+                <option value="cancelled">ملغاة</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <input type="date" [(ngModel)]="liveClassFilter.date" 
+                     placeholder="التاريخ">
+            </div>
+            <div class="filter-actions">
+              <button class="btn btn-primary" (click)="applyLiveClassFilter()">
+                🔍 تطبيق التصفية
+              </button>
+              <button class="btn btn-secondary" (click)="resetLiveClassFilter()">
+                ♻️ إعادة تعيين
+              </button>
+            </div>
+          </div>
+        </div>
+  
+        <!-- Live Classes Grid -->
+        <div class="grid-container">
+          <div class="grid-card" *ngFor="let liveClass of liveClasses" 
+               [class.selected]="selectedLiveClass?._id === liveClass._id"
+               (click)="selectLiveClass(liveClass)">
+            <div class="card-header">
+              <h3>{{liveClass.class?.name || 'غير معروف'}}</h3>
+              <span class="status-badge" [class]="'status-' + liveClass.status">
+                {{getStatusText(liveClass.status)}}
+              </span>
+            </div>
+            
+            <div class="card-body">
+              <div class="info-row">
+                <span class="label">التاريخ:</span>
+                <span class="value">{{liveClass.date | date: 'dd/MM/yyyy'}}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">الوقت:</span>
+                <span class="value">{{liveClass.startTime}}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">الحضور:</span>
+                <span class="value">
+                  {{getPresentCount(liveClass)}} / {{(liveClass.class && liveClass.class.students && liveClass.class.students.length) || 0}}
+                </span>
+              </div>
+              <div class="info-row">
+                <span class="label">المادة:</span>
+                <span class="value">{{liveClass.class?.subject || 'غير معروف'}}</span>
+              </div>
+            </div>
+            
+            <div class="card-actions">
+              <button class="btn-action" (click)="viewAttendance(liveClass); $event.stopPropagation()">
+                📝 الحضور
+              </button>
+              <button class="btn-action btn-danger" 
+                      *ngIf="liveClass.status === 'scheduled'"
+                      (click)="cancelLiveClass(liveClass._id); $event.stopPropagation()">
+                ❌ إلغاء
+              </button>
+              <button class="btn-action btn-success" 
+                      *ngIf="liveClass.status === 'scheduled'"
+                      (click)="startLiveClass(liveClass._id); $event.stopPropagation()">
+                ▶️ بدء
+              </button>
+              <button class="btn-action btn-warning" 
+                      *ngIf="liveClass.status === 'ongoing'"
+                      (click)="endLiveClass(liveClass._id); $event.stopPropagation()">
+                ⏹️ إنهاء
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Attendance Section -->
+    <div class="section-container" *ngIf="viewMode === 'attendance' && selectedLiveClass">
+      <div class="attendance-section">
+        <div class="attendance-header">
+          <h2 class="section-title">📝 تسجيل الحضور</h2>
+          <div class="header-info">
+            <span>الحصة: {{selectedLiveClass.class?.name}}</span>
+            <span>التاريخ: {{selectedLiveClass.date | date: 'dd/MM/yyyy'}}</span>
+            <span>الوقت: {{selectedLiveClass.startTime}}</span>
+          </div>
+        </div>
+        
+        <div class="attendance-actions">
+          <button class="btn btn-primary" (click)="autoMarkAbsent()">
+            ⚡ تسجيل الغياب التلقائي
+          </button>
+          <button class="btn btn-secondary" (click)="debugAttendance()">
+            🐛 تصحيح
+          </button>
+          <button class="btn btn-warning" (click)="goToClassDetails()">
+            📚 تفاصيل الحصة
+          </button>
+          <button class="btn btn-danger" (click)="selectedLiveClass = null; viewMode = 'liveClasses'">
+            ✖️ إغلاق
+          </button>
+        </div>
+        
+        <!-- Attendance Statistics -->
+        <div class="stats-cards" *ngIf="hasValidLiveClassData()">
+          <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-info">
+              <h3>{{(selectedLiveClass.class && selectedLiveClass.class.students && selectedLiveClass.class.students.length) || 0}}</h3>
+              <p>إجمالي الطلاب</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-info">
+              <h3>{{getPresentCount(selectedLiveClass)}}</h3>
+              <p>حاضر</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">❌</div>
+            <div class="stat-info">
+              <h3>{{((selectedLiveClass.class && selectedLiveClass.class.students && selectedLiveClass.class.students.length) || 0) - getPresentCount(selectedLiveClass)}}</h3>
+              <p>غائب</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Attendance Table -->
+        <div class="attendance-table" *ngIf="hasValidLiveClassData() && selectedLiveClass.class && selectedLiveClass.class.students">
+          <div class="table-container">
             <table>
               <thead>
                 <tr>
-                  <th>الحصة</th>
-                  <th>التاريخ</th>
-                  <th>الوقت</th>
-                  <th>الأستاذ</th>
+                  <th>#</th>
+                  <th>اسم الطالب</th>
+                  <th>رقم الطالب</th>
+                  <th>السنة</th>
+                  <th>ولي الأمر</th>
+                  <th>الهاتف</th>
                   <th>الحالة</th>
-                  <th>عدد الحاضرين</th>
                   <th>الإجراءات</th>
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let liveClass of liveClasses" 
-                    [class.selected]="selectedLiveClass?._id === liveClass._id"
-                    (click)="selectLiveClass(liveClass)">
-                  <td>{{ liveClass.class?.name || 'غير محدد' }}</td>
-                  <td>{{ liveClass.date | date: 'yyyy/MM/dd' }}</td>
-                  <td>{{ liveClass.startTime }}</td>
-                  <td>{{ liveClass.teacher?.name || 'غير محدد' }}</td>
+                <tr *ngFor="let student of selectedLiveClass.class.students; let i = index"
+                    [class]="getAttendanceStatusClass(student)">
+                  <td>{{i + 1}}</td>
+                  <td>{{getStudentName(student)}}</td>
+                  <td>{{getStudentId(student)}}</td>
+                  <td>{{getStudentAcademicYear(student)}}</td>
+                  <td>{{getStudentParentName(student)}}</td>
+                  <td>{{getStudentParentPhone(student)}}</td>
                   <td>
-                    <span [class]="'status-' + liveClass.status">
-                      {{ getStatusText(liveClass.status) }}
+                    <span class="attendance-status" [class]="'status-' + getAttendanceStatus(student)">
+                      {{getAttendanceStatus(student)}}
                     </span>
                   </td>
                   <td>
-                    {{ getPresentCount(liveClass) }}
-                  </td>
-                  <td>
                     <div class="action-buttons">
-                      <button (click)="viewAttendance(liveClass); $event.stopPropagation()">
-                        حضور
+                      <button class="btn-action btn-success" 
+                              (click)="recordAttendance(student, 'present')">
+                        ✅ حاضر
                       </button>
-                      <button *ngIf="liveClass.status === 'scheduled'" 
-                              (click)="startLiveClass(liveClass._id); $event.stopPropagation()"
-                              class="success">
-                        بدء
+                      <button class="btn-action btn-danger" 
+                              (click)="recordAttendance(student, 'absent')">
+                        ❌ غائب
                       </button>
-                      <button *ngIf="liveClass.status === 'ongoing'" 
-                              (click)="endLiveClass(liveClass._id); $event.stopPropagation()"
-                              class="warning">
-                        إنهاء
-                      </button>
-                      <button *ngIf="liveClass.status === 'scheduled' || liveClass.status === 'ongoing'" 
-                              (click)="cancelLiveClass(liveClass._id); $event.stopPropagation()"
-                              class="danger">
-                        إلغاء
+                      <button class="btn-action btn-warning" 
+                              (click)="recordAttendance(student, 'late')">
+                        ⏰ متأخر
                       </button>
                     </div>
                   </td>
@@ -335,154 +727,101 @@
             </table>
           </div>
         </div>
-  
-        <!-- Create Live Class Form -->
-        <div *ngIf="isCreatingLiveClass && selectedClass" class="create-live-class">
-          <h4>إنشاء حصة حية جديدة</h4>
-          <form (submit)="createLiveClass()">
-            <div class="form-group">
-              <label>الحصة:</label>
-              <input [value]="selectedClass.name" disabled>
-            </div>
-            
-            <div class="form-group">
-              <label>التاريخ:</label>
-              <input type="date" [(ngModel)]="newLiveClass.date" name="date" required>
-            </div>
-            
-            <div class="form-group">
-              <label>وقت البداية:</label>
-              <input type="time" [(ngModel)]="newLiveClass.startTime" name="startTime" required>
-            </div>
-            
-            <div class="form-group">
-              <label>وقت النهاية (اختياري):</label>
-              <input type="time" [(ngModel)]="newLiveClass.endTime" name="endTime">
-            </div>
-            
-            <div class="form-group">
-              <label>ملاحظات:</label>
-              <textarea [(ngModel)]="newLiveClass.notes" name="notes" rows="3"></textarea>
-            </div>
-            
-            <div class="form-actions">
-              <button type="submit" class="success">إنشاء الحصة</button>
-              <button type="button" (click)="isCreatingLiveClass = false">إلغاء</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  
-    <!-- Attendance View -->
-    <div *ngIf="viewMode === 'attendance' && selectedLiveClass" class="attendance-view">
-      <div class="attendance-header">
-        <h3>تسجيل الحضور والغياب</h3>
-        <div class="class-info">
-          <span>الحصة: {{ selectedLiveClass.class?.name || 'غير محدد' }}</span>
-          <span>التاريخ: {{ selectedLiveClass.date | date: 'yyyy/MM/dd' }}</span>
-          <span>الوقت: {{ selectedLiveClass.startTime }}</span>
-        </div>
-      </div>
-  
-<!-- أضف في قسم الحضور والغياب -->
-<div class="attendance-actions">
-    <button (click)="autoMarkAbsent()" class="warning">تسجيل الغياب التلقائي</button>
-    <button (click)="exportClassData()" class="secondary">تصدير البيانات</button>
-    <button (click)="printAttendanceReport()" class="secondary">طباعة التقرير</button>
-    <button (click)="debugAttendance()" class="debug-button">تصحيح</button>
-  </div>  
-      <div class="attendance-list" *ngIf="selectedLiveClass.class?.students">
-        <table>
-          <thead>
-            <tr>
-              <th>اسم الطالب</th>
-              <th>رقم الطالب</th>
-              <th>السنة الدراسية</th>
-              <th>ولي الأمر</th>
-              <th>الهاتف</th>
-              <th>الحالة</th>
-              <th>الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let studentId of selectedLiveClass.class.students">
-              <td>{{ getStudentName(studentId) }}</td>
-              <td>{{ getStudentId(studentId) }}</td>
-              <td>{{ getStudentAcademicYear(studentId) }}</td>
-              <td>{{ getStudentParentName(studentId) }}</td>
-              <td>{{ getStudentParentPhone(studentId) }}</td>
-              <td>
-                <span [class]="getAttendanceStatusClass(studentId)">
-                  {{ getAttendanceStatus(studentId) }}
-                </span>
-              </td>
-              <td>
-                <div class="attendance-buttons">
-                  <button (click)="recordAttendance(studentId, 'present')" 
-                          [class.active]="getAttendanceStatus(studentId) === 'حاضر'">
-                    حاضر
-                  </button>
-                  <button (click)="recordAttendance(studentId, 'absent')"
-                          [class.active]="getAttendanceStatus(studentId) === 'غائب'">
-                    غائب
-                  </button>
-                  <button (click)="recordAttendance(studentId, 'late')"
-                          [class.active]="getAttendanceStatus(studentId) === 'متأخر'">
-                    متأخر
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  
-    <!-- Students View -->
-    <div *ngIf="viewMode === 'students'" class="students-view">
-      <div class="students-list">
-        <h3>قائمة الطلاب</h3>
-        <div class="table-responsive">
-          <table>
-            <thead>
-              <tr>
-                <th>اسم الطالب</th>
-                <th>رقم الطالب</th>
-                <th>السنة الدراسية</th>
-                <th>ولي الأمر</th>
-                <th>الهاتف</th>
-                <th>الحالة</th>
-                <th>الإجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let student of students">
-                <td>{{ student.name }}</td>
-                <td>{{ student.studentId }}</td>
-                <td>{{ student.academicYear }}</td>
-                <td>{{ student.parentName }}</td>
-                <td>{{ student.parentPhone }}</td>
-                <td>
-                  <span [class]="'status-' + student.status">
-                    {{ getStudentStatusText(student.status) }}
-                  </span>
-                </td>
-                <td>
-                  <button (click)="viewStudentPayments(student)">المدفوعات</button>
-                  <button (click)="viewAttendanceForStudent(student)">الحضور</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-  
-      <!-- Student Details -->
-      <div *ngIf="selectedStudent" class="student-details">
-        <h4>تفاصيل الطالب: {{ selectedStudent.name }}</h4>
         
-        <!-- Add payment/attendance details here -->
+        <!-- No Students Message -->
+        <div class="empty-state" *ngIf="!hasValidLiveClassData()">
+          <div class="empty-icon">👨‍🎓</div>
+          <h3>لا يوجد طلاب مسجلين في هذه الحصة</h3>
+          <p>يجب تسجيل طلاب في الحصة قبل تسجيل الحضور</p>
+          <button class="btn btn-primary" (click)="goToClassDetails()">
+            📚 الذهاب لتسجيل الطلاب
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Students Section -->
+    <div class="section-container" *ngIf="viewMode === 'students' && selectedStudent">
+      <div class="student-details-section">
+        <div class="section-header">
+          <h2 class="section-title">👨‍🎓 تفاصيل الطالب: {{selectedStudent.name}}</h2>
+          <button class="btn btn-secondary" (click)="selectedStudent = null">
+            ✖️ إغلاق
+          </button>
+        </div>
+        
+        <div class="student-info-card">
+          <div class="info-grid">
+            <div class="info-item">
+              <strong>اسم الطالب:</strong> {{selectedStudent.name}}
+            </div>
+            <div class="info-item">
+              <strong>رقم الطالب:</strong> {{selectedStudent.studentId}}
+            </div>
+            <div class="info-item">
+              <strong>السنة الدراسية:</strong> {{selectedStudent.academicYear}}
+            </div>
+            <div class="info-item">
+              <strong>حالة التسجيل:</strong> 
+              <span [class]="'status-' + selectedStudent.status">
+                {{getStudentStatusText(selectedStudent.status)}}
+              </span>
+            </div>
+            <div class="info-item">
+              <strong>اسم ولي الأمر:</strong> {{selectedStudent.parentName}}
+            </div>
+            <div class="info-item">
+              <strong>هاتف ولي الأمر:</strong> {{selectedStudent.parentPhone}}
+            </div>
+            <div class="info-item">
+              <strong>دفع التسجيل:</strong> 
+              <span [class]="selectedStudent.hasPaidRegistration ? 'status-active' : 'status-inactive'">
+                {{selectedStudent.hasPaidRegistration ? 'مدفوع' : 'غير مدفوع'}}
+              </span>
+            </div>
+            <div class="info-item">
+              <strong>تاريخ التسجيل:</strong> 
+              {{selectedStudent.registrationDate | date: 'dd/MM/yyyy'}}
+            </div>
+          </div>
+        </div>
+        
+        <!-- Student Classes -->
+        <div class="student-classes-section">
+          <h3>📚 الحصص المسجل فيها</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>اسم الحصة</th>
+                  <th>المادة</th>
+                  <th>السنة</th>
+                  <th>السعر</th>
+                  <th>عدد الجلسات</th>
+                  <th>الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let class of selectedStudent.classes || []">
+                  <td>{{class.name}}</td>
+                  <td>{{class.subject}}</td>
+                  <td>{{class.academicYear}}</td>
+                  <td>{{class.price}} د.ج</td>
+                  <td>{{(class.schedule && class.schedule.length) || 0}}</td>
+                  <td>
+                    <button class="btn-action" 
+                            (click)="selectClass(class); viewMode = 'classes'">
+                      👁️ عرض التفاصيل
+                    </button>
+                  </td>
+                </tr>
+                <tr *ngIf="(!selectedStudent.classes || selectedStudent.classes.length === 0)">
+                  <td colspan="6" class="empty-row">لا يوجد حصص مسجلة لهذا الطالب</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>

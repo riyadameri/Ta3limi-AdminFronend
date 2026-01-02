@@ -14,7 +14,9 @@
   --shadow-color: rgba(0, 0, 0, 0.2);
   --logout-color: rgba(255, 153, 153, 0.9);
 }
-
+*{
+  color :#ffffff
+}
 /* ===== النافبار الأساسية ===== */
 .sidebar {
   width: 100%;

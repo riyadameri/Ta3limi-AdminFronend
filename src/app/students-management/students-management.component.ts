@@ -357,21 +357,16 @@ export class StudentsManagementComponent implements OnInit {
 
   parseTextData(text: string, delimiter: string): void {
     const lines = text.split('\n').filter(line => line.trim() !== '');
-    const students = [];
-    
-    for (const line of lines) {
+    const students = lines.map(line => {
       const parts = line.split(delimiter).map(part => part.trim());
-      if (parts.length >= 3) {
-        students.push({
-          name: parts[0],
-          parentName: parts[1] || '',
-          parentPhone: parts[2] || '',
-          academicYear: this.bulkImportData.academicYear || parts[3] || '',
-          birthDate: parts[4] || ''
-        });
-      }
-    }
-    
+      return parts.length >= 3 ? {
+        name: parts[0],
+        parentName: parts[1] || '',
+        parentPhone: parts[2] || '',
+        academicYear: this.bulkImportData.academicYear || parts[3] || '',
+        birthDate: parts[4] || ''
+      } : null;
+    }).filter(student => student !== null);
     if (students.length > 0) {
       this.bulkImportData.students = students;
       Swal.fire('نجاح', `تم تحليل ${students.length} طالب`, 'success');
@@ -589,7 +584,7 @@ export class StudentsManagementComponent implements OnInit {
   // Helper function for CSV parsing
   parseCSV(csvText: string, delimiter: string = ','): any[] {
     const lines = csvText.split('\n');
-    const result = [];
+    const result: any[] = [];
     const headers = lines[0].split(delimiter).map(header => header.trim());
 
     for (let i = 1; i < lines.length; i++) {
@@ -602,7 +597,7 @@ export class StudentsManagementComponent implements OnInit {
         obj[headers[j]] = currentline[j] || '';
       }
       
-      result.push(obj);
+      result.push(obj); // Ensure obj matches the type defined for result
     }
     
     return result;

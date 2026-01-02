@@ -5,6 +5,7 @@ import { ClassesService, Class, Schedule } from '../../classes.service';
 import { StudentsService, Student } from '../../services/students.service';
 import { LiveClassesService, LiveClass, Attendance } from '../../services/live-classes.service';
 import { PaymentsService } from '../../services/payments.service';
+import { HttpClient } from '@angular/common/http';
 
 @Component({
   selector: 'app-lesson-management',
@@ -18,6 +19,8 @@ export class LessonManagementComponent implements OnInit {
   students: Student[] = [];
   liveClasses: LiveClass[] = [];
   availableStudents: Student[] = [];
+  teachers: any[] = [];
+  classrooms: any[] = [];
   
   // Selected items
   selectedClass: Class | null = null;
@@ -31,7 +34,9 @@ export class LessonManagementComponent implements OnInit {
     description: '',
     academicYear: '',
     price: 0,
-    schedule: []
+    schedule: [],
+    teacher: '',
+    students: []
   };
   
   newLiveClass: Partial<LiveClass> = {
@@ -40,11 +45,34 @@ export class LessonManagementComponent implements OnInit {
     status: 'scheduled'
   };
   
+  // Schedule Form
+  newScheduleItem: Partial<Schedule> = {
+    day: '',
+    time: '',
+    classroom: ''
+  };
+  
+  // Days of week
+  daysOfWeek = [
+    { value: 'السبت', label: 'السبت' },
+    { value: 'الأحد', label: 'الأحد' },
+    { value: 'الإثنين', label: 'الإثنين' },
+    { value: 'الثلاثاء', label: 'الثلاثاء' },
+    { value: 'الأربعاء', label: 'الأربعاء' },
+    { value: 'الخميس', label: 'الخميس' },
+    { value: 'الجمعة', label: 'الجمعة' }
+  ];
+  
+  // Time slots (every 30 minutes)
+  timeSlots: string[] = [];
+  
   // UI states
   viewMode: 'classes' | 'liveClasses' | 'attendance' | 'students' = 'classes';
   isEditingClass = false;
   isCreatingLiveClass = false;
   isViewingAttendance = false;
+  showScheduleForm = false;
+  isCreatingClass = false;
   
   // Filters
   classFilter = {
@@ -71,18 +99,33 @@ export class LessonManagementComponent implements OnInit {
     private classesService: ClassesService,
     private studentsService: StudentsService,
     private liveClassesService: LiveClassesService,
-    private paymentsService: PaymentsService
+    private paymentsService: PaymentsService,
+    private http: HttpClient
   ) {}
 
   ngOnInit(): void {
     this.loadData();
+    this.generateTimeSlots();
   }
 
   loadData(): void {
     this.loadClasses();
     this.loadStudents();
     this.loadLiveClasses();
+    this.loadTeachers();
+    this.loadClassrooms();
     this.calculateStats();
+  }
+
+  // توليد قائمة الأوقات
+  generateTimeSlots(): void {
+    this.timeSlots = [];
+    for (let hour = 8; hour <= 20; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        this.timeSlots.push(time);
+      }
+    }
   }
 
   loadClasses(): void {
@@ -111,13 +154,36 @@ export class LessonManagementComponent implements OnInit {
     });
   }
 
+  loadTeachers(): void {
+    this.http.get<any[]>('http://localhost:3000/api/teachers').subscribe({
+      next: (teachers) => {
+        this.teachers = teachers;
+      },
+      error: (error) => {
+        console.error('Error loading teachers:', error);
+        alert('فشل في تحميل المعلمين');
+      }
+    });
+  }
+
+  loadClassrooms(): void {
+    this.http.get<any[]>('http://localhost:3000/api/classrooms').subscribe({
+      next: (classrooms) => {
+        this.classrooms = classrooms;
+      },
+      error: (error) => {
+        console.error('Error loading classrooms:', error);
+        alert('فشل في تحميل القاعات');
+      }
+    });
+  }
+
   loadLiveClasses(): void {
     this.liveClassesService.getLiveClasses(this.liveClassFilter).subscribe({
       next: (liveClasses) => {
         this.liveClasses = liveClasses;
-        console.log('Live classes loaded:', liveClasses); // أضف هذا السطر
+        console.log('Live classes loaded:', liveClasses);
         
-        // تحقق من بيانات الطلاب في كل حصة حية
         liveClasses.forEach((liveClass, index) => {
           console.log(`Live class ${index + 1}:`, {
             id: liveClass._id,
@@ -141,7 +207,6 @@ export class LessonManagementComponent implements OnInit {
     });
   }
   
-  
   hasValidLiveClassData(): boolean {
     if (!this.selectedLiveClass) return false;
     
@@ -163,7 +228,6 @@ export class LessonManagementComponent implements OnInit {
 
   getStudentName(student: any): string {
     if (typeof student === 'string') {
-      // إنه ID، ابحث عن الطالب في قائمة الطلاب
       const foundStudent = this.students.find(s => s._id === student || s.id === student);
       return foundStudent?.name || `طالب (${student.substring(0, 8)}...)`;
     }
@@ -172,7 +236,6 @@ export class LessonManagementComponent implements OnInit {
 
   getStudentId(student: any): string {
     if (typeof student === 'string') {
-      // إنه ID، ابحث عن الطالب في قائمة الطلاب
       const foundStudent = this.students.find(s => s._id === student || s.id === student);
       return foundStudent?.studentId || student;
     }
@@ -181,7 +244,6 @@ export class LessonManagementComponent implements OnInit {
 
   getStudentAcademicYear(student: any): string {
     if (typeof student === 'string') {
-      // إنه ID، ابحث عن الطالب في قائمة الطلاب
       const foundStudent = this.students.find(s => s._id === student || s.id === student);
       return foundStudent?.academicYear || 'غير معروف';
     }
@@ -190,7 +252,6 @@ export class LessonManagementComponent implements OnInit {
 
   getStudentParentName(student: any): string {
     if (typeof student === 'string') {
-      // إنه ID، ابحث عن الطالب في قائمة الطلاب
       const foundStudent = this.students.find(s => s._id === student || s.id === student);
       return foundStudent?.parentName || 'غير معروف';
     }
@@ -199,7 +260,6 @@ export class LessonManagementComponent implements OnInit {
 
   getStudentParentPhone(student: any): string {
     if (typeof student === 'string') {
-      // إنه ID، ابحث عن الطالب في قائمة الطلاب
       const foundStudent = this.students.find(s => s._id === student || s.id === student);
       return foundStudent?.parentPhone || 'غير معروف';
     }
@@ -241,7 +301,6 @@ export class LessonManagementComponent implements OnInit {
       return 'غائب';
     }
     
-    // تحقق من أن attendance موجودة
     if (!Array.isArray(this.selectedLiveClass.attendance)) {
       console.log('Attendance is not an array:', this.selectedLiveClass.attendance);
       return 'غائب';
@@ -295,7 +354,6 @@ export class LessonManagementComponent implements OnInit {
     return `status-${attendance.status}`;
   }
 
-  // Get full student object from student ID or object
   getStudentFullObject(student: any): Student | null {
     if (typeof student === 'string') {
       return this.students.find(s => s._id === student) || null;
@@ -308,6 +366,41 @@ export class LessonManagementComponent implements OnInit {
     this.loadAvailableStudents(cls._id);
   }
 
+  // إضافة عنصر للجدول
+  addScheduleItem(): void {
+    if (this.newScheduleItem.day && this.newScheduleItem.time && this.newScheduleItem.classroom) {
+      if (!this.newClass.schedule) {
+        this.newClass.schedule = [];
+      }
+      
+      this.newClass.schedule.push({
+        day: this.newScheduleItem.day,
+        time: this.newScheduleItem.time,
+        classroom: this.newScheduleItem.classroom
+      } as any);
+      
+      this.resetScheduleForm();
+    } else {
+      alert('الرجاء ملء جميع الحقول');
+    }
+  }
+
+  // حذف عنصر من الجدول
+  removeScheduleItem(index: number): void {
+    if (this.newClass.schedule) {
+      this.newClass.schedule.splice(index, 1);
+    }
+  }
+
+  // إعادة تعيين نموذج الجدول
+  resetScheduleForm(): void {
+    this.newScheduleItem = {
+      day: '',
+      time: '',
+      classroom: ''
+    };
+  }
+
   createClass(): void {
     if (!this.validateClass()) return;
 
@@ -315,6 +408,7 @@ export class LessonManagementComponent implements OnInit {
       next: (createdClass) => {
         this.classes.push(createdClass);
         this.resetNewClassForm();
+        this.isCreatingClass = false;
         alert('تم إنشاء الحصة بنجاح');
       },
       error: (error) => {
@@ -366,7 +460,6 @@ export class LessonManagementComponent implements OnInit {
       next: (classes) => {
         const currentClass = classes.find(c => c._id === classId);
         if (currentClass) {
-          // Filter students who are not already enrolled
           const enrolledIds = currentClass.students?.map(s => 
             typeof s === 'string' ? s : s._id
           ) || [];
@@ -388,7 +481,6 @@ export class LessonManagementComponent implements OnInit {
     if (confirm(`هل تريد تسجيل الطالب ${student.name} في الحصة ${this.selectedClass.name}؟`)) {
       this.classesService.enrollStudent(this.selectedClass._id, student._id).subscribe({
         next: (response) => {
-          // Update local data
           if (this.selectedClass) {
             if (!this.selectedClass.students) {
               this.selectedClass.students = [];
@@ -412,13 +504,11 @@ export class LessonManagementComponent implements OnInit {
     if (confirm('هل تريد إزالة الطالب من هذه الحصة؟')) {
       this.classesService.unenrollStudent(this.selectedClass._id, studentId).subscribe({
         next: () => {
-          // Update local data
           if (this.selectedClass && this.selectedClass.students) {
             this.selectedClass.students = this.selectedClass.students.filter(s => {
               const sId = typeof s === 'string' ? s : s._id;
               return sId !== studentId;
             });
-            // Reload available students
             this.loadAvailableStudents(this.selectedClass._id);
           }
           alert('تم إزالة الطالب بنجاح');
@@ -527,7 +617,6 @@ export class LessonManagementComponent implements OnInit {
 
     this.liveClassesService.recordAttendance(this.selectedLiveClass._id, attendanceData).subscribe({
       next: (response) => {
-        // Update local data
         if (this.selectedLiveClass) {
           if (!this.selectedLiveClass.attendance) {
             this.selectedLiveClass.attendance = [];
@@ -572,7 +661,7 @@ export class LessonManagementComponent implements OnInit {
       this.liveClassesService.autoMarkAbsent(this.selectedLiveClass._id).subscribe({
         next: (response) => {
           alert(`تم تسجيل ${response.absentStudents?.length || 0} طالب كغائبين`);
-          this.loadLiveClasses(); // Reload to get updated data
+          this.loadLiveClasses();
         },
         error: (error) => {
           console.error('Error auto-marking absent:', error);
@@ -590,14 +679,18 @@ export class LessonManagementComponent implements OnInit {
   viewAttendanceForStudent(student: Student): void {
     this.selectedStudent = student;
     this.viewMode = 'attendance';
-    // You might want to load specific attendance data for this student
     console.log('Viewing attendance for student:', student.name);
   }
 
   // Utility Methods
   private validateClass(): boolean {
-    if (!this.newClass.name || !this.newClass.subject || !this.newClass.academicYear || !this.newClass.price) {
-      alert('الرجاء ملء جميع الحقول المطلوبة');
+    if (!this.newClass.name || 
+        !this.newClass.subject || 
+        !this.newClass.academicYear || 
+        !this.newClass.price ||
+        !this.newClass.teacher ||
+        (this.newClass.schedule && this.newClass.schedule.length === 0)) {
+      alert('الرجاء ملء جميع الحقول المطلوبة وإضافة جدول الحصص');
       return false;
     }
     return true;
@@ -611,18 +704,21 @@ export class LessonManagementComponent implements OnInit {
     return true;
   }
 
-  private resetNewClassForm(): void {
+  public resetNewClassForm(): void {
     this.newClass = {
       name: '',
       subject: '',
       description: '',
       academicYear: '',
       price: 0,
-      schedule: []
+      schedule: [],
+      teacher: '',
+      students: []
     };
+    this.resetScheduleForm();
   }
 
-  private resetNewLiveClassForm(): void {
+  public resetNewLiveClassForm(): void {
     this.newLiveClass = {
       date: new Date().toISOString().split('T')[0],
       startTime: '08:00',
@@ -630,7 +726,7 @@ export class LessonManagementComponent implements OnInit {
     };
   }
 
-  private updateLiveClassInList(updatedLiveClass: LiveClass): void {
+  public updateLiveClassInList(updatedLiveClass: LiveClass): void {
     const index = this.liveClasses.findIndex(lc => lc._id === updatedLiveClass._id);
     if (index !== -1) {
       this.liveClasses[index] = updatedLiveClass;
@@ -673,6 +769,7 @@ export class LessonManagementComponent implements OnInit {
     this.isEditingClass = false;
     this.isCreatingLiveClass = false;
     this.isViewingAttendance = false;
+    this.isCreatingClass = false;
   }
 
   // Export/Print
@@ -688,35 +785,58 @@ export class LessonManagementComponent implements OnInit {
     // Already calculated in load methods
   }
 
-  // في lesson-management.component.ts - أضف هذه الدوال
-goToClassDetails(): void {
-  if (this.selectedLiveClass?.class?._id) {
-    // ابحث عن الحصة الأصلية
-    const foundClass = this.classes.find(c => c._id === this.selectedLiveClass?.class?._id);
-    if (foundClass) {
-      this.selectClass(foundClass);
-      this.setViewMode('classes');
+  goToClassDetails(): void {
+    if (this.selectedLiveClass?.class?._id) {
+      const foundClass = this.classes.find(c => c._id === this.selectedLiveClass?.class?._id);
+      if (foundClass) {
+        this.selectClass(foundClass);
+        this.setViewMode('classes');
+      }
     }
   }
-}
 
-// دالة مساعدة لعرض رسائل التصحيح
-debugAttendance(): void {
-  console.log('=== Attendance Debug ===');
-  console.log('Selected live class:', this.selectedLiveClass);
-  
-  if (this.selectedLiveClass?.class?.students) {
-    console.log('Students in class:', this.selectedLiveClass.class.students);
+  debugAttendance(): void {
+    console.log('=== Attendance Debug ===');
+    console.log('Selected live class:', this.selectedLiveClass);
     
-    this.selectedLiveClass.class.students.forEach((studentId: string, index: number) => {
-      console.log(`Student ${index + 1}:`, {
-        id: studentId,
-        name: this.getStudentName(studentId),
-        attendanceStatus: this.getAttendanceStatus(studentId)
+    if (this.selectedLiveClass?.class?.students) {
+      console.log('Students in class:', this.selectedLiveClass.class.students);
+      
+      this.selectedLiveClass.class.students.forEach((studentId: string, index: number) => {
+        console.log(`Student ${index + 1}:`, {
+          id: studentId,
+          name: this.getStudentName(studentId),
+          attendanceStatus: this.getAttendanceStatus(studentId)
+        });
       });
-    });
+    }
+    
+    console.log('All students loaded:', this.students);
+  }
+
+  // أضف هذه الدوال في LessonManagementComponent
+
+getTeacherName(teacherId: any): string {
+  if (!teacherId) return 'غير معروف';
+  
+  if (typeof teacherId === 'string') {
+    const teacher = this.teachers.find(t => t._id === teacherId);
+    return teacher?.name || 'غير معروف';
   }
   
-  console.log('All students loaded:', this.students);
+  return teacherId?.name || 'غير معروف';
 }
+
+getClassroomName(classroomId: any): string {
+  if (!classroomId) return 'غير معروف';
+  
+  if (typeof classroomId === 'string') {
+    const classroom = this.classrooms.find(c => c._id === classroomId);
+    return classroom?.name || 'غير معروف';
+  }
+  
+  return classroomId?.name || 'غير معروف';
+}
+
+
 }

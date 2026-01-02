@@ -151,7 +151,7 @@ export class PaymentsManagementComponent implements OnInit {
   
   generateAvailableMonths() {
     const currentDate = new Date();
-    const months = [];
+    const months: string[] = [];
     
     // Generate 12 months back and 6 months forward
     for (let i = -12; i <= 6; i++) {

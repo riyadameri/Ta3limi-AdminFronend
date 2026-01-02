@@ -1,0 +1,221 @@
+<div class="financial-report-container">
+    <div class="card">
+      <div class="card-header bg-dark text-white">
+        <h5 class="mb-0">
+          <i class="fas fa-chart-line me-2"></i>
+          التقرير المالي الشامل
+        </h5>
+      </div>
+      
+      <div class="card-body">
+        <!-- فلترة التقرير -->
+        <div class="row mb-4">
+          <div class="col-md-3">
+            <label class="form-label">نوع الفترة</label>
+            <select class="form-control" formControlName="periodType" (change)="loadFinancialReport()">
+              <option value="monthly">شهري</option>
+              <option value="yearly">سنوي</option>
+              <option value="custom">فترة مخصصة</option>
+            </select>
+          </div>
+          
+          <div class="col-md-3" *ngIf="reportForm.get('periodType')?.value === 'monthly'">
+            <label class="form-label">الشهر</label>
+            <input type="month" class="form-control" formControlName="month" 
+                   (change)="loadFinancialReport()">
+          </div>
+          
+          <div class="col-md-2" *ngIf="reportForm.get('periodType')?.value === 'yearly'">
+            <label class="form-label">السنة</label>
+            <input type="number" class="form-control" formControlName="year" 
+                   (change)="loadFinancialReport()" min="2020" max="2030">
+          </div>
+          
+          <div class="col-md-3" *ngIf="reportForm.get('periodType')?.value === 'custom'">
+            <label class="form-label">من تاريخ</label>
+            <input type="date" class="form-control" formControlName="startDate" 
+                   (change)="loadFinancialReport()">
+          </div>
+          
+          <div class="col-md-3" *ngIf="reportForm.get('periodType')?.value === 'custom'">
+            <label class="form-label">إلى تاريخ</label>
+            <input type="date" class="form-control" formControlName="endDate" 
+                   (change)="loadFinancialReport()">
+          </div>
+          
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="btn-group w-100">
+              <button class="btn btn-success" (click)="exportReport('excel')">
+                <i class="fas fa-file-excel me-1"></i> Excel
+              </button>
+              <button class="btn btn-danger" (click)="exportReport('pdf')">
+                <i class="fas fa-file-pdf me-1"></i> PDF
+              </button>
+            </div>
+          </div>
+        </div>
+  
+        <!-- عرض التقرير -->
+        <div *ngIf="financialReport && !loading" class="report-content">
+          <!-- بطاقات الملخص -->
+          <div class="row mb-4">
+            <div class="col-md-3">
+              <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                  <h6 class="card-title">الإيرادات</h6>
+                  <h3 class="mb-0">{{ formatCurrency(financialReport.income.total) }}</h3>
+                  <small>{{ financialReport.income.breakdown.classPayments.count }} معاملة</small>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-3">
+              <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                  <h6 class="card-title">المصاريف</h6>
+                  <h3 class="mb-0">{{ formatCurrency(financialReport.expenses.total) }}</h3>
+                  <small>{{ financialReport.expenses.breakdown.teacherSalaries.count }} معاملة</small>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-3">
+              <div class="card" [ngClass]="{
+                'bg-primary': financialReport.profit.netProfit > 0,
+                'bg-warning': financialReport.profit.netProfit === 0,
+                'bg-danger': financialReport.profit.netProfit < 0
+              }">
+                <div class="card-body text-center text-white">
+                  <h6 class="card-title">صافي الربح</h6>
+                  <h3 class="mb-0">{{ formatCurrency(financialReport.profit.netProfit) }}</h3>
+                  <small>هامش الربح: {{ financialReport.profit.profitMargin }}%</small>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-3">
+              <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                  <h6 class="card-title">المتوسط اليومي</h6>
+                  <h3 class="mb-0">{{ formatCurrency(financialReport.summary.averageDailyIncome) }}</h3>
+                  <small>إيراد / {{ formatCurrency(financialReport.summary.averageDailyExpense) }} مصروف</small>
+                </div>
+              </div>
+            </div>
+          </div>
+  
+          <!-- الرسم البياني -->
+          <div class="row mb-4">
+            <div class="col-md-8">
+              <div class="card">
+                <div class="card-header">
+                  <h6 class="mb-0">الرسم البياني</h6>
+                </div>
+                <div class="card-body">
+                  <canvas id="financialChart"></canvas>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header">
+                  <h6 class="mb-0">تفصيل المصاريف</h6>
+                </div>
+                <div class="card-body">
+                  <ul class="list-group">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      رواتب الأساتذة
+                      <span class="badge bg-primary rounded-pill">
+                        {{ formatCurrency(financialReport.expenses.breakdown.teacherSalaries.total) }}
+                      </span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      رواتب الموظفين
+                      <span class="badge bg-primary rounded-pill">
+                        {{ formatCurrency(financialReport.expenses.breakdown.staffSalaries.total) }}
+                      </span>
+                    </li>
+                    <li *ngFor="let item of financialReport.expenses.breakdown.operational" 
+                        class="list-group-item d-flex justify-content-between align-items-center">
+                      {{ item._id }}
+                      <span class="badge bg-secondary rounded-pill">
+                        {{ formatCurrency(item.total) }}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+  
+          <!-- جداول التفاصيل -->
+          <div class="row">
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header bg-success text-white">
+                  <h6 class="mb-0">آخر الإيرادات</h6>
+                </div>
+                <div class="card-body">
+                  <div class="table-responsive">
+                    <table class="table table-sm">
+                      <thead>
+                        <tr>
+                          <th>التاريخ</th>
+                          <th>الوصف</th>
+                          <th>المبلغ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr *ngFor="let item of financialReport.income.details | slice:0:5">
+                          <td>{{ formatDate(item.date) }}</td>
+                          <td>{{ item.description }}</td>
+                          <td class="text-success">{{ formatCurrency(item.amount) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header bg-danger text-white">
+                  <h6 class="mb-0">آخر المصاريف</h6>
+                </div>
+                <div class="card-body">
+                  <div class="table-responsive">
+                    <table class="table table-sm">
+                      <thead>
+                        <tr>
+                          <th>التاريخ</th>
+                          <th>الوصف</th>
+                          <th>المبلغ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr *ngFor="let item of financialReport.expenses.details | slice:0:5">
+                          <td>{{ formatDate(item.date) }}</td>
+                          <td>{{ item.description }}</td>
+                          <td class="text-danger">{{ formatCurrency(item.amount) }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+  
+        <!-- حالة التحميل -->
+        <div *ngIf="loading" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">جاري التحميل...</span>
+          </div>
+          <p class="mt-2">جاري تحميل التقرير...</p>
+        </div>
+      </div>
+    </div>
+  </div>

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { BehaviorSubject, Observable, tap } from 'rxjs';
 import { Router } from '@angular/router';
 import Swal from 'sweetalert2';
@@ -43,6 +43,19 @@ export class AuthService {
       })
     );
   }
+  isLoggedIn(): boolean {
+    return this.getToken() !== null;
+  }
+  redirectToLogin(): void {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Session Expired',
+      text: 'Please log in again to continue.',
+      confirmButtonText: 'OK'
+    }).then(() => {
+      this.router.navigate(['/login']);
+    });
+  }
 
   logout(): void {
     localStorage.removeItem('token');
@@ -54,20 +67,31 @@ export class AuthService {
   getToken(): string | null {
     return localStorage.getItem('token');
   }
-
-  getCurrentUser(): User | null {
-    return this.currentUserSubject.value;
+  getCurrentUser(): any {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
   }
-
   isAuthenticated(): boolean {
     return !!this.getToken();
   }
 
-  getAuthHeaders(): { [header: string]: string } {
-    const token = this.getToken();
-    return {
+// في AuthService
+getAuthHeaders(): HttpHeaders {
+  const token = this.getToken();
+  if (token) {
+    return new HttpHeaders({
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
-    };
+    });
   }
+  return new HttpHeaders({
+    'Content-Type': 'application/json'
+  });
+}
+
+
+}
+
+function jwt_decode(token: string): any {
+  throw new Error('Function not implemented.');
 }

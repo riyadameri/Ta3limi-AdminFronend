@@ -71,7 +71,7 @@ export class CardsService {
   // Authorized Cards Management
   getAuthorizedCards(active?: boolean, expired?: boolean): Observable<AuthorizedCard[]> {
     let url = `${this.apiUrl}/authorized-cards`;
-    const params = [];
+    const params: string[] = [];
     
     if (active !== undefined) params.push(`active=${active}`);
     if (expired !== undefined) params.push(`expired=${expired}`);

@@ -19,7 +19,7 @@ export class NavBarComponent implements OnInit {
   hoveredItem: string | null = null;
 
   // بيانات المستخدم
-  userName = 'أحمد محمد';
+  userName = 'Yasser';
   userRole = 'مدير النظام';
   userAvatar = 'https://ui-avatars.com/api/?name=أحمد+محمد&background=0D8ABC&color=fff';
 

@@ -1,1 +1,710 @@
-<p>rooms-management-component works!</p>
+<div class="rooms-management">
+    <!-- شاشة التحميل -->
+    <div *ngIf="isLoading" class="loading-screen">
+      <div class="loader">
+        <div class="school-building">
+          <div class="building-roof"></div>
+          <div class="building-body">
+            <div class="window"></div>
+            <div class="window"></div>
+            <div class="window"></div>
+            <div class="window"></div>
+            <div class="window"></div>
+            <div class="window"></div>
+            <div class="building-door"></div>
+          </div>
+        </div>
+        <p>جاري تحميل بيانات الغرف...</p>
+      </div>
+    </div>
+  
+    <!-- شريط التحكم العلوي -->
+    <div class="control-bar">
+      <div class="title-section">
+        <h1>
+          <i class="fas fa-school"></i>
+          نظام إدارة الفصول الدراسية
+        </h1>
+        <p class="school-name">
+          <i class="fas fa-map-marker-alt"></i>
+          Al-rouad Akadime
+        </p>
+      </div>
+  
+      <div class="controls">
+        <div class="view-controls">
+          <button 
+            class="btn" 
+            [class.active]="viewMode === 'list'"
+            (click)="changeViewMode('list')">
+            <i class="fas fa-list"></i> قائمة
+          </button>
+          <button 
+            class="btn" 
+            [class.active]="viewMode === 'grid'"
+            (click)="changeViewMode('grid')">
+            <i class="fas fa-th-large"></i> شبكة
+          </button>
+          <button 
+            class="btn" 
+            [class.active]="viewMode === '3d'"
+            (click)="changeViewMode('3d')">
+            <i class="fas fa-cube"></i> ثلاثي الأبعاد
+          </button>
+        </div>
+  
+        <button class="btn btn-primary" (click)="addRoom()">
+          <i class="fas fa-plus"></i>
+          إضافة غرفة جديدة
+        </button>
+      </div>
+    </div>
+  
+    <!-- لوحة الإحصائيات -->
+    <div class="stats-panel">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-door-open"></i>
+        </div>
+        <div class="stat-content">
+          <h3>إجمالي الغرف</h3>
+          <p class="stat-number">{{ statistics.totalRooms }}</p>
+        </div>
+      </div>
+  
+      <div class="stat-card available">
+        <div class="stat-icon">
+          <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="stat-content">
+          <h3>الغرف المتاحة</h3>
+          <p class="stat-number">{{ statistics.availableRooms }}</p>
+        </div>
+      </div>
+  
+      <div class="stat-card occupied">
+        <div class="stat-icon">
+          <i class="fas fa-users"></i>
+        </div>
+        <div class="stat-content">
+          <h3>الغرف المشغولة</h3>
+          <p class="stat-number">{{ statistics.occupiedRooms }}</p>
+        </div>
+      </div>
+  
+      <div class="stat-card maintenance">
+        <div class="stat-icon">
+          <i class="fas fa-tools"></i>
+        </div>
+        <div class="stat-content">
+          <h3>قيد الصيانة</h3>
+          <p class="stat-number">{{ statistics.maintenanceRooms }}</p>
+        </div>
+      </div>
+  
+      <div class="stat-card">
+        <div class="stat-icon">
+          <i class="fas fa-user-friends"></i>
+        </div>
+        <div class="stat-content">
+          <h3>السعة الإجمالية</h3>
+          <p class="stat-number">{{ statistics.totalCapacity }}</p>
+        </div>
+      </div>
+    </div>
+  
+    <!-- عوامل التصفية -->
+    <div class="filter-panel">
+      <div class="filter-title">
+        <i class="fas fa-filter"></i>
+        تصفية الغرف
+      </div>
+      
+      <div class="filter-controls">
+        <div class="filter-group">
+          <label><i class="fas fa-layer-group"></i> الطابق</label>
+          <select [(ngModel)]="filter.floor" (change)="filterRooms()">
+            <option value="">جميع الطوابق</option>
+            <option *ngFor="let floor of schoolMap?.floors || [1,2,3]" [value]="floor">
+              الطابق {{ floor }}
+            </option>
+          </select>
+        </div>
+  
+        <div class="filter-group">
+          <label><i class="fas fa-building"></i> المبنى</label>
+          <select [(ngModel)]="filter.building" (change)="filterRooms()">
+            <option value="">جميع المباني</option>
+            <option value="Main">المبنى الرئيسي</option>
+            <option value="Science">مبنى العلوم</option>
+            <option value="Arts">مبنى الفنون</option>
+          </select>
+        </div>
+  
+        <div class="filter-group">
+          <label><i class="fas fa-info-circle"></i> الحالة</label>
+          <select [(ngModel)]="filter.status" (change)="filterRooms()">
+            <option value="">جميع الحالات</option>
+            <option value="available">متاحة</option>
+            <option value="occupied">مشغولة</option>
+            <option value="maintenance">صيانة</option>
+          </select>
+        </div>
+  
+        <div class="filter-group">
+          <label><i class="fas fa-users"></i> السعة (حد أدنى)</label>
+          <input 
+            type="number" 
+            [(ngModel)]="filter.capacity" 
+            (input)="filterRooms()" 
+            placeholder="أدخل السعة"
+            min="1"
+            max="100">
+        </div>
+      </div>
+    </div>
+  
+    <!-- لوحة التنقل للعرض ثلاثي الأبعاد -->
+    <div *ngIf="viewMode === '3d'" class="navigation-panel">
+      <div class="floor-navigation">
+        <button class="btn-nav" (click)="changeFloor(-1)">
+          <i class="fas fa-chevron-down"></i>
+          الطابق السابق
+        </button>
+        
+        <div class="current-floor">
+          <div class="floor-number">
+            <i class="fas fa-layer-group"></i>
+            الطابق {{ currentFloor }}
+          </div>
+          <p class="building-name">
+            <i class="fas fa-building"></i>
+            {{ currentBuilding }}
+          </p>
+        </div>
+        
+        <button class="btn-nav" (click)="changeFloor(1)">
+          الطابق التالي
+          <i class="fas fa-chevron-up"></i>
+        </button>
+      </div>
+  
+      <div class="zoom-controls">
+        <button class="btn-zoom" (click)="zoomOut()">
+          <i class="fas fa-search-minus"></i>
+        </button>
+        
+        <div class="zoom-level">
+          {{ (zoomLevel * 100).toFixed(0) }}%
+        </div>
+        
+        <button class="btn-zoom" (click)="zoomIn()">
+          <i class="fas fa-search-plus"></i>
+        </button>
+        
+        <button class="btn-reset" (click)="resetView()" title="إعادة التعيين">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+      </div>
+    </div>
+  
+    <!-- عرض ثلاثي الأبعاد -->
+    <div *ngIf="viewMode === '3d'" class="game-view">
+      <div class="canvas-container">
+        <canvas #gameCanvas class="game-canvas"></canvas>
+        
+        <div class="game-instructions">
+          <h4><i class="fas fa-gamepad"></i> تعليمات التحكم</h4>
+          <ul>
+            <li><span class="key">↑ ↓</span> التنقل بين الطوابق</li>
+            <li><span class="key">+ -</span> التكبير والتصغير</li>
+            <li><span class="key">R</span> إعادة التعيين</li>
+            <li>اسحب الفأرة للتدوير</li>
+            <li>عجلة الفأرة للتمرير</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  
+    <!-- عرض الشبكة -->
+    <div *ngIf="viewMode === 'grid'" class="rooms-grid">
+      <div 
+        *ngFor="let room of filteredRooms" 
+        class="room-card" 
+        [class.selected]="selectedRoom?._id === room._id"
+        [class.available]="room.status === 'available'"
+        [class.occupied]="room.status === 'occupied'"
+        [class.maintenance]="room.status === 'maintenance'"
+        (click)="selectRoom(room)">
+        
+        <div class="room-header">
+          <div class="room-name">
+            <i class="fas fa-door-closed"></i>
+            {{ room.name }}
+          </div>
+          <div class="room-status" [class]="room.status">
+            <i [class]="getStatusIcon(room.status)"></i>
+            {{ getStatusText(room.status) }}
+          </div>
+        </div>
+        
+        <div class="room-body">
+          <div class="room-icon">
+            <i class="fas fa-chalkboard-teacher"></i>
+          </div>
+          
+          <div class="room-details">
+            <p>
+              <i class="fas fa-layer-group"></i>
+              الطابق: {{ room.floor }}
+            </p>
+            <p>
+              <i class="fas fa-building"></i>
+              المبنى: {{ room.building }}
+            </p>
+            <p>
+              <i class="fas fa-users"></i>
+              السعة: {{ room.capacity }} طالب
+            </p>
+          </div>
+        </div>
+        
+        <div class="room-actions">
+          <button class="btn-action" (click)="editRoom(room); $event.stopPropagation()">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button class="btn-action" (click)="changeStatus(room._id, getNextStatus(room.status)); $event.stopPropagation()">
+            <i [class]="getStatusIcon(getNextStatus(room.status))"></i>
+          </button>
+          <button class="btn-action danger" (click)="deleteRoom(room._id); $event.stopPropagation()">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- عرض القائمة -->
+    <div *ngIf="viewMode === 'list'" class="rooms-table-container">
+      <table class="rooms-table">
+        <thead>
+          <tr>
+            <th>الغرفة</th>
+            <th>الطابق</th>
+            <th>المبنى</th>
+            <th>السعة</th>
+            <th>الحالة</th>
+            <th>الإجراءات</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr 
+            *ngFor="let room of filteredRooms" 
+            [class.selected]="selectedRoom?._id === room._id"
+            (click)="selectRoom(room)">
+            
+            <td>
+              <div class="room-name-cell">
+                <div 
+                  class="room-color-indicator" 
+                  [style.background-color]="room.color || '#3498db'">
+                </div>
+                {{ room.name }}
+              </div>
+            </td>
+            
+            <td>
+              <i class="fas fa-layer-group"></i>
+              {{ room.floor }}
+            </td>
+            
+            <td>
+              <i class="fas fa-building"></i>
+              {{ room.building }}
+            </td>
+            
+            <td>
+              <span class="capacity-badge">
+                <i class="fas fa-users"></i>
+                {{ room.capacity }}
+              </span>
+            </td>
+            
+            <td>
+              <span class="status-badge" [class]="room.status">
+                <i [class]="getStatusIcon(room.status)"></i>
+                {{ getStatusText(room.status) }}
+              </span>
+            </td>
+            
+            <td>
+              <div class="actions-cell">
+                <button class="btn-action small" (click)="editRoom(room); $event.stopPropagation()">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-action small" (click)="changeStatus(room._id, getNextStatus(room.status)); $event.stopPropagation()">
+                  <i [class]="getStatusIcon(getNextStatus(room.status))"></i>
+                </button>
+                <button class="btn-action small danger" (click)="deleteRoom(room._id); $event.stopPropagation()">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  
+    <!-- لوحة تفاصيل الغرفة -->
+    <div *ngIf="selectedRoom" class="details-panel">
+      <div class="panel-header">
+        <h3>
+          <i class="fas fa-info-circle"></i>
+          تفاصيل الغرفة: {{ selectedRoom.name }}
+        </h3>
+        <button class="btn-close" (click)="selectedRoom = null">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="room-details">
+        <div class="detail-row">
+          <div class="detail-label">اسم الغرفة:</div>
+          <div class="detail-value">
+            <i class="fas fa-door-closed"></i>
+            {{ selectedRoom.name }}
+          </div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label">الموقع:</div>
+          <div class="detail-value">
+            <i class="fas fa-map-marker-alt"></i>
+            {{ selectedRoom.location || 'غير محدد' }}
+          </div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label">الطابق:</div>
+          <div class="detail-value">
+            <i class="fas fa-layer-group"></i>
+            {{ selectedRoom.floor }}
+          </div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label">المبنى:</div>
+          <div class="detail-value">
+            <i class="fas fa-building"></i>
+            {{ selectedRoom.building }}
+          </div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label">الحالة:</div>
+          <div class="detail-value">
+            <div class="status-controls">
+              <button 
+                class="btn-status" 
+                [class.active]="selectedRoom.status === 'available'"
+                (click)="changeStatus(selectedRoom._id, 'available')">
+                <i class="fas fa-check-circle"></i> متاحة
+              </button>
+              <button 
+                class="btn-status" 
+                [class.active]="selectedRoom.status === 'occupied'"
+                (click)="changeStatus(selectedRoom._id, 'occupied')">
+                <i class="fas fa-users"></i> مشغولة
+              </button>
+              <button 
+                class="btn-status" 
+                [class.active]="selectedRoom.status === 'maintenance'"
+                (click)="changeStatus(selectedRoom._id, 'maintenance')">
+                <i class="fas fa-tools"></i> صيانة
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label">السعة:</div>
+          <div class="detail-value">
+            <div class="capacity-display">
+              <i class="fas fa-users"></i>
+              {{ selectedRoom.capacity }} طالب
+            </div>
+          </div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label">التجهيزات:</div>
+          <div class="detail-value">
+            <div class="equipment-tags">
+              <span class="equipment-tag" *ngFor="let item of selectedRoom.equipment">
+                <i class="fas fa-check"></i> {{ item }}
+              </span>
+              <span *ngIf="!selectedRoom.equipment || selectedRoom.equipment.length === 0" class="text-muted">
+                لا توجد تجهيزات
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="detail-row">
+          <div class="detail-label">لون الغرفة:</div>
+          <div class="detail-value">
+            <div 
+              class="color-preview" 
+              [style.background-color]="selectedRoom.color || '#3498db'">
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- جدول الغرفة -->
+      <div class="schedule-section" *ngIf="scheduleData.length > 0">
+        <h4>
+          <i class="fas fa-calendar-alt"></i>
+          جدول الحصص
+        </h4>
+        
+        <div class="schedule-table">
+          <div class="schedule-header">
+            <div>اليوم</div>
+            <div>الحصة</div>
+            <div>المادة</div>
+            <div>المعلم</div>
+          </div>
+          
+          <div *ngFor="let item of scheduleData" class="schedule-row">
+            <div>{{ item.day }}</div>
+            <div>{{ item.period }}</div>
+            <div>{{ item.subject }}</div>
+            <div>{{ item.teacher }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- نافذة إضافة/تعديل الغرفة -->
+    <div *ngIf="isAddingRoom || isEditingRoom" class="modal-overlay" (click)="isAddingRoom = false; isEditingRoom = false">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>
+            <i class="fas" [class.fa-plus]="isAddingRoom" [class.fa-edit]="isEditingRoom"></i>
+            {{ isAddingRoom ? 'إضافة غرفة جديدة' : 'تعديل الغرفة' }}
+          </h3>
+          <button class="btn-close" (click)="isAddingRoom = false; isEditingRoom = false">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        
+        <div class="modal-body">
+          <form (ngSubmit)="isAddingRoom ? saveNewRoom() : saveRoomEdit()">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="roomName">
+                  <i class="fas fa-door-closed"></i>
+                  اسم الغرفة *
+                </label>
+                <input 
+                  type="text" 
+                  id="roomName" 
+                  [(ngModel)]="newRoom.name" 
+                  name="roomName" 
+                  required
+                  placeholder="أدخل اسم الغرفة">
+              </div>
+              
+              <div class="form-group">
+                <label for="roomCapacity">
+                  <i class="fas fa-users"></i>
+                  السعة
+                </label>
+                <input 
+                  type="number" 
+                  id="roomCapacity" 
+                  [(ngModel)]="newRoom.capacity" 
+                  name="capacity"
+                  min="1"
+                  max="100"
+                  placeholder="عدد الطلاب">
+              </div>
+            </div>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label for="roomFloor">
+                  <i class="fas fa-layer-group"></i>
+                  الطابق
+                </label>
+                <select id="roomFloor" [(ngModel)]="newRoom.floor" name="floor">
+                  <option *ngFor="let floor of schoolMap?.floors || [1,2,3]" [value]="floor">
+                    الطابق {{ floor }}
+                  </option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label for="roomBuilding">
+                  <i class="fas fa-building"></i>
+                  المبنى
+                </label>
+                <select id="roomBuilding" [(ngModel)]="newRoom.building" name="building">
+                  <option value="Main">المبنى الرئيسي</option>
+                  <option value="Science">مبنى العلوم</option>
+                  <option value="Arts">مبنى الفنون</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="roomLocation">
+                <i class="fas fa-map-marker-alt"></i>
+                الموقع (اختياري)
+              </label>
+              <input 
+                type="text" 
+                id="roomLocation" 
+                [(ngModel)]="newRoom.location" 
+                name="location"
+                placeholder="مثال: شمال المبنى الرئيسي">
+            </div>
+            
+            <div class="form-group">
+              <label for="roomStatus">
+                <i class="fas fa-info-circle"></i>
+                الحالة
+              </label>
+              <select id="roomStatus" [(ngModel)]="newRoom.status" name="status">
+                <option value="available">متاحة</option>
+                <option value="occupied">مشغولة</option>
+                <option value="maintenance">قيد الصيانة</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label>
+                <i class="fas fa-palette"></i>
+                لون الغرفة
+              </label>
+              <div class="color-picker">
+                <input 
+                  type="color" 
+                  [(ngModel)]="newRoom.color" 
+                  name="color">
+                <div 
+                  class="color-preview" 
+                  [style.background-color]="newRoom.color">
+                </div>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label>
+                <i class="fas fa-tools"></i>
+                التجهيزات المتاحة
+              </label>
+              <div class="equipment-selector">
+                <label>
+                  <input 
+                    type="checkbox" 
+                    name="projector" 
+                    [checked]="newRoom.equipment.includes('بروجكتر')"
+                    (change)="toggleEquipment('بروجكتر')">
+                  <i class="fas fa-video"></i>
+                  بروجكتر
+                </label>
+                
+                <label>
+                  <input 
+                    type="checkbox" 
+                    name="computer" 
+                    [checked]="newRoom.equipment.includes('حاسب آلي')"
+                    (change)="toggleEquipment('حاسب آلي')">
+                  <i class="fas fa-desktop"></i>
+                  حاسب آلي
+                </label>
+                
+                <label>
+                  <input 
+                    type="checkbox" 
+                    name="airConditioner" 
+                    [checked]="newRoom.equipment.includes('مكيف')"
+                    (change)="toggleEquipment('مكيف')">
+                  <i class="fas fa-wind"></i>
+                  مكيف
+                </label>
+                
+                <label>
+                  <input 
+                    type="checkbox" 
+                    name="smartBoard" 
+                    [checked]="newRoom.equipment.includes('سبورة ذكية')"
+                    (change)="toggleEquipment('سبورة ذكية')">
+                  <i class="fas fa-chalkboard"></i>
+                  سبورة ذكية
+                </label>
+                
+                <label>
+                  <input 
+                    type="checkbox" 
+                    name="speakers" 
+                    [checked]="newRoom.equipment.includes('مكبرات صوت')"
+                    (change)="toggleEquipment('مكبرات صوت')">
+                  <i class="fas fa-volume-up"></i>
+                  مكبرات صوت
+                </label>
+                
+                <label>
+                  <input 
+                    type="checkbox" 
+                    name="wifi" 
+                    [checked]="newRoom.equipment.includes('واي فاي')"
+                    (change)="toggleEquipment('واي فاي')">
+                  <i class="fas fa-wifi"></i>
+                  واي فاي
+                </label>
+              </div>
+            </div>
+            
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" (click)="isAddingRoom = false; isEditingRoom = false">
+                إلغاء
+              </button>
+              <button type="submit" class="btn btn-primary">
+                {{ isAddingRoom ? 'إضافة' : 'حفظ التعديلات' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  
+    <!-- التذييل -->
+    <div class="footer">
+      <div class="footer-info">
+        <p>
+          <i class="fas fa-clock"></i>
+        </p>
+        <p>
+          <i class="fas fa-school"></i>
+          إجمالي الغرف: {{ statistics.totalRooms }} غرفة
+        </p>
+      </div>
+      
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-color available"></div>
+          <span>متاحة</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color occupied"></div>
+          <span>مشغولة</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color maintenance"></div>
+          <span>صيانة</span>
+        </div>
+      </div>
+    </div>
+  </div>

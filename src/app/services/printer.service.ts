@@ -41,7 +41,7 @@ export class PrinterService {
 
   // روابط الصور
   private readonly REDOX_LOGO_URL = 'https://redox-sm.onrender.com/favicon.ico';
-  private readonly ACADEMY_LOGO_URL = 'https://via.placeholder.com/100x100/2C3E50/FFFFFF?text=AR'; // يمكن استبدالها بلوجو الأكاديمية الفعلي
+  private readonly ACADEMY_LOGO_URL = 'https://redox-sm.onrender.com/favicon.ico'; // يمكن استبدالها بلوجو الأكاديمية الفعلي
 
   constructor(private ngZone: NgZone) {
     window.addEventListener('beforeunload', () => {

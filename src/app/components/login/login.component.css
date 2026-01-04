@@ -267,3 +267,23 @@
       padding: 12px;
     }
   }
+  .btn-accounting{
+    border: #90c4ff;
+    padding: 8px;
+    margin: 23px;
+    position: relative;
+    border: currentColor;
+    border-width: 0 0 2px;
+    border-style: solid;
+    background: transparent;
+    color: #90c4ff;
+    cursor: pointer;
+    transition: 0.3s;
+    font-size: 1.1rem;
+
+  }
+  .btn-accounting:hover{
+    transform: scale(1.02);
+    background: #f0f0f0;
+    transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+  }

@@ -2,19 +2,31 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './services/auth.service';
+import { environment } from '../environments/environment.development';
+
+
 export interface Class {
-  _id: string;
+  _id?: string; // جعلها اختيارية
+  id?: string;  // إضافة حقل id
   name: string;
   subject: string;
-  academicYear: string;
-  description?: string;
-  schedule: Schedule[];
   price: number;
-  teacher: any;
-  students: any[];
+  teacher?: any;
+  schedule?: any[];
+  paymentSystem: 'monthly' | 'rounds';
+  roundSettings?: {
+    sessionCount: number;
+    sessionDuration: number;
+    breakBetweenSessions: number;
+  };
+  students?: any[];
+  academicYear?: string; // إضافة هذا الحقل
+  classroom?: any;
+  description?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
-
-export interface Schedule {
+export interface Schedule  {
   day: string;
   time: string;
   classroom: string;
@@ -24,7 +36,7 @@ export interface Schedule {
   providedIn: 'root'
 })
 export class ClassesService {
-  private apiUrl = 'http://localhost:3000/api';
+  private apiUrl = environment.apiUrl || '/api';
 
   constructor(private http: HttpClient, private authService: AuthService) {}
 

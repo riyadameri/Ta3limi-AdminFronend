@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment.development';
 
 export interface Classroom {
   _id: string;
@@ -41,7 +42,7 @@ export interface SchoolMap {
   providedIn: 'root'
 })
 export class RoomsService {
-  private apiUrl = 'http://localhost:3000/api';
+  private apiUrl = environment.apiUrl;
 
   constructor(
     private http: HttpClient,

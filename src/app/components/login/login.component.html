@@ -62,6 +62,10 @@
           <span *ngIf="!isLoading">دخول النظام</span>
           <div *ngIf="isLoading" class="spinner"></div>
         </button>
+        <button type="button" class="btn-accounting" (click)="redirectToAccountingInterface()" [disabled]="isLoading">
+          واجهة المحاسبة
+        </button>
+
       </div>
 
     </form>
@@ -71,6 +75,7 @@
     <button class="btn-new" (click)="navigateToRegister()" [disabled]="isLoading">
       إنشاء حساب جديد
     </button>
+
 
     <footer class="footer-info">
       © {{ currentYear }} Redox Club | الإصدار 1.0.3

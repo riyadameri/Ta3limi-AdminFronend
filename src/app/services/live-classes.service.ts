@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment.development';
 
 export interface LiveClass {
   _id: string;
@@ -28,7 +29,7 @@ export interface Attendance {
   providedIn: 'root'
 })
 export class LiveClassesService {
-  private apiUrl = 'http://localhost:3000/api';
+  private apiUrl = environment.apiUrl;
   constructor(private http: HttpClient, private authService: AuthService) {}
 
   getLiveClasses(filters?: any): Observable<LiveClass[]> {

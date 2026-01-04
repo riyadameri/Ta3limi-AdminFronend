@@ -27,8 +27,14 @@ export class LessonManagementComponent implements OnInit {
   selectedLiveClass: LiveClass | null = null;
   selectedStudent: Student | null = null;
   
+  // نظام الدفع
+  paymentSystemOptions = [
+    { value: 'monthly', label: 'شهري' },
+    { value: 'rounds', label: 'جولاتي' }
+  ];
+
   // Forms
-  newClass: Partial<Class> = {
+  newClass: any = {
     name: '',
     subject: '',
     description: '',
@@ -36,7 +42,13 @@ export class LessonManagementComponent implements OnInit {
     price: 0,
     schedule: [],
     teacher: '',
-    students: []
+    students: [],
+    paymentSystem: 'monthly',
+    roundSettings: {
+      sessionCount: 8,
+      sessionDuration: 2,
+      breakBetweenSessions: 0
+    }
   };
   
   newLiveClass: Partial<LiveClass> = {
@@ -106,6 +118,7 @@ export class LessonManagementComponent implements OnInit {
   ngOnInit(): void {
     this.loadData();
     this.generateTimeSlots();
+    this.initializeRoundSettings(); // تهيئة إعدادات الجولات
   }
 
   loadData(): void {
@@ -115,6 +128,17 @@ export class LessonManagementComponent implements OnInit {
     this.loadTeachers();
     this.loadClassrooms();
     this.calculateStats();
+  }
+
+  // تهيئة إعدادات الجولات
+  initializeRoundSettings(): void {
+    if (!this.newClass.roundSettings) {
+      this.newClass.roundSettings = {
+        sessionCount: 8,
+        sessionDuration: 2,
+        breakBetweenSessions: 0
+      };
+    }
   }
 
   // توليد قائمة الأوقات
@@ -363,7 +387,18 @@ export class LessonManagementComponent implements OnInit {
 
   selectClass(cls: Class): void {
     this.selectedClass = cls;
-    this.loadAvailableStudents(cls._id);
+    // Add null check
+    if (cls._id) {
+      this.loadAvailableStudents(cls._id);
+    }
+    // تأكد من وجود إعدادات الجولات
+    if (cls.paymentSystem === 'rounds' && !cls.roundSettings) {
+      cls.roundSettings = {
+        sessionCount: 8,
+        sessionDuration: 2,
+        breakBetweenSessions: 0
+      };
+    }
   }
 
   // إضافة عنصر للجدول
@@ -401,8 +436,50 @@ export class LessonManagementComponent implements OnInit {
     };
   }
 
+  // إظهار/إخفاء قسم إعدادات الجولات
+  showRoundSettings(): boolean {
+    return this.newClass.paymentSystem === 'rounds';
+  }
+
+  // تحديث إجمالي السعر للجولات
+  updateRoundTotal(): void {
+    if (this.newClass.paymentSystem === 'rounds' && 
+        this.newClass.roundSettings && 
+        this.newClass.price > 0) {
+      const total = this.newClass.price * (this.newClass.roundSettings.sessionCount || 1);
+      console.log('إجمالي سعر الجولة:', total);
+    }
+  }
+
+  // تأكد من وجود إعدادات الجولات
+  ensureRoundSettingsExist(): void {
+    if (!this.newClass.roundSettings) {
+      this.newClass.roundSettings = {
+        sessionCount: 8,
+        sessionDuration: 2,
+        breakBetweenSessions: 0
+      };
+    }
+  }
+
+  // عند تغيير نظام الدفع
+  onPaymentSystemChange(): void {
+    if (this.newClass.paymentSystem === 'rounds') {
+      this.ensureRoundSettingsExist();
+    }
+  }
+
   createClass(): void {
     if (!this.validateClass()) return;
+
+    // التحقق من إعدادات الجولات
+    if (this.newClass.paymentSystem === 'rounds') {
+      this.ensureRoundSettingsExist();
+      if (this.newClass.roundSettings.sessionCount < 1) {
+        alert('يجب تحديد عدد جلسات صحيح للنظام الجولاتي');
+        return;
+      }
+    }
 
     this.classesService.createClass(this.newClass as any).subscribe({
       next: (createdClass) => {
@@ -419,7 +496,7 @@ export class LessonManagementComponent implements OnInit {
   }
 
   updateClass(): void {
-    if (!this.selectedClass || !this.validateClass()) return;
+    if (!this.selectedClass || !this.selectedClass._id || !this.validateClass()) return;
 
     this.classesService.updateClass(this.selectedClass._id, this.selectedClass).subscribe({
       next: (updatedClass) => {
@@ -476,7 +553,7 @@ export class LessonManagementComponent implements OnInit {
   }
 
   enrollStudent(student: Student): void {
-    if (!this.selectedClass) return;
+    if (!this.selectedClass || !this.selectedClass._id) return;
 
     if (confirm(`هل تريد تسجيل الطالب ${student.name} في الحصة ${this.selectedClass.name}؟`)) {
       this.classesService.enrollStudent(this.selectedClass._id, student._id).subscribe({
@@ -499,7 +576,7 @@ export class LessonManagementComponent implements OnInit {
   }
 
   unenrollStudent(studentId: string): void {
-    if (!this.selectedClass) return;
+    if (!this.selectedClass || !this.selectedClass._id) return;
 
     if (confirm('هل تريد إزالة الطالب من هذه الحصة؟')) {
       this.classesService.unenrollStudent(this.selectedClass._id, studentId).subscribe({
@@ -509,7 +586,10 @@ export class LessonManagementComponent implements OnInit {
               const sId = typeof s === 'string' ? s : s._id;
               return sId !== studentId;
             });
-            this.loadAvailableStudents(this.selectedClass._id);
+            // Add null check
+            if (this.selectedClass._id) {
+              this.loadAvailableStudents(this.selectedClass._id);
+            }
           }
           alert('تم إزالة الطالب بنجاح');
         },
@@ -693,6 +773,17 @@ export class LessonManagementComponent implements OnInit {
       alert('الرجاء ملء جميع الحقول المطلوبة وإضافة جدول الحصص');
       return false;
     }
+    
+    // التحقق من إعدادات الجولات
+    if (this.newClass.paymentSystem === 'rounds') {
+      this.ensureRoundSettingsExist();
+      if (!this.newClass.roundSettings.sessionCount || 
+          this.newClass.roundSettings.sessionCount < 1) {
+        alert('يجب تحديد عدد جلسات صحيح للنظام الجولاتي');
+        return false;
+      }
+    }
+    
     return true;
   }
 
@@ -713,7 +804,13 @@ export class LessonManagementComponent implements OnInit {
       price: 0,
       schedule: [],
       teacher: '',
-      students: []
+      students: [],
+      paymentSystem: 'monthly',
+      roundSettings: {
+        sessionCount: 8,
+        sessionDuration: 2,
+        breakBetweenSessions: 0
+      }
     };
     this.resetScheduleForm();
   }
@@ -814,29 +911,41 @@ export class LessonManagementComponent implements OnInit {
     console.log('All students loaded:', this.students);
   }
 
-  // أضف هذه الدوال في LessonManagementComponent
-
-getTeacherName(teacherId: any): string {
-  if (!teacherId) return 'غير معروف';
-  
-  if (typeof teacherId === 'string') {
-    const teacher = this.teachers.find(t => t._id === teacherId);
-    return teacher?.name || 'غير معروف';
+  getTeacherName(teacherId: any): string {
+    if (!teacherId) return 'غير معروف';
+    
+    if (typeof teacherId === 'string') {
+      const teacher = this.teachers.find(t => t._id === teacherId);
+      return teacher?.name || 'غير معروف';
+    }
+    
+    return teacherId?.name || 'غير معروف';
   }
-  
-  return teacherId?.name || 'غير معروف';
-}
 
-getClassroomName(classroomId: any): string {
-  if (!classroomId) return 'غير معروف';
-  
-  if (typeof classroomId === 'string') {
-    const classroom = this.classrooms.find(c => c._id === classroomId);
-    return classroom?.name || 'غير معروف';
+  getClassroomName(classroomId: any): string {
+    if (!classroomId) return 'غير معروف';
+    
+    if (typeof classroomId === 'string') {
+      const classroom = this.classrooms.find(c => c._id === classroomId);
+      return classroom?.name || 'غير معروف';
+    }
+    
+    return classroomId?.name || 'غير معروف';
   }
-  
-  return classroomId?.name || 'غير معروف';
-}
 
+  // الحصول على جلسات الجولة
+  getRoundSessionsCount(): number {
+    if (this.selectedClass?.paymentSystem === 'rounds' && this.selectedClass?.roundSettings) {
+      return this.selectedClass.roundSettings.sessionCount || 0;
+    }
+    return 0;
+  }
 
+  // الحصول على إجمالي سعر الجولة
+  getRoundTotalPrice(): number {
+    if (this.selectedClass?.paymentSystem === 'rounds' && this.selectedClass?.price && this.selectedClass?.roundSettings) {
+      return this.selectedClass.price * (this.selectedClass.roundSettings.sessionCount || 1);
+    }
+    return 0;
+  }
 }

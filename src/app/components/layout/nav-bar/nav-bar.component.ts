@@ -29,7 +29,7 @@ export class NavBarComponent implements OnInit {
       id: 'dashboard', 
       icon: 'bi-speedometer2', 
       label: 'لوحة التحكم', 
-      route: '/home/lesson-management',
+      route: '/home/dashboard',
       notification: 3
     },
     { 

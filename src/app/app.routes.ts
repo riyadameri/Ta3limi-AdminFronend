@@ -12,6 +12,7 @@ import { TeachersManagementComponent } from './teachers-management/teachers-mana
 import { StudentDetailsComponent } from './student-details/student-details.component';
 import { AddStudentToClassesModalComponent } from './add-student-to-classes-modal/add-student-to-classes-modal.component';
 import { AccountingComponent } from './components/accounting/accounting.component';
+import { DashboardComponent } from './components/dashboard/dashboard.component';
 export const routes: Routes = [
   // المسار الافتراضي - إعادة توجيه إلى login
   { path: '', redirectTo: '/login', pathMatch: 'full' },
@@ -32,6 +33,7 @@ export const routes: Routes = [
     // يمكن إضافة canActivate: [AuthGuard] هنا إذا كانت الصفحة محمية
     children: [
       { path: 'lesson-management', component: LessonManagementComponent },
+      {path:'dashboard',component:DashboardComponent},
       { path: 'live-class', component: LiveClassComponent },
       { path: 'students-management', component: StudentsManagementComponent },
       { path: 'students-management/:id', component: StudentDetailsComponent },   

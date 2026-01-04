@@ -2,11 +2,12 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment.development';
 @Injectable({
   providedIn: 'root'
 })
 export class CountService {
-  private apiUrl = 'http://localhost:3000/api/count';
+  private apiUrl = `${environment.apiUrl}/count`;
   constructor(
     private http: HttpClient,
     private authService: AuthService

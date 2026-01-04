@@ -1,0 +1,269 @@
+<div class="dashboard-container">
+    <!-- رأس Dashboard -->
+    <div class="dashboard-header">
+      <h1><i class="fas fa-tachometer-alt"></i> لوحة التحكم</h1>
+      <div class="header-actions">
+        <button class="btn btn-refresh" (click)="refreshData()">
+          <i class="fas fa-sync-alt"></i> تحديث
+        </button>
+        <button class="btn btn-export" (click)="exportDailyReport()">
+          <i class="fas fa-file-export"></i> تصدير التقرير
+        </button>
+        <div class="date-display">
+          <i class="fas fa-calendar-day"></i>
+          {{ today | date:'fullDate' }}
+        </div>
+      </div>
+    </div>
+  
+    <!-- حالة RFID -->
+    <div class="rfid-status" [class.scanning]="isScanning">
+      <div class="rfid-indicator">
+        <i class="fas fa-id-card"></i>
+        <span>RFID {{ isScanning ? 'جارٍ المسح...' : 'متوقف' }}</span>
+      </div>
+      <button class="btn btn-rfid" (click)="isScanning ? stopRFIDScanning() : startRFIDScanning()">
+        <i class="fas" [class.fa-stop]="isScanning" [class.fa-play]="!isScanning"></i>
+        {{ isScanning ? 'إيقاف المسح' : 'بدء المسح' }}
+      </button>
+    </div>
+  
+    <!-- بطاقة الطالب المكتشف بالـ RFID -->
+    <div *ngIf="scannedStudent" class="student-card-overlay">
+      <div class="student-card">
+        <div class="card-header">
+          <h3><i class="fas fa-user-graduate"></i> طالب مكتشف</h3>
+          <button class="btn-close" (click)="scannedStudent = null">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="card-body">
+          <div class="student-info">
+            <div class="student-avatar">
+              <i class="fas fa-user-circle"></i>
+            </div>
+            <div class="student-details">
+              <h4>{{ scannedStudent.student.name }}</h4>
+              <p><i class="fas fa-id-card"></i> {{ scannedStudent.student.studentId }}</p>
+              <p><i class="fas fa-graduation-cap"></i> {{ scannedStudent.student.academicYear }}</p>
+              <p><i class="fas fa-phone"></i> {{ scannedStudent.student.parentPhone }}</p>
+            </div>
+          </div>
+          
+          <div class="student-actions">
+            <button class="btn btn-details" (click)="goToStudentDetails(scannedStudent.student._id)">
+              <i class="fas fa-info-circle"></i> التفاصيل
+            </button>
+            <button class="btn btn-payment" (click)="payForClass(scannedStudent.student._id)">
+              <i class="fas fa-money-bill-wave"></i> دفع حصة
+            </button>
+            <button class="btn btn-attendance">
+              <i class="fas fa-clipboard-check"></i> تسجيل حضور
+            </button>
+          </div>
+          
+          <div class="student-classes" *ngIf="scannedStudent.classes?.length">
+            <h5>الحصص المسجلة:</h5>
+            <div class="classes-list">
+              <span *ngFor="let cls of scannedStudent.classes" class="class-tag">
+                {{ cls.name }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- الإحصائيات اليومية -->
+    <div class="stats-grid">
+      <!-- دخل اليوم -->
+      <div class="stat-card income">
+        <div class="stat-icon">
+          <i class="fas fa-money-bill-wave"></i>
+        </div>
+        <div class="stat-content">
+          <h3>دخل اليوم</h3>
+          <div class="stat-amount">{{ dailyStats.income | currency:'DZD ' }}</div>
+          <div class="stat-change positive">
+            <i class="fas fa-arrow-up"></i> إيرادات
+          </div>
+        </div>
+      </div>
+  
+      <!-- مصروفات اليوم -->
+      <div class="stat-card expenses">
+        <div class="stat-icon">
+          <i class="fas fa-credit-card"></i>
+        </div>
+        <div class="stat-content">
+          <h3>مصروفات اليوم</h3>
+          <div class="stat-amount">{{ dailyStats.expenses | currency:'DZD ' }}</div>
+          <div class="stat-change negative">
+            <i class="fas fa-arrow-down"></i> مصاريف
+          </div>
+        </div>
+      </div>
+  
+      <!-- صافي الربح -->
+  
+      <!-- عدد الحصص -->
+      <div class="stat-card classes">
+        <div class="stat-icon">
+          <i class="fas fa-chalkboard-teacher"></i>
+        </div>
+        <div class="stat-content">
+          <h3>الحصص اليوم</h3>
+          <div class="stat-amount">{{ dailyStats.totalClasses }}</div>
+          <div class="stat-change">
+            <i class="fas fa-clock"></i> حصص
+          </div>
+        </div>
+      </div>
+  
+      <!-- الطلاب الحاضرين -->
+      <div class="stat-card present">
+        <div class="stat-icon">
+          <i class="fas fa-user-check"></i>
+        </div>
+        <div class="stat-content">
+          <h3>الحاضرين</h3>
+          <div class="stat-amount">{{ currentStudents.present }}</div>
+          <div class="stat-change positive">
+            <i class="fas fa-check-circle"></i> حاضر
+          </div>
+        </div>
+      </div>
+  
+      <!-- الطلاب الغائبين -->
+      <div class="stat-card absent">
+        <div class="stat-icon">
+          <i class="fas fa-user-times"></i>
+        </div>
+        <div class="stat-content">
+          <h3>الغائبين</h3>
+          <div class="stat-amount">{{ currentStudents.absent }}</div>
+          <div class="stat-change negative">
+            <i class="fas fa-times-circle"></i> غائب
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- قسمين رئيسيين -->
+    <div class="main-grid">
+      <!-- الحصص المقررة اليوم -->
+      <div class="section-card">
+        <div class="section-header">
+          <h2><i class="fas fa-calendar-alt"></i> الحصص المقررة اليوم</h2>
+          <span class="badge">{{ todayClasses.length }}</span>
+        </div>
+        
+        <div class="classes-list">
+          <div *ngFor="let cls of todayClasses" class="class-item">
+            <div class="class-info">
+              <h4>{{ cls.name }}</h4>
+              <p class="class-meta">
+                <span><i class="fas fa-book"></i> {{ cls.subject }}</span>
+                <span><i class="fas fa-user-tie"></i> {{ cls.teacher?.name }}</span>
+                <span><i class="fas fa-clock"></i> {{ cls.time }}</span>
+                <span><i class="fas fa-door-open"></i> {{ cls.classroom?.name }}</span>
+              </p>
+              <div class="class-students">
+                <i class="fas fa-users"></i> {{ cls.studentsCount }} طالب
+              </div>
+            </div>
+            <div class="class-actions">
+              <button class="btn btn-schedule" (click)="scheduleClass(cls)" *ngIf="!cls.isScheduled">
+                <i class="fas fa-calendar-plus"></i> جدولة
+              </button>
+              <button class="btn btn-view" [routerLink]="['/home/live-class']" [queryParams]="{classId: cls._id}">
+                <i class="fas fa-eye"></i> عرض
+              </button>
+            </div>
+          </div>
+          
+          <div *ngIf="todayClasses.length === 0" class="empty-state">
+            <i class="fas fa-calendar-times"></i>
+            <p>لا توجد حصص مقررة اليوم</p>
+          </div>
+        </div>
+      </div>
+  
+      <!-- الطلاب المتأخرين في الدفع -->
+      <div class="section-card">
+        <div class="section-header">
+          <h2><i class="fas fa-exclamation-triangle"></i> الطلاب المتأخرين في الدفع</h2>
+          <span class="badge badge-warning">{{ lateStudents.length }}</span>
+        </div>
+        
+        <div class="late-students-list">
+          <div *ngFor="let student of lateStudents" class="late-student-item">
+            <div class="student-avatar-small">
+              <i class="fas fa-user-circle"></i>
+            </div>
+            <div class="student-details-small">
+              <h4>{{ student.name }}</h4>
+              <p class="student-id">{{ student.studentId }}</p>
+              <div class="late-info">
+                <span class="amount-due">
+                  <i class="fas fa-money-bill-wave"></i>
+                  متأخر: {{ student.amountDue | currency:'DZD ' }}
+                </span>
+                <span class="months-late">
+                  <i class="fas fa-calendar-times"></i>
+                  {{ student.monthsLate }} أشهر
+                </span>
+              </div>
+            </div>
+            <div class="student-actions-small">
+              <button class="btn btn-pay-now" (click)="payForClass(student._id)">
+                <i class="fas fa-credit-card"></i> دفع
+              </button>
+              <button class="btn btn-notify" (click)="sendPaymentReminder(student)">
+                <i class="fas fa-bell"></i> تذكير
+              </button>
+            </div>
+          </div>
+          
+          <div *ngIf="lateStudents.length === 0" class="empty-state">
+            <i class="fas fa-check-circle"></i>
+            <p>لا يوجد طلاب متأخرين في الدفع</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- قسم الإشعارات -->
+    <div class="notifications-section">
+      <div class="section-card">
+        <div class="section-header">
+          <h2><i class="fas fa-bell"></i> الإشعارات والتنبيهات</h2>
+          <span class="badge badge-info">{{ notifications.length }}</span>
+        </div>
+        
+        <div class="notifications-list">
+          <div *ngFor="let notification of notifications" 
+               class="notification-item" 
+               [class.success]="notification.type === 'success'"
+               [class.error]="notification.type === 'error'"
+               [class.warning]="notification.type === 'warning'">
+            <div class="notification-icon">
+              <i class="fas" 
+                 [class.fa-check-circle]="notification.type === 'success'"
+                 [class.fa-exclamation-circle]="notification.type === 'error'"
+                 [class.fa-exclamation-triangle]="notification.type === 'warning'"></i>
+            </div>
+            <div class="notification-content">
+              <p>{{ notification.message }}</p>
+              <small>{{ notification.timestamp | date:'shortTime' }}</small>
+            </div>
+          </div>
+          
+          <div *ngIf="notifications.length === 0" class="empty-state">
+            <i class="fas fa-bell-slash"></i>
+            <p>لا توجد إشعارات جديدة</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

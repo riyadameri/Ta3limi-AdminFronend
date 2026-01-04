@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './auth.service';
-
+import { environment } from '../../environments/environment.development';
 export interface Transaction {
   _id?: string;
   type: string;
@@ -172,7 +172,7 @@ export interface MonthlyFinancialReport {
   providedIn: 'root'
 })
 export class AccountingService {
-  private apiUrl = 'http://localhost:3000/api/accounting';
+  private apiUrl = `${environment.apiUrl}/accounting` || '/api/accounting';
 
   constructor(
     private http: HttpClient,

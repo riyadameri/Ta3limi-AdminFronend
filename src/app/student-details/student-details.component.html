@@ -1,581 +1,1019 @@
-<div class="student-details">
-    <div class="container-fluid">
-      <!-- Back Button -->
-      <div class="row mb-4">
-        <div class="col">
-          <button class="btn btn-outline-secondary" (click)="goBack()">
-            <i class="bi bi-arrow-right me-1"></i>
-            العودة للقائمة
+<!-- student-details.component.html -->
+<div class="student-details-container">
+  <!-- Loading State -->
+  <div *ngIf="loading" class="loading-overlay">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">جاري التحميل...</span>
+    </div>
+  </div>
+
+  <!-- All Modal Components will go here -->
+
+  <!-- Add Payment Modal -->
+  <div *ngIf="showPaymentModal" class="modal-overlay">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title">
+            <i class="fas fa-plus-circle me-2"></i>إضافة دفعة جديدة
+          </h5>
+          <button type="button" class="btn-close btn-close-white" (click)="closePaymentModal()"></button>
+        </div>
+        <div class="modal-body">
+          <form (ngSubmit)="addPayment()">
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">المبلغ (د.ج)</label>
+                <input type="number" 
+                       class="form-control" 
+                       [(ngModel)]="newPayment.amount" 
+                       name="amount"
+                       min="0" 
+                       step="100"
+                       required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">الشهر</label>
+                <select class="form-select" [(ngModel)]="newPayment.month" name="month" required>
+                  <option value="">اختر الشهر</option>
+                  <option *ngFor="let month of generateMonthOptions()" [value]="month">
+                    {{ month }}
+                  </option>
+                </select>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">طريقة الدفع</label>
+                <select class="form-select" [(ngModel)]="newPayment.paymentMethod" name="paymentMethod" required>
+                  <option *ngFor="let method of paymentMethods" [value]="method.value">
+                    {{ method.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">التاريخ</label>
+                <input type="date" 
+                       class="form-control" 
+                       [value]="currentDate | date:'yyyy-MM-dd'"
+                       disabled>
+              </div>
+              <div class="col-12 mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" 
+                          [(ngModel)]="newPayment.notes" 
+                          name="notes"
+                          rows="3"
+                          placeholder="ملاحظات إضافية حول الدفعة..."></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" (click)="closePaymentModal()">إلغاء</button>
+              <button type="submit" class="btn btn-primary">حفظ الدفعة</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Payment Modal -->
+  <div *ngIf="showEditPaymentModal" class="modal-overlay">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-warning text-white">
+          <h5 class="modal-title">
+            <i class="fas fa-edit me-2"></i>تعديل الدفعة
+          </h5>
+          <button type="button" class="btn-close btn-close-white" (click)="closeEditPaymentModal()"></button>
+        </div>
+        <div class="modal-body">
+          <form (ngSubmit)="updatePayment()" *ngIf="editingPayment">
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">المبلغ (د.ج)</label>
+                <input type="number" 
+                       class="form-control" 
+                       [(ngModel)]="editingPayment.amount" 
+                       name="amount"
+                       min="0" 
+                       step="100"
+                       required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">الشهر</label>
+                <input type="text" 
+                       class="form-control" 
+                       [(ngModel)]="editingPayment.month" 
+                       name="month"
+                       required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">طريقة الدفع</label>
+                <select class="form-select" [(ngModel)]="editingPayment.paymentMethod" name="paymentMethod" required>
+                  <option *ngFor="let method of paymentMethods" [value]="method.value">
+                    {{ method.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">الحالة</label>
+                <select class="form-select" [(ngModel)]="editingPayment.status" name="status" required>
+                  <option value="paid">مدفوع</option>
+                  <option value="pending">معلق</option>
+                  <option value="late">متأخر</option>
+                </select>
+              </div>
+              <div class="col-12 mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" 
+                          [(ngModel)]="editingPayment.notes" 
+                          name="notes"
+                          rows="3"
+                          placeholder="ملاحظات إضافية حول الدفعة..."></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" (click)="closeEditPaymentModal()">إلغاء</button>
+              <button type="submit" class="btn btn-warning">تحديث الدفعة</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Payment Confirmation Modal -->
+  <div *ngIf="showDeleteConfirmModal" class="modal-overlay">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title">
+            <i class="fas fa-exclamation-triangle me-2"></i>تأكيد الحذف
+          </h5>
+          <button type="button" class="btn-close btn-close-white" (click)="closeDeleteConfirmModal()"></button>
+        </div>
+        <div class="modal-body" *ngIf="paymentToDelete">
+          <div class="text-center">
+            <i class="fas fa-trash-alt fa-3x text-danger mb-3"></i>
+            <h5 class="mb-3">هل أنت متأكد من حذف هذه الدفعة؟</h5>
+            <div class="alert alert-warning">
+              <p class="mb-1"><strong>المبلغ:</strong> {{ paymentToDelete.amount | number:'1.0-0' }} د.ج</p>
+              <p class="mb-1"><strong>الشهر:</strong> {{ paymentToDelete.month }}</p>
+              <p class="mb-0"><strong>الحالة:</strong> {{ getPaymentStatusText(paymentToDelete) }}</p>
+            </div>
+            <p class="text-danger">
+              <i class="fas fa-exclamation-circle me-1"></i>
+              لا يمكن التراجع عن هذا الإجراء
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeDeleteConfirmModal()">إلغاء</button>
+          <button type="button" class="btn btn-danger" (click)="deletePayment()">حذف</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add to Lessons Modal -->
+  <div *ngIf="showAddToLessonsModal" class="modal-overlay">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title">
+            <i class="fas fa-plus-circle me-2"></i>إضافة الطالب إلى حصص جديدة
+          </h5>
+          <button type="button" class="btn-close btn-close-white" (click)="closeAddToLessonsModal()"></button>
+        </div>
+        <div class="modal-body">
+          
+          <!-- Loading State -->
+          <div *ngIf="loadingAvailableClasses" class="text-center py-5">
+            <div class="spinner-border text-success" role="status">
+              <span class="visually-hidden">جاري التحميل...</span>
+            </div>
+            <p class="mt-3">جاري تحميل الحصص المتاحة...</p>
+          </div>
+
+          <!-- Available Classes Content -->
+          <div *ngIf="!loadingAvailableClasses">
+            <!-- Already Enrolled Classes Warning -->
+            <div *ngIf="alreadyEnrolledClasses.length > 0" class="alert alert-info mb-4">
+              <h6><i class="fas fa-info-circle me-2"></i>الحصص المسجلة حالياً:</h6>
+              <div class="d-flex flex-wrap gap-2 mt-2">
+                <span *ngFor="let cls of alreadyEnrolledClasses" 
+                      class="badge bg-info">
+                  {{ cls.name }} - {{ cls.subject }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Filter Section -->
+            <div class="row mb-4">
+              <div class="col-md-6">
+                <label class="form-label">فلترة حسب المادة:</label>
+                <select class="form-select" [(ngModel)]="filterSubject" (change)="filterAvailableClasses()">
+                  <option value="">جميع المواد</option>
+                  <option *ngFor="let subject of subjects" [value]="subject">{{ subject }}</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">فلترة حسب المستوى:</label>
+                <select class="form-select" [(ngModel)]="filterLevel" (change)="filterAvailableClasses()">
+                  <option value="">جميع المستويات</option>
+                  <option *ngFor="let year of academicYears" [value]="year.value">{{ year.label }}</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Selected Classes Summary -->
+            <div *ngIf="selectedClasses.length > 0" class="alert alert-success mb-4">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6><i class="fas fa-check-circle me-2"></i>الحصص المختارة ({{ selectedClasses.length }})</h6>
+                  <p class="mb-0 mt-2">
+                    <span *ngFor="let cls of selectedClasses; let last = last">
+                      {{ cls.name }}<span *ngIf="!last">, </span>
+                    </span>
+                  </p>
+                </div>
+                <div class="text-end">
+                  <h5 class="mb-0">{{ calculateMonthlyTotal() | number:'1.0-0' }} د.ج</h5>
+                  <small>الإجمالي الشهري</small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Available Classes List -->
+            <div *ngIf="filteredAvailableClasses.length === 0" class="text-center py-5">
+              <i class="fas fa-book fa-3x text-muted mb-3"></i>
+              <h5 class="text-muted">لا توجد حصص متاحة</h5>
+              <p class="text-muted">جميع الحصص المتاحة مسجلة للطالب</p>
+            </div>
+
+            <div *ngIf="filteredAvailableClasses.length > 0" class="table-responsive">
+              <table class="table table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th width="50">اختر</th>
+                    <th>اسم الحصة</th>
+                    <th>المادة</th>
+                    <th>المعلم</th>
+                    <th>المستوى</th>
+                    <th>نظام الدفع</th>
+                    <th>السعر</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let classItem of filteredAvailableClasses">
+                    <td>
+                      <input type="checkbox" 
+                             class="form-check-input"
+                             [checked]="isClassSelected(classItem._id || classItem.id)"
+                             (change)="toggleClassSelection(classItem)"
+                             [disabled]="!isLevelCompatible(classItem)">
+                    </td>
+                    <td>
+                      <strong>{{ classItem.name }}</strong>
+                      <div *ngIf="!isLevelCompatible(classItem)" class="text-danger small">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        غير متوافق مع مستوى الطالب
+                      </div>
+                    </td>
+                    <td>{{ classItem.subject }}</td>
+                    <td>{{ classItem.teacher?.name || 'غير محدد' }}</td>
+                    <td>{{ getAcademicYearName(classItem.academicYear) }}</td>
+                    <td>
+                      <span class="badge" [ngClass]="{
+                        'bg-info': classItem.paymentSystem === 'monthly',
+                        'bg-warning': classItem.paymentSystem === 'rounds'
+                      }">
+                        {{ classItem.paymentSystem === 'monthly' ? 'شهري' : 'جولات' }}
+                      </span>
+                    </td>
+                    <td>
+                      <strong class="text-primary">{{ classItem.price | number:'1.0-0' }} د.ج</strong>
+                      <div class="text-muted small">
+                        {{ classItem.paymentSystem === 'monthly' ? 'شهرياً' : 'للمجموعة' }}
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeAddToLessonsModal()">إلغاء</button>
+          <button type="button" 
+                  class="btn btn-success" 
+                  (click)="checkAndEnrollStudentToSelectedClasses()"
+                  [disabled]="selectedClasses.length === 0 || isEnrolling">
+            <span *ngIf="!isEnrolling">
+              <i class="fas fa-plus-circle me-2"></i>تسجيل في الحصص المختارة
+            </span>
+            <span *ngIf="isEnrolling">
+              <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+              جاري التسجيل...
+            </span>
           </button>
         </div>
       </div>
-  
-      <!-- Loading State -->
-      <div *ngIf="loading" class="text-center py-5">
-        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
-          <span class="visually-hidden">جاري التحميل...</span>
+    </div>
+  </div>
+
+  <!-- Round Selection Modal -->
+  <div *ngIf="showRoundSelectionModal" class="modal-overlay">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-warning text-white">
+          <h5 class="modal-title">
+            <i class="fas fa-sync-alt me-2"></i>تكوين نظام الجولات
+          </h5>
+          <button type="button" class="btn-close btn-close-white" (click)="closeRoundSelectionModal()"></button>
         </div>
-        <p class="mt-3 text-muted">جاري تحميل بيانات الطالب...</p>
-      </div>
-  
-      <!-- Student Details -->
-      <div *ngIf="!loading && student" class="row">
-        <!-- Student Info Card -->
-        <div class="col-lg-4 mb-4">
-          <div class="card student-profile-card">
-            <div class="card-body text-center">
-              <div class="avatar-lg bg-primary text-white rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center">
-                {{ student.name.charAt(0) }}
-              </div>
-              <h4 class="card-title">{{ student.name }}</h4>
-              <p class="text-muted">الرقم الجامعي: {{ student.studentId }}</p>
-              
-              <div class="student-info">
-                <div class="info-item">
-                  <i class="bi bi-book me-2"></i>
-                  <span>المستوى: {{ student.academicYear }}</span>
-                </div>
-                <div class="info-item" *ngIf="student.parentName">
-                  <i class="bi bi-person me-2"></i>
-                  <span>ولي الأمر: {{ student.parentName }}</span>
-                </div>
-                <div class="info-item" *ngIf="student.parentPhone">
-                  <i class="bi bi-phone me-2"></i>
-                  <span>هاتف ولي الأمر: {{ student.parentPhone }}</span>
-                </div>
-                <div class="info-item" *ngIf="student.birthDate">
-                  <i class="bi bi-calendar me-2"></i>
-                  <span>العمر: {{ calculateAge(student.birthDate) }} سنة</span>
-                </div>
-                <div class="info-item">
-                  <i class="bi bi-calendar-check me-2"></i>
-                  <span>تاريخ التسجيل: {{ student.registrationDate | date:'yyyy/MM/dd' }}</span>
-                </div>
-              </div>
-  
-              <div class="status-badges mt-4">
-                <span [class]="student.hasPaidRegistration ? 'badge bg-success' : 'badge bg-danger'">
-                  {{ student.hasPaidRegistration ? 'رسوم مدفوعة' : 'رسوم غير مدفوعة' }}
-                </span>
-                <span [class]="student.status === 'active' ? 'badge bg-success' : 'badge bg-secondary'" class="ms-2">
-                  {{ student.status === 'active' ? 'نشط' : 'غير نشط' }}
-                </span>
-              </div>
-            </div>
+        <div class="modal-body" *ngIf="selectedClassForRounds">
+          <div class="alert alert-warning mb-4">
+            <h6><i class="fas fa-info-circle me-2"></i>معلومة</h6>
+            <p class="mb-0">
+              الحصة <strong>{{ selectedClassForRounds.name }}</strong> تستخدم نظام الدفع بالجولات.
+              يرجى تحديد تفاصيل الجولة الأولى للطالب.
+            </p>
           </div>
-        </div>
-  
-        <!-- Details Tabs -->
-        <div class="col-lg-8">
-          <div class="card">
-            <div class="card-header">
-              <ul class="nav nav-tabs card-header-tabs">
-                <li class="nav-item">
-                  <a class="nav-link" [class.active]="activeTab === 'info'" 
-                     (click)="setActiveTab('info')">المعلومات الأساسية</a>
-                </li>
-                <li class="nav-item">
-                  <a class="nav-link" [class.active]="activeTab === 'classes'" 
-                     (click)="setActiveTab('classes')">الحصص المسجلة</a>
-                </li>
-                <li class="nav-item">
-                  <a class="nav-link" [class.active]="activeTab === 'payments'" 
-                     (click)="setActiveTab('payments')">سجل المدفوعات</a>
-                </li>
-                <li class="nav-item">
-                  <a class="nav-link" [class.active]="activeTab === 'attendance'" 
-                     (click)="setActiveTab('attendance')">سجل الحضور</a>
-                </li>
-              </ul>
+
+          <form (ngSubmit)="confirmRoundSelection()">
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">رقم الجولة</label>
+                <input type="text" 
+                       class="form-control" 
+                       [(ngModel)]="roundSelection.roundNumber" 
+                       name="roundNumber"
+                       required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">عدد الجلسات</label>
+                <input type="number" 
+                       class="form-control" 
+                       [(ngModel)]="roundSelection.sessionCount" 
+                       name="sessionCount"
+                       min="1"
+                       max="30"
+                       (change)="updateRoundTotalAmount()"
+                       required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">سعر الجلسة (د.ج)</label>
+                <input type="number" 
+                       class="form-control" 
+                       [(ngModel)]="roundSelection.sessionPrice" 
+                       name="sessionPrice"
+                       min="0"
+                       step="100"
+                       (change)="updateRoundTotalAmount()"
+                       required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">المجموع الكلي (د.ج)</label>
+                <input type="text" 
+                       class="form-control bg-light" 
+                       [value]="roundSelection.totalAmount | number:'1.0-0'"
+                       readonly>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">تاريخ البدء</label>
+                <input type="date" 
+                       class="form-control" 
+                       [(ngModel)]="roundSelection.startDate" 
+                       name="startDate"
+                       [valueAsDate]="roundSelection.startDate"
+                       required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">تاريخ الانتهاء</label>
+                <input type="date" 
+                       class="form-control" 
+                       [(ngModel)]="roundSelection.endDate" 
+                       name="endDate"
+                       [valueAsDate]="roundSelection.endDate"
+                       required>
+              </div>
+              <div class="col-12 mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" 
+                          [(ngModel)]="roundSelection.notes" 
+                          name="notes"
+                          rows="3"
+                          placeholder="ملاحظات إضافية حول الجولة..."></textarea>
+              </div>
             </div>
-  
-            <div class="card-body">
-              <!-- Basic Info Tab -->
-              <div *ngIf="activeTab === 'info'" class="tab-content">
-                <div class="row">
-                  <div class="col-md-6">
-                    <h6>المعلومات الشخصية</h6>
-                    <table class="table table-borderless">
-                      <tr>
-                        <td><strong>الاسم الكامل:</strong></td>
-                        <td>{{ student.name }}</td>
-                      </tr>
-                      <tr *ngIf="student.birthDate">
-                        <td><strong>تاريخ الميلاد:</strong></td>
-                        <td>{{ student.birthDate | date:'yyyy/MM/dd' }}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>المستوى الدراسي:</strong></td>
-                        <td>{{ student.academicYear }}</td>
-                      </tr>
-                    </table>
-                  </div>
-                  <div class="col-md-6">
-                    <h6>معلومات ولي الأمر</h6>
-                    <table class="table table-borderless">
-                      <tr *ngIf="student.parentName">
-                        <td><strong>اسم ولي الأمر:</strong></td>
-                        <td>{{ student.parentName }}</td>
-                      </tr>
-                      <tr *ngIf="student.parentPhone">
-                        <td><strong>هاتف ولي الأمر:</strong></td>
-                        <td>{{ student.parentPhone }}</td>
-                      </tr>
-                    </table>
-                  </div>
-                </div>
-              </div>
-  
-              <!-- Classes Tab -->
-              <div *ngIf="activeTab === 'classes'" class="tab-content">
-                  <div class="add-to-lesson">
-                    <button class="btn btn-primary" (click)="openAddToLessonsModal()"> 
-                      <i class="bi bi-plus-lg me-1"></i>
-                          إضافة إلى حصص
-                      </button>
-                      <br>
-                      <br>
-                <h6>الحصص المسجلة</h6>
-                </div>
-                <div *ngIf="studentClasses.length === 0" class="text-center py-4">
-                  <i class="bi bi-book display-1 text-muted"></i>
-                  <p class="text-muted mt-3">لا توجد حصص مسجلة لهذا الطالب</p>
-                </div>
-                
-                <div *ngIf="studentClasses.length > 0" class="table-responsive">
-                  <table class="table table-hover">
-                    <thead>
-                      <tr>
-                        <th>اسم الحصة</th>
-                        <th>المادة</th>
-                        <th>المعلم</th>
-                        <th>الجدول</th>
-                        <th>الحالة</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngFor="let class of studentClasses">
-                        <td>{{ class.name }}</td>
-                        <td>{{ class.subject }}</td>
-                        <td>{{ class.teacher?.name || '-' }}</td>
-                        <td>
-                          <span *ngFor="let schedule of class.schedule" class="badge bg-light text-dark me-1">
-                            {{ schedule.day }} {{ schedule.time }}
-                          </span>
-                        </td>
-                        <td>
-                          <span class="badge bg-success">نشط</span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-  
-              <!-- Payments Tab -->
-<!-- Payments Tab -->
-<div *ngIf="activeTab === 'payments'" class="tab-content">
-    <div class="payment-actions-header mb-4">
-      <button class="btn btn-primary" (click)="openAddPaymentModal()">
-        <i class="bi bi-plus-lg me-1"></i>
-        إضافة دفعة جديدة
-      </button>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeRoundSelectionModal()">رجوع</button>
+          <button type="button" class="btn btn-warning" (click)="confirmRoundSelection()">
+            تأكيد والمتابعة
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content - Same as before -->
+  <!-- Header with Student Info -->
+  <div class="student-header" *ngIf="student">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+      <div>
+        <button class="btn btn-outline-secondary mb-3" (click)="goBack()">
+          <i class="fas fa-arrow-right me-2"></i>العودة إلى القائمة
+        </button>
+        <h1 class="student-name">{{ student.name }}</h1>
+        <div class="student-id-badge">
+          <span class="badge bg-primary me-2">رقم الطالب: {{ student.studentId }}</span>
+          <span class="badge" [ngClass]="{
+            'bg-success': student.active,
+            'bg-danger': !student.active
+          }">
+            {{ student.active ? 'نشط' : 'غير نشط' }}
+          </span>
+          <span class="badge bg-info me-2">{{ getAcademicYearName(student.academicYear) }}</span>
+        </div>
+      </div>
       
-      <button class="btn btn-outline-success ms-2" (click)="printStudentReport()">
-        <i class="bi bi-printer me-1"></i>
-        طباعة تقرير
-      </button>
+      <div class="action-buttons">
+        <button class="btn btn-success me-2" (click)="printStudentReport()">
+          <i class="fas fa-print me-2"></i>طباعة التقرير
+        </button>
+        <button class="btn btn-primary" (click)="openAddToLessonsModal()">
+          <i class="fas fa-plus-circle me-2"></i>إضافة إلى حصص
+        </button>
+      </div>
     </div>
-    
-    <!-- Payment Summary -->
-    <div class="row mb-4">
-      <div class="col-md-4">
-        <div class="card bg-light">
-          <div class="card-body text-center">
-            <h6 class="text-muted">المبلغ الإجمالي المدفوع</h6>
-            <h3 class="text-success">{{ getTotalPaid() | number }} د.ج</h3>
+
+    <!-- Quick Stats -->
+    <div class="row quick-stats mb-4">
+      <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stat-card">
+          <div class="stat-icon text-primary">
+            <i class="fas fa-book"></i>
+          </div>
+          <div class="stat-info">
+            <h5>{{ studentClasses.length }}</h5>
+            <p>عدد الحصص</p>
           </div>
         </div>
       </div>
-      <div class="col-md-4">
-        <div class="card bg-light">
-          <div class="card-body text-center">
-            <h6 class="text-muted">عدد الدفعات</h6>
-            <h3>{{ paymentHistory.length }}</h3>
+      <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stat-card">
+          <div class="stat-icon text-success">
+            <i class="fas fa-money-check-alt"></i>
+          </div>
+          <div class="stat-info">
+            <h5>{{ getTotalPaid() | number:'1.0-0' }} د.ج</h5>
+            <p>المبلغ المدفوع</p>
           </div>
         </div>
       </div>
-      <div class="col-md-4">
-        <div class="card bg-light">
-          <div class="card-body text-center">
-            <h6 class="text-muted">المبلغ المعلق</h6>
-            <h3 class="text-danger">{{ getTotalPending() | number }} د.ج</h3>
+      <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stat-card">
+          <div class="stat-icon text-warning">
+            <i class="fas fa-clock"></i>
+          </div>
+          <div class="stat-info">
+            <h5>{{ getTotalPending() | number:'1.0-0' }} د.ج</h5>
+            <p>المبلغ المعلق</p>
           </div>
         </div>
       </div>
-    </div>
-    
-    <h6>سجل المدفوعات</h6>
-    <div *ngIf="paymentHistory.length === 0" class="text-center py-4">
-      <i class="bi bi-credit-card display-1 text-muted"></i>
-      <p class="text-muted mt-3">لا توجد مدفوعات مسجلة</p>
-    </div>
-    
-    <div *ngIf="paymentHistory.length > 0" class="table-responsive">
-      <table class="table table-hover">
-        <thead>
-          <tr>
-            <th>التاريخ</th>
-            <th>المبلغ</th>
-            <th>الشهر</th>
-            <th>طريقة الدفع</th>
-            <th>الحالة</th>
-            <th>الإجراءات</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr *ngFor="let payment of paymentHistory">
-            <td>{{ payment.paymentDate | date:'yyyy/MM/dd' }}</td>
-            <td>{{ payment.amount }} د.ج</td>
-            <td>{{ payment.month }}</td>
-            <td>{{ getPaymentMethodLabel(payment.paymentMethod) }}</td>
-            <td>
-              <span [class]="payment.status === 'paid' ? 'badge bg-success' : 'badge bg-warning'">
-                {{ payment.status === 'paid' ? 'مدفوع' : 'معلق' }}
-              </span>
-            </td>
-            <td>
-              <div class="btn-group btn-group-sm" role="group">
-                <button class="btn btn-outline-primary" (click)="printPaymentReceipt(payment)"
-                        title="طباعة الإيصال">
-                  <i class="bi bi-printer"></i>
-                </button>
-                <button class="btn btn-outline-warning" (click)="openEditPaymentModal(payment)"
-                        title="تعديل">
-                  <i class="bi bi-pencil"></i>
-                </button>
-                <button class="btn btn-outline-danger" (click)="openDeleteConfirmModal(payment)"
-                        title="حذف">
-                  <i class="bi bi-trash"></i>
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="col-md-3 col-sm-6 mb-3">
+        <div class="stat-card">
+          <div class="stat-icon text-info">
+            <i class="fas fa-calendar-alt"></i>
+          </div>
+          <div class="stat-info">
+            <h5>{{ calculateAge(student.birthDate) }}</h5>
+            <p>العمر</p>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-  
-              <!-- Attendance Tab -->
-              <div *ngIf="activeTab === 'attendance'" class="tab-content">
-                <h6>سجل الحضور</h6>
-                <div class="text-center py-4">
-                  <i class="bi bi-calendar-check display-1 text-muted"></i>
-                  <p class="text-muted mt-3">سيتم إضافة سجل الحضور قريباً</p>
+
+  <!-- Navigation Tabs -->
+  <nav class="tabs-navigation">
+    <ul class="nav nav-tabs">
+      <li class="nav-item">
+        <a class="nav-link" [ngClass]="{'active': activeTab === 'info'}" 
+           (click)="setActiveTab('info')">
+          <i class="fas fa-user-circle me-2"></i>معلومات الطالب
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" [ngClass]="{'active': activeTab === 'classes'}" 
+           (click)="setActiveTab('classes')">
+          <i class="fas fa-book-open me-2"></i>الحصص المسجلة
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" [ngClass]="{'active': activeTab === 'payments'}" 
+           (click)="setActiveTab('payments')">
+          <i class="fas fa-money-bill-wave me-2"></i>المدفوعات
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" [ngClass]="{'active': activeTab === 'systems'}" 
+           (click)="setActiveTab('systems')">
+          <i class="fas fa-calculator me-2"></i>أنظمة الدفع
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- Tab Content -->
+  <div class="tab-content mt-4">
+    
+    <!-- Student Information Tab -->
+    <div class="tab-pane fade" [ngClass]="{'show active': activeTab === 'info'}">
+      <div class="row" *ngIf="student">
+        <div class="col-md-8">
+          <div class="card">
+            <div class="card-header bg-primary text-white">
+              <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>المعلومات الأساسية</h5>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label text-muted">اسم الطالب</label>
+                  <p class="form-control-static">{{ student.name }}</p>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label text-muted">رقم الطالب</label>
+                  <p class="form-control-static">{{ student.studentId }}</p>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label text-muted">المستوى الدراسي</label>
+                  <p class="form-control-static">{{ getAcademicYearName(student.academicYear) }}</p>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label text-muted">تاريخ الميلاد</label>
+                  <p class="form-control-static">
+                    {{ student.birthDate ? (student.birthDate | date:'dd/MM/yyyy') : 'غير محدد' }}
+                    <span *ngIf="student.birthDate" class="text-muted">
+                      (العمر: {{ calculateAge(student.birthDate) }} سنة)
+                    </span>
+                  </p>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label text-muted">تاريخ التسجيل</label>
+                  <p class="form-control-static">{{ student.registrationDate | date:'dd/MM/yyyy' }}</p>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label text-muted">الحالة</label>
+                  <p class="form-control-static">
+                    <span class="badge" [ngClass]="{
+                      'bg-success': student.active,
+                      'bg-danger': !student.active
+                    }">
+                      {{ student.active ? 'نشط' : 'غير نشط' }}
+                    </span>
+                    <span class="badge ms-2" [ngClass]="{
+                      'bg-success': student.hasPaidRegistration,
+                      'bg-warning': !student.hasPaidRegistration
+                    }">
+                      {{ student.hasPaidRegistration ? 'مسجل بدفع' : 'غير مسجل' }}
+                    </span>
+                  </p>
                 </div>
               </div>
             </div>
+          </div>
 
-
-            <!-- Add Payment Modal -->
-<div *ngIf="showPaymentModal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">إضافة دفعة جديدة</h5>
-        <button type="button" class="btn-close" (click)="closePaymentModal()"></button>
-      </div>
-      <div class="modal-body">
-        <form (ngSubmit)="addPayment()">
-          <div class="mb-3">
-            <label class="form-label">المبلغ (د.ج)</label>
-            <input type="number" class="form-control" [(ngModel)]="newPayment.amount" 
-                   name="amount" required min="0" step="100">
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label">الشهر</label>
-            <select class="form-control" [(ngModel)]="newPayment.month" name="month" required>
-              <option value="">اختر الشهر</option>
-              <option *ngFor="let month of months" [value]="month">{{month}}</option>
-            </select>
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label">طريقة الدفع</label>
-            <select class="form-control" [(ngModel)]="newPayment.paymentMethod" name="paymentMethod" required>
-              <option *ngFor="let method of paymentMethods" [value]="method.value">
-                {{method.label}}
-              </option>
-            </select>
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label">ملاحظات</label>
-            <textarea class="form-control" [(ngModel)]="newPayment.notes" 
-                      name="notes" rows="3"></textarea>
-          </div>
-          
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" (click)="closePaymentModal()">
-              إلغاء
-            </button>
-            <button type="submit" class="btn btn-primary">
-              <i class="bi bi-check-circle me-2"></i>
-              تسجيل الدفعة
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Edit Payment Modal -->
-  <div *ngIf="showEditPaymentModal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">تعديل الدفعة</h5>
-        <button type="button" class="btn-close" (click)="closeEditPaymentModal()"></button>
-      </div>
-      <div class="modal-body">
-        <form (ngSubmit)="updatePayment()">
-          <div class="mb-3">
-            <label class="form-label">المبلغ (د.ج)</label>
-            <input type="number" class="form-control" [(ngModel)]="editingPayment.amount" 
-                   name="amount" required min="0" step="100">
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label">الشهر</label>
-            <input type="text" class="form-control" [(ngModel)]="editingPayment.month" 
-                   name="month" required>
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label">طريقة الدفع</label>
-            <select class="form-control" [(ngModel)]="editingPayment.paymentMethod" name="paymentMethod" required>
-              <option *ngFor="let method of paymentMethods" [value]="method.value">
-                {{method.label}}
-              </option>
-            </select>
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label">ملاحظات</label>
-            <textarea class="form-control" [(ngModel)]="editingPayment.notes" 
-                      name="notes" rows="3"></textarea>
-          </div>
-          
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" (click)="closeEditPaymentModal()">
-              إلغاء
-            </button>
-            <button type="submit" class="btn btn-primary">
-              <i class="bi bi-check-circle me-2"></i>
-              حفظ التغييرات
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-  
-  <!-- Delete Confirmation Modal -->
-  <div *ngIf="showDeleteConfirmModal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title text-danger">تأكيد الحذف</h5>
-        <button type="button" class="btn-close" (click)="closeDeleteConfirmModal()"></button>
-      </div>
-      <div class="modal-body">
-        <p>هل أنت متأكد من حذف هذه الدفعة؟</p>
-        <p class="text-muted">هذا الإجراء لا يمكن التراجع عنه.</p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" (click)="closeDeleteConfirmModal()">
-          إلغاء
-        </button>
-        <button type="button" class="btn btn-danger" (click)="deletePayment()">
-          <i class="bi bi-trash me-2"></i>
-          حذف الدفعة
-        </button>
-      </div>
-    </div>
-  </div>
-
-
-
-<!-- Add this after the existing modals -->
-<!-- Add to Lessons Modal -->
-<div *ngIf="showAddToLessonsModal" class="modal-overlay">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h5 class="modal-title">إضافة الطالب إلى حصص</h5>
-      <button type="button" class="btn-close" (click)="closeAddToLessonsModal()"></button>
-    </div>
-    <div class="modal-body">
-      <!-- Loading State -->
-      <div *ngIf="loadingAvailableClasses" class="text-center py-3">
-        <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">جاري التحميل...</span>
-        </div>
-        <p class="mt-2">جاري تحميل الحصص المتاحة...</p>
-      </div>
-
-      <!-- Available Classes -->
-      <div *ngIf="!loadingAvailableClasses">
-        <!-- Filter Controls -->
-        <div class="row mb-4">
-          <div class="col-md-6">
-            <label class="form-label">فلترة حسب المادة</label>
-            <select class="form-control" [(ngModel)]="filterSubject" (change)="filterAvailableClasses()">
-              <option value="">جميع المواد</option>
-              <option *ngFor="let subject of subjects" [value]="subject">{{subject}}</option>
-            </select>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">فلترة حسب المستوى</label>
-            <select class="form-control" [(ngModel)]="filterLevel" (change)="filterAvailableClasses()">
-              <option value="">جميع المستويات</option>
-              <option *ngFor="let year of academicYears" [value]="year.value">{{year.label}}</option>
-            </select>
+          <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+              <h5 class="mb-0"><i class="fas fa-users me-2"></i>معلومات ولي الأمر</h5>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label text-muted">اسم ولي الأمر</label>
+                  <p class="form-control-static">{{ student.parentName }}</p>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label text-muted">رقم الهاتف</label>
+                  <p class="form-control-static">{{ student.parentPhone }}</p>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label class="form-label text-muted">البريد الإلكتروني</label>
+                  <p class="form-control-static">
+                    {{ student.parentEmail || 'غير محدد' }}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Already Enrolled Classes -->
-        <div *ngIf="alreadyEnrolledClasses.length > 0" class="mb-4">
-          <h6 class="text-primary">الحصص المسجلة بالفعل</h6>
-          <div class="alert alert-info">
-            <i class="bi bi-info-circle me-2"></i>
-            الطالب مسجل بالفعل في {{alreadyEnrolledClasses.length}} حصة
+        <div class="col-md-4">
+          <div class="card">
+            <div class="card-header bg-success text-white">
+              <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>ملخص المدفوعات</h5>
+            </div>
+            <div class="card-body">
+              <div class="payment-summary">
+                <div class="summary-item">
+                  <span class="label">المدفوع:</span>
+                  <span class="value text-success">{{ getTotalPaid() | number:'1.0-0' }} د.ج</span>
+                </div>
+                <div class="summary-item">
+                  <span class="label">المعلق:</span>
+                  <span class="value text-warning">{{ getTotalPending() | number:'1.0-0' }} د.ج</span>
+                </div>
+                <hr>
+                <div class="summary-item total">
+                  <span class="label">الإجمالي:</span>
+                  <span class="value">{{ (getTotalPaid() + getTotalPending()) | number:'1.0-0' }} د.ج</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="table-responsive">
-            <table class="table table-sm table-bordered">
-              <thead>
+
+          <div class="card mt-4">
+            <div class="card-header bg-warning text-white">
+              <h5 class="mb-0"><i class="fas fa-book me-2"></i>الحصص المسجلة</h5>
+            </div>
+            <div class="card-body">
+              <div *ngIf="studentClasses.length === 0" class="text-center text-muted">
+                <i class="fas fa-book fa-2x mb-2"></i>
+                <p>لا توجد حصص مسجلة</p>
+              </div>
+              <div *ngIf="studentClasses.length > 0">
+                <ul class="list-group list-group-flush">
+                  <li class="list-group-item d-flex justify-content-between align-items-center" 
+                      *ngFor="let classItem of studentClasses">
+                    <div>
+                      <h6 class="mb-1">{{ classItem.name }}</h6>
+                      <small class="text-muted">{{ classItem.subject }}</small>
+                    </div>
+                    <span class="badge bg-primary rounded-pill">
+                      {{ classItem.price | number:'1.0-0' }} د.ج
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Classes Tab -->
+    <div class="tab-pane fade" [ngClass]="{'show active': activeTab === 'classes'}">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
+          <h5 class="mb-0"><i class="fas fa-book-open me-2"></i>الحصص المسجلة</h5>
+          <button class="btn btn-light" (click)="openAddToLessonsModal()">
+            <i class="fas fa-plus me-2"></i>إضافة حصص جديدة
+          </button>
+        </div>
+        <div class="card-body">
+          <div *ngIf="studentClasses.length === 0" class="text-center py-5">
+            <i class="fas fa-book fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">لا توجد حصص مسجلة</h5>
+            <p class="text-muted mb-4">ابدأ بإضافة الطالب إلى حصص جديدة</p>
+            <button class="btn btn-primary" (click)="openAddToLessonsModal()">
+              <i class="fas fa-plus-circle me-2"></i>إضافة إلى حصص
+            </button>
+          </div>
+
+          <div *ngIf="studentClasses.length > 0" class="table-responsive">
+            <table class="table table-hover">
+              <thead class="table-light">
                 <tr>
                   <th>اسم الحصة</th>
                   <th>المادة</th>
-                  <th>المستوى</th>
                   <th>المعلم</th>
+                  <th>نظام الدفع</th>
+                  <th>السعر</th>
+                  <th>المستوى</th>
+                  <th>الحالة</th>
                 </tr>
               </thead>
               <tbody>
-                <tr *ngFor="let cls of alreadyEnrolledClasses">
-                  <td>{{ cls.name }}</td>
-                  <td>{{ cls.subject }}</td>
-                  <td>{{ getAcademicYearName(cls.academicYear) }}</td>
-                  <td>{{ cls.teacher?.name || 'غير محدد' }}</td>
+                <tr *ngFor="let classItem of studentClasses">
+                  <td>
+                    <strong>{{ classItem.name }}</strong>
+                    <div *ngIf="classItem.schedule" class="text-muted small">
+                      <i class="fas fa-clock me-1"></i>
+                      {{ classItem.schedule[0]?.day }} - {{ classItem.schedule[0]?.time }}
+                    </div>
+                  </td>
+                  <td>{{ classItem.subject }}</td>
+                  <td>{{ classItem.teacher?.name || 'غير محدد' }}</td>
+                  <td>
+                    <span class="badge" [ngClass]="{
+                      'bg-info': classItem.paymentSystem === 'monthly',
+                      'bg-warning': classItem.paymentSystem === 'rounds'
+                    }">
+                      {{ classItem.paymentSystem === 'monthly' ? 'شهري' : 'جولات' }}
+                    </span>
+                  </td>
+                  <td>
+                    <strong class="text-primary">{{ classItem.price | number:'1.0-0' }} د.ج</strong>
+                    <div class="text-muted small">
+                      {{ classItem.paymentSystem === 'monthly' ? 'شهرياً' : 'للمجموعة' }}
+                    </div>
+                  </td>
+                  <td>{{ getAcademicYearName(classItem.academicYear) }}</td>
+                  <td>
+                    <span class="badge bg-success">نشطة</span>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
+      </div>
+    </div>
 
-        <!-- Available Classes List -->
-        <h6 class="mb-3">الحصص المتاحة للتسجيل</h6>
-        
-        <div *ngIf="filteredAvailableClasses.length === 0" class="text-center py-4">
-          <i class="bi bi-book display-4 text-muted"></i>
-          <p class="text-muted mt-3">لا توجد حصص متاحة للتسجيل</p>
+    <!-- Payments Tab -->
+    <div class="tab-pane fade" [ngClass]="{'show active': activeTab === 'payments'}">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
+          <h5 class="mb-0"><i class="fas fa-money-bill-wave me-2"></i>سجل المدفوعات</h5>
+          <div>
+            <button class="btn btn-light me-2" (click)="openAddPaymentModal()">
+              <i class="fas fa-plus me-2"></i>إضافة دفعة
+            </button>
+          </div>
         </div>
-
-        <div *ngIf="filteredAvailableClasses.length > 0" class="available-classes-list">
-          <div class="row">
-            <div class="col-md-6 mb-3" *ngFor="let class of filteredAvailableClasses">
-              <div class="card class-card" [class.selected]="isClassSelected(class._id)">
-                <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                      <h6 class="card-title mb-1">{{ class.name }}</h6>
-                      <p class="text-muted small mb-1">
-                        <i class="bi bi-book me-1"></i> {{ class.subject }}
-                      </p>
-                      <p class="text-muted small mb-1">
-                        <i class="bi bi-person me-1"></i> {{ class.teacher?.name || 'غير محدد' }}
-                      </p>
-                      <p class="text-muted small mb-1">
-                        <i class="bi bi-people me-1"></i> {{ class.students?.length || 0 }} طالب
-                      </p>
-                      <p class="text-muted small mb-1">
-                        <i class="bi bi-calendar me-1"></i> {{ getAcademicYearName(class.academicYear) }}
-                      </p>
-                      <p class="text-muted small mb-1">
-                        <i class="bi bi-cash-coin me-1"></i> {{ class.price | number }} د.ج/شهر
-                      </p>
-                    </div>
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" 
-                             [checked]="isClassSelected(class._id)"
-                             (change)="toggleClassSelection(class)">
-                    </div>
-                  </div>
-                  
-                  <!-- Schedule -->
-                  <div class="mt-3">
-                    <h6 class="small fw-bold">الجدول:</h6>
-                    <div *ngIf="class.schedule && class.schedule.length > 0">
-                      <span *ngFor="let schedule of class.schedule" 
-                            class="badge bg-light text-dark me-1 mb-1">
-                        {{ schedule.day }} {{ schedule.time }}
-                        <span *ngIf="schedule.classroom?.name">({{ schedule.classroom.name }})</span>
-                      </span>
-                    </div>
-                    <div *ngIf="!class.schedule || class.schedule.length === 0">
-                      <span class="badge bg-secondary">غير محدد</span>
-                    </div>
-                  </div>
-                  
-                  <!-- Level Compatibility -->
-                  <div class="mt-2">
-                    <span *ngIf="isLevelCompatible(class)" class="badge bg-success">
-                      <i class="bi bi-check-circle me-1"></i> متوافق مع مستوى الطالب
-                    </span>
-                    <span *ngIf="!isLevelCompatible(class)" class="badge bg-warning">
-                      <i class="bi bi-exclamation-triangle me-1"></i> مستوى مختلف
-                    </span>
-                  </div>
+        <div class="card-body">
+          <!-- Payment Summary -->
+          <div class="row mb-4">
+            <div class="col-md-4">
+              <div class="summary-card bg-success text-white">
+                <div class="summary-content">
+                  <h3>{{ getTotalPaid() | number:'1.0-0' }} د.ج</h3>
+                  <p>إجمالي المدفوعات</p>
+                </div>
+                <div class="summary-icon">
+                  <i class="fas fa-check-circle"></i>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="summary-card bg-warning text-white">
+                <div class="summary-content">
+                  <h3>{{ getTotalPending() | number:'1.0-0' }} د.ج</h3>
+                  <p>إجمالي المعلقة</p>
+                </div>
+                <div class="summary-icon">
+                  <i class="fas fa-clock"></i>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="summary-card bg-info text-white">
+                <div class="summary-content">
+                  <h3>{{ paymentHistory.length }}</h3>
+                  <p>عدد المعاملات</p>
+                </div>
+                <div class="summary-icon">
+                  <i class="fas fa-list-alt"></i>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Selected Classes Summary -->
-        <div *ngIf="selectedClasses.length > 0" class="selected-classes-summary mt-4 p-3 bg-light rounded">
-          <h6 class="mb-3">الحصص المحددة ({{selectedClasses.length}})</h6>
-          <div class="row">
-            <div class="col-md-4 mb-2" *ngFor="let class of selectedClasses">
-              <div class="d-flex align-items-center bg-white p-2 rounded">
-                <i class="bi bi-check-circle text-success me-2"></i>
-                <div>
-                  <small class="fw-bold">{{class.name}}</small><br>
-                  <small class="text-muted">{{class.price | number}} د.ج/شهر</small>
-                </div>
-              </div>
-            </div>
+          <!-- Payments Table -->
+          <div *ngIf="paymentHistory.length === 0" class="text-center py-5">
+            <i class="fas fa-money-bill-wave fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">لا توجد مدفوعات مسجلة</h5>
+            <p class="text-muted mb-4">ابدأ بتسجيل دفعة جديدة للطالب</p>
+            <button class="btn btn-primary" (click)="openAddPaymentModal()">
+              <i class="fas fa-plus-circle me-2"></i>إضافة دفعة جديدة
+            </button>
           </div>
-          <div class="mt-3">
-            <strong>الإجمالي الشهري:</strong> {{ calculateMonthlyTotal() | number }} د.ج
+
+          <div *ngIf="paymentHistory.length > 0" class="table-responsive">
+            <table class="table table-hover">
+              <thead class="table-light">
+                <tr>
+                  <th>رقم الفاتورة</th>
+                  <th>التاريخ</th>
+                  <th>المبلغ</th>
+                  <th>الشهر</th>
+                  <th>الحصة</th>
+                  <th>طريقة الدفع</th>
+                  <th>الحالة</th>
+                  <th>الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let payment of paymentHistory">
+                  <td>
+                    <strong>{{ payment.invoiceNumber || 'غير محدد' }}</strong>
+                  </td>
+                  <td>
+                    {{ payment.paymentDate ? (payment.paymentDate | date:'dd/MM/yyyy') : 'لم يتم الدفع' }}
+                  </td>
+                  <td>
+                    <strong class="text-primary">{{ payment.amount | number:'1.0-0' }} د.ج</strong>
+                  </td>
+                  <td>{{ payment.month }}</td>
+                  <td>
+                    {{ payment.className || 'عام' }}
+                    <div *ngIf="payment.subject" class="text-muted small">
+                      {{ payment.subject }}
+                    </div>
+                  </td>
+                  <td>{{ getPaymentMethodLabel(payment.paymentMethod) }}</td>
+                  <td>
+                    <span class="badge" [ngClass]="getPaymentStatusClass(payment)">
+                      {{ getPaymentStatusText(payment) }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button class="btn btn-outline-primary" 
+                              *ngIf="payment.status !== 'paid'"
+                              (click)="payPayment(payment)"
+                              title="دفع">
+                        <i class="fas fa-money-check"></i>
+                      </button>
+                      <button class="btn btn-outline-info" 
+                              (click)="printPaymentReceipt(payment)"
+                              title="طباعة الإيصال">
+                        <i class="fas fa-print"></i>
+                      </button>
+                      <button class="btn btn-outline-warning" 
+                              (click)="openEditPaymentModal(payment)"
+                              title="تعديل">
+                        <i class="fas fa-edit"></i>
+                      </button>
+                      <button class="btn btn-outline-danger" 
+                              (click)="openDeleteConfirmModal(payment)"
+                              title="حذف">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
     </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" (click)="closeAddToLessonsModal()">
-        إلغاء
-      </button>
-      <button type="button" class="btn btn-primary" 
-              (click)="enrollStudentToSelectedClasses()"
-              [disabled]="selectedClasses.length === 0 || isEnrolling">
-        <span *ngIf="isEnrolling" class="spinner-border spinner-border-sm me-2" role="status"></span>
-        <i class="bi bi-check-circle me-2"></i>
-        تسجيل في الحصص المحددة ({{selectedClasses.length}})
-      </button>
+
+    <!-- Payment Systems Tab -->
+    <div class="tab-pane fade" [ngClass]="{'show active': activeTab === 'systems'}">
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>أنظمة الدفع التلقائية</h5>
+        </div>
+        <div class="card-body">
+          
+          <!-- Monthly Payments System -->
+          <div class="mb-5">
+            <h5 class="border-bottom pb-2 mb-3">
+              <i class="fas fa-calendar-alt me-2 text-primary"></i>نظام الدفع الشهري
+            </h5>
+            
+            <div *ngIf="studentMonthlyPayments.length === 0" class="alert alert-info">
+              <i class="fas fa-info-circle me-2"></i>
+              لا توجد دفعات شهرية مسجلة لهذا الطالب
+            </div>
+            
+            <div *ngIf="studentMonthlyPayments.length > 0" class="table-responsive">
+              <table class="table table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th>الشهر</th>
+                    <th>المبلغ</th>
+                    <th>الحصة</th>
+                    <th>تاريخ الاستحقاق</th>
+                    <th>تاريخ الدفع</th>
+                    <th>طريقة الدفع</th>
+                    <th>الحالة</th>
+                    <th>الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let payment of studentMonthlyPayments">
+                    <td>{{ payment.month }}</td>
+                    <td>
+                      <strong class="text-primary">{{ payment.amount | number:'1.0-0' }} د.ج</strong>
+                    </td>
+                    <td>{{ payment.className || 'عام' }}</td>
+                    <td>
+                      {{ payment.dueDate ? (payment.dueDate | date:'dd/MM/yyyy') : 'غير محدد' }}
+                    </td>
+                    <td>
+                      {{ payment.paymentDate ? (payment.paymentDate | date:'dd/MM/yyyy') : 'لم يتم الدفع' }}
+                    </td>
+                    <td>{{ payment.paymentMethod ? getPaymentMethodLabel(payment.paymentMethod) : 'غير محدد' }}</td>
+                    <td>
+                      <span class="badge" [ngClass]="{
+                        'bg-success': payment.status === 'paid',
+                        'bg-warning': payment.status === 'pending',
+                        'bg-danger': payment.status === 'late'
+                      }">
+                        {{ payment.status === 'paid' ? 'مدفوع' : 
+                           payment.status === 'pending' ? 'معلق' : 
+                           payment.status === 'late' ? 'متأخر' : payment.status }}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-primary" 
+                                *ngIf="payment.status !== 'paid'"
+                                (click)="payLatePayment(payment)"
+                                title="دفع">
+                          <i class="fas fa-money-check"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Rounds Payment System -->
+          <div>
+            <h5 class="border-bottom pb-2 mb-3">
+              <i class="fas fa-sync-alt me-2 text-warning"></i>نظام الدفع بالجولات
+            </h5>
+            
+            <div *ngIf="studentRounds.length === 0" class="alert alert-warning">
+              <i class="fas fa-exclamation-circle me-2"></i>
+              لا توجد جولات دفع مسجلة لهذا الطالب
+            </div>
+            
+            <div *ngIf="studentRounds.length > 0" class="row">
+              <div class="col-md-6 col-lg-4 mb-4" *ngFor="let round of studentRounds">
+                <div class="round-card card h-100" [ngClass]="{
+                  'border-success': round.status === 'paid',
+                  'border-warning': round.status === 'pending',
+                  'border-danger': round.status === 'late'
+                }">
+                  <div class="card-header">
+                    <h6 class="mb-0 d-flex justify-content-between align-items-center">
+                      <span>
+                        <i class="fas fa-sync-alt me-2"></i>
+                        الجولة {{ round.roundNumber }}
+                      </span>
+                      <span class="badge" [ngClass]="round.statusClass">
+                        {{ round.statusText }}
+                      </span>
+                    </h6>
+                  </div>
+                  <div class="card-body">
+                    <div class="round-info">
+                      <div class="info-item">
+                        <span class="label">عدد الجلسات:</span>
+                        <span class="value">{{ round.sessionCount }}</span>
+                      </div>
+                      <div class="info-item">
+                        <span class="label">سعر الجلسة:</span>
+                        <span class="value">{{ round.sessionPrice | number:'1.0-0' }} د.ج</span>
+                      </div>
+                      <div class="info-item">
+                        <span class="label">المجموع:</span>
+                        <span class="value text-primary">{{ round.totalAmount | number:'1.0-0' }} د.ج</span>
+                      </div>
+                      <div class="info-item">
+                        <span class="label">تاريخ البدء:</span>
+                        <span class="value">{{ round.startDate | date:'dd/MM/yyyy' }}</span>
+                      </div>
+                      <div class="info-item">
+                        <span class="label">تاريخ الانتهاء:</span>
+                        <span class="value">{{ round.endDate | date:'dd/MM/yyyy' }}</span>
+                      </div>
+                      <div class="info-item" *ngIf="round.class">
+                        <span class="label">الحصة:</span>
+                        <span class="value">{{ round.class.name }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-footer">
+                    <div class="d-flex justify-content-between">
+                      <button class="btn btn-sm btn-outline-info" 
+                              (click)="viewRoundDetails(round)">
+                        <i class="fas fa-eye me-1"></i>التفاصيل
+                      </button>
+                      <button class="btn btn-sm btn-outline-success" 
+                              *ngIf="round.status !== 'paid'"
+                              (click)="payRound(round)">
+                        <i class="fas fa-money-check me-1"></i>دفع
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
-
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>

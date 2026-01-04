@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import Swal from 'sweetalert2';
 import { CommonModule } from '@angular/common';
-
+import { environment } from '../../../environments/environment';
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -12,7 +12,7 @@ import { CommonModule } from '@angular/common';
   imports: [FormsModule, CommonModule]
 })
 export class LoginComponent implements OnInit {
-
+  private apiUrl = environment.apiUrl;
   username: string = '';
   password: string = '';
   rememberMe: boolean = false;
@@ -53,7 +53,7 @@ export class LoginComponent implements OnInit {
     this.isLoading = true;
 
     try {
-      const response = await fetch('https://redox-sm.onrender.com/api/auth/login', {
+      const response = await fetch(`${this.apiUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: this.username.trim(), password: this.password })
@@ -115,5 +115,53 @@ export class LoginComponent implements OnInit {
   getGreeting(): string {
     const hour = new Date().getHours();
     return hour < 12 ? 'صباح الخير' : 'مساء الخير';
+  }
+  async redirectToAccountingInterface(){
+
+    if (!this.isFormValid()) {
+      Swal.fire({ title: 'خطأ', text: 'يرجى إكمال البيانات', icon: 'error', confirmButtonColor: '#0a66c2' });
+      return;
+    }
+
+    this.isLoading = true;
+
+    try {
+      const response = await fetch(`${this.apiUrl}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: this.username.trim(), password: this.password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.token) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        if (this.rememberMe) {
+          localStorage.setItem('rememberedUser', JSON.stringify({ username: this.username.trim(), rememberMe: true }));
+        } else {
+          localStorage.removeItem('rememberedUser');
+        }
+
+        await Swal.fire({
+          title: 'تم تسجيل الدخول',
+          text: 'جاري تحويلك إلى مدرسة الرواد...',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false
+        });
+
+        // Redirect to default child route
+        this.router.navigate(['/accounting']);
+      } else {
+        Swal.fire({ title: 'فشل الدخول', text: data.message || 'بيانات غير صحيحة', icon: 'error' });
+      }
+    } catch (err) {
+      Swal.fire({ title: 'خطأ في الاتصال', text: 'يرجى التحقق من الإنترنت', icon: 'error' });
+    } finally {
+      this.isLoading = false;
+    }
+
   }
 }

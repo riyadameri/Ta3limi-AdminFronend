@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './services/auth.service';
-
+import { environment } from '../environments/environment.development';
 export interface Card {
   _id: string;
   uid: string;
@@ -27,7 +27,7 @@ export interface AuthorizedCard {
   providedIn: 'root'
 })
 export class CardsService {
-  private apiUrl = 'http://localhost:3000/api';
+  private apiUrl = environment.apiUrl || '/api';
 
   constructor(private http: HttpClient, private authService: AuthService) {}
 

@@ -2,12 +2,13 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment.development';
 
 @Injectable({
   providedIn: 'root'
 })
 export class PaymentsService {
-  private apiUrl = 'http://localhost:3000/api';
+  private apiUrl = environment.apiUrl;
 
   constructor(
     private http: HttpClient,
@@ -82,6 +83,37 @@ export class PaymentsService {
     });
   }
 
-  
+  createMonthlyPayment(paymentData: any): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/payments/monthly`, paymentData, {
+      headers: this.authService.getAuthHeaders()
+    });
+  }
+
+  createRoundPayment(roundData: any): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/payments/rounds`, roundData, {
+      headers: this.authService.getAuthHeaders()
+    });
+  }
+
+  // الحصول على جولات الطالب
+  getStudentRounds(studentId: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/payments/rounds/student/${studentId}`, {
+      headers: this.authService.getAuthHeaders()
+    });
+  }
+
+  // الحصول على المدفوعات الشهرية
+  getStudentMonthlyPayments(studentId: string): Observable<any[]> {
+    return this.http.get<any[]>(`${this.apiUrl}/payments/monthly/student/${studentId}`, {
+      headers: this.authService.getAuthHeaders()
+    });
+  }
+
+  // تسديد دفعة متأخرة
+  payLatePayment(paymentId: string, paymentData: any): Observable<any> {
+    return this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/pay-late`, paymentData, {
+      headers: this.authService.getAuthHeaders()
+    });
+  }
 
 }

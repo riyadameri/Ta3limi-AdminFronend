@@ -6,7 +6,6 @@ import { StudentsService, Student } from '../../services/students.service';
 import { LiveClassesService, LiveClass, Attendance } from '../../services/live-classes.service';
 import { PaymentsService } from '../../services/payments.service';
 import { HttpClient } from '@angular/common/http';
-
 @Component({
   selector: 'app-lesson-management',
   imports: [CommonModule, FormsModule],
@@ -179,7 +178,7 @@ export class LessonManagementComponent implements OnInit {
   }
 
   loadTeachers(): void {
-    this.http.get<any[]>('http://localhost:3000/api/teachers').subscribe({
+    this.http.get<any[]>('/api/teachers').subscribe({
       next: (teachers) => {
         this.teachers = teachers;
       },
@@ -191,7 +190,7 @@ export class LessonManagementComponent implements OnInit {
   }
 
   loadClassrooms(): void {
-    this.http.get<any[]>('http://localhost:3000/api/classrooms').subscribe({
+    this.http.get<any[]>('/api/classrooms').subscribe({
       next: (classrooms) => {
         this.classrooms = classrooms;
       },

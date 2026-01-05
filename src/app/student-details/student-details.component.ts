@@ -121,7 +121,7 @@ interface RoundSelection {
   styleUrls: ['./student-details.component.css']
 })
 export class StudentDetailsComponent implements OnInit {
-  private apiUrl = 'http://localhost:3000/api';
+  private apiUrl = '/api';
   
   student: Student | null = null;
   loading: boolean = false;

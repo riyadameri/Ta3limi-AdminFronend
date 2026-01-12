@@ -18,6 +18,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isRFIDInputActive: boolean = false;
   rfidInputValue: string = '';
   rfidStatus: string = 'Waiting for card...';
+  private apiUrl = environment.apiUrl;
   
   // الإحصائيات اليومية
   dailyStats = {
@@ -341,7 +342,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // معالجة بطاقة RFID
   processRFIDCard(uid: string) {
-    this.http.get<any>(`/api/cards/uid/${uid}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/cards/uid/${uid}`).subscribe({
       next: (data) => {
         if (data.student) {
           this.scannedStudent = data;

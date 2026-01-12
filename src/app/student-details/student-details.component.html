@@ -7,8 +7,8 @@
     </div>
   </div>
 
-  <!-- All Modal Components will go here -->
-
+  <!-- ===== All Modal Components ===== -->
+  
   <!-- Add Payment Modal -->
   <div *ngIf="showPaymentModal" class="modal-overlay">
     <div class="modal-dialog modal-lg">
@@ -169,6 +169,291 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" (click)="closeDeleteConfirmModal()">إلغاء</button>
           <button type="button" class="btn btn-danger" (click)="deletePayment()">حذف</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Payment Modal (for multiple students) -->
+  <div *ngIf="showBulkPaymentModal" class="modal-overlay">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title">
+            <i class="fas fa-users me-2"></i>دفع جماعي للطلاب
+          </h5>
+          <button type="button" class="btn-close btn-close-white" (click)="closeBulkPaymentModal()"></button>
+        </div>
+        <div class="modal-body">
+          
+          <!-- Progress Bar -->
+          <div *ngIf="isProcessingBulkPayment" class="mb-4">
+            <div class="d-flex justify-content-between mb-2">
+              <span>جاري معالجة الدفعات...</span>
+              <span>{{ bulkPaymentProgress }}%</span>
+            </div>
+            <div class="progress" style="height: 20px;">
+              <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                   [style.width]="bulkPaymentProgress + '%'">
+                {{ bulkPaymentProgress }}%
+              </div>
+            </div>
+          </div>
+
+          <!-- Bulk Payment Form -->
+          <div *ngIf="!isProcessingBulkPayment">
+            <!-- Payment Details Section -->
+            <div class="row mb-4">
+              <div class="col-md-4 mb-3">
+                <label class="form-label">المبلغ للطالب الواحد (د.ج)</label>
+                <input type="number" 
+                       class="form-control" 
+                       [(ngModel)]="bulkPayment.amount" 
+                       min="0" 
+                       step="100"
+                       required>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">الشهر</label>
+                <select class="form-select" [(ngModel)]="bulkPayment.month" required>
+                  <option value="">اختر الشهر</option>
+                  <option *ngFor="let month of generateMonthOptions()" [value]="month">
+                    {{ month }}
+                  </option>
+                </select>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label">طريقة الدفع</label>
+                <select class="form-select" [(ngModel)]="bulkPayment.paymentMethod" required>
+                  <option *ngFor="let method of paymentMethods" [value]="method.value">
+                    {{ method.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="col-12 mb-3">
+                <label class="form-label">ملاحظات</label>
+                <textarea class="form-control" 
+                          [(ngModel)]="bulkPayment.notes" 
+                          rows="2"
+                          placeholder="ملاحظات حول الدفع الجماعي..."></textarea>
+              </div>
+            </div>
+
+            <!-- Class Selection -->
+            <div class="mb-4">
+              <label class="form-label">اختيار الحصة (اختياري)</label>
+              <div class="d-flex flex-wrap gap-2">
+                <button *ngFor="let classItem of studentClasses" 
+                        type="button"
+                        class="btn btn-outline-primary"
+                        [ngClass]="{'active': classForBulkPayment?._id === classItem._id}"
+                        (click)="selectClassForBulkPayment(classItem)">
+                  {{ classItem.name }} - {{ classItem.price | number:'1.0-0' }} د.ج
+                </button>
+              </div>
+              <small class="text-muted">اختيار الحصة سيتم ربط الدفعات بها تلقائياً</small>
+            </div>
+
+            <!-- Students Selection Section -->
+            <div class="card">
+              <div class="card-header bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="mb-0">اختيار الطلاب ({{ selectedStudents.length }})</h6>
+                  <div>
+                    <button type="button" class="btn btn-sm btn-outline-primary me-2" (click)="selectAllStudents()">
+                      <i class="fas fa-check-double me-1"></i>تحديد الكل
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" (click)="deselectAllStudents()">
+                      <i class="fas fa-times me-1"></i>إلغاء الكل
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="card-body">
+                <!-- Search Box -->
+                <div class="mb-3">
+                  <input type="text" 
+                         class="form-control" 
+                         placeholder="ابحث عن طالب بالاسم أو الرقم..."
+                         [(ngModel)]="studentSearchTerm"
+                         (input)="filterStudents()">
+                </div>
+
+                <!-- Selected Students Summary -->
+                <div *ngIf="selectedStudents.length > 0" class="alert alert-success mb-3">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                      <strong>{{ selectedStudents.length }}</strong> طالب مختار
+                    </div>
+                    <div class="text-end">
+                      <h5 class="mb-0">{{ (selectedStudents.length * bulkPayment.amount) | number:'1.0-0' }} د.ج</h5>
+                      <small class="text-muted">الإجمالي</small>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Students List -->
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                  <table class="table table-hover table-sm">
+                    <thead>
+                      <tr>
+                        <th width="50"></th>
+                        <th>الاسم</th>
+                        <th>رقم الطالب</th>
+                        <th>المستوى</th>
+                        <th>ولي الأمر</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let student of filteredStudents">
+                        <td>
+                          <input type="checkbox" 
+                                 class="form-check-input"
+                                 [checked]="isStudentSelected(student)"
+                                 (change)="toggleStudentSelection(student)">
+                        </td>
+                        <td>{{ student.name }}</td>
+                        <td>{{ student.studentId }}</td>
+                        <td>{{ getAcademicYearName(student.academicYear) }}</td>
+                        <td>{{ student.parentName }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeBulkPaymentModal()">إلغاء</button>
+          <button type="button" 
+                  class="btn btn-success" 
+                  (click)="processBulkPayment()"
+                  [disabled]="selectedStudents.length === 0 || isProcessingBulkPayment">
+            <span *ngIf="!isProcessingBulkPayment">
+              <i class="fas fa-money-check me-2"></i>دفع جماعي
+            </span>
+            <span *ngIf="isProcessingBulkPayment">
+              <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+              جاري المعالجة...
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Class Payments Modal -->
+  <div *ngIf="showClassPaymentsModal" class="modal-overlay">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header bg-info text-white">
+          <h5 class="modal-title">
+            <i class="fas fa-file-invoice-dollar me-2"></i>مدفوعات الحصة: {{ selectedClassForPayments?.name }}
+          </h5>
+          <button type="button" class="btn-close btn-close-white" (click)="closeClassPaymentsModal()"></button>
+        </div>
+        <div class="modal-body">
+          <div *ngIf="classPayments.length === 0" class="text-center py-5">
+            <i class="fas fa-money-bill-wave fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">لا توجد مدفوعات لهذه الحصة</h5>
+          </div>
+
+          <div *ngIf="classPayments.length > 0" class="table-responsive">
+            <table class="table table-hover">
+              <thead class="table-light">
+                <tr>
+                  <th>رقم الفاتورة</th>
+                  <th>اسم الطالب</th>
+                  <th>رقم الطالب</th>
+                  <th>المبلغ</th>
+                  <th>الشهر</th>
+                  <th>طريقة الدفع</th>
+                  <th>تاريخ الدفع</th>
+                  <th>الحالة</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let payment of classPayments">
+                  <td>
+                    <strong>{{ payment.invoiceNumber || 'غير محدد' }}</strong>
+                  </td>
+                  <td>{{ payment.student?.name || 'غير محدد' }}</td>
+                  <td>{{ payment.student?.studentId || 'غير محدد' }}</td>
+                  <td>
+                    <strong class="text-primary">{{ payment.amount | number:'1.0-0' }} د.ج</strong>
+                  </td>
+                  <td>{{ payment.month }}</td>
+                  <td>{{ getPaymentMethodLabel(payment.paymentMethod) }}</td>
+                  <td>
+                    {{ payment.paymentDate ? (payment.paymentDate | date:'dd/MM/yyyy') : 'لم يتم الدفع' }}
+                  </td>
+                  <td>
+                    <span class="badge" [ngClass]="getPaymentStatusClass(payment)">
+                      {{ getPaymentStatusText(payment) }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeClassPaymentsModal()">إغلاق</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Pay Confirmation Modal -->
+  <div *ngIf="showBulkPayConfirmation" class="modal-overlay">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title">
+            <i class="fas fa-money-check me-2"></i>تأكيد الدفع الجماعي للمحدد
+          </h5>
+          <button type="button" class="btn-close btn-close-white" (click)="closeBulkPayConfirmation()"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info mb-4">
+            <h6><i class="fas fa-info-circle me-2"></i>تفاصيل الدفع الجماعي</h6>
+            <p class="mb-1"><strong>عدد المدفوعات المحددة:</strong> {{ selectedPaymentsForBulkPay.length }}</p>
+            <p class="mb-1"><strong>المبلغ الإجمالي:</strong> {{ getSelectedPaymentsTotal() | number:'1.0-0' }} د.ج</p>
+            <p class="mb-0"><strong>ملاحظة:</strong> سيتم دفع جميع المدفوعات المحددة بنفس طريقة الدفع</p>
+          </div>
+
+          <div class="table-responsive mb-4" style="max-height: 300px;">
+            <table class="table table-sm">
+              <thead class="table-light">
+                <tr>
+                  <th>الشهر</th>
+                  <th>المبلغ</th>
+                  <th>الحصة</th>
+                  <th>الحالة</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let payment of selectedPaymentsForBulkPay">
+                  <td>{{ payment.month }}</td>
+                  <td>{{ payment.amount | number:'1.0-0' }} د.ج</td>
+                  <td>{{ payment.className || 'عام' }}</td>
+                  <td>
+                    <span class="badge bg-warning">معلق</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="text-center">
+            <button class="btn btn-secondary me-3" (click)="closeBulkPayConfirmation()">
+              <i class="fas fa-times me-2"></i>إلغاء
+            </button>
+            <button class="btn btn-success" (click)="processBulkPaySelected()">
+              <i class="fas fa-check-circle me-2"></i>تأكيد الدفع الجماعي
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -418,7 +703,8 @@
     </div>
   </div>
 
-  <!-- Main Content - Same as before -->
+  <!-- ===== Main Content ===== -->
+  
   <!-- Header with Student Info -->
   <div class="student-header" *ngIf="student">
     <div class="d-flex justify-content-between align-items-start mb-4">
@@ -443,7 +729,10 @@
         <button class="btn btn-success me-2" (click)="printStudentReport()">
           <i class="fas fa-print me-2"></i>طباعة التقرير
         </button>
-        <button class="btn btn-primary" (click)="openAddToLessonsModal()">
+        <button class="btn btn-primary me-2" (click)="openBulkPaymentModal()">
+          <i class="fas fa-users me-2"></i>دفع جماعي جديد
+        </button>
+        <button class="btn btn-info" (click)="openAddToLessonsModal()">
           <i class="fas fa-plus-circle me-2"></i>إضافة إلى حصص
         </button>
       </div>
@@ -653,9 +942,16 @@
                       <h6 class="mb-1">{{ classItem.name }}</h6>
                       <small class="text-muted">{{ classItem.subject }}</small>
                     </div>
-                    <span class="badge bg-primary rounded-pill">
-                      {{ classItem.price | number:'1.0-0' }} د.ج
-                    </span>
+                    <div class="d-flex align-items-center">
+                      <span class="badge bg-primary rounded-pill me-2">
+                        {{ classItem.price | number:'1.0-0' }} د.ج
+                      </span>
+                      <button class="btn btn-sm btn-outline-info" 
+                              (click)="openClassPaymentsModal(classItem)"
+                              title="عرض مدفوعات الحصة">
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </div>
                   </li>
                 </ul>
               </div>
@@ -670,9 +966,14 @@
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
           <h5 class="mb-0"><i class="fas fa-book-open me-2"></i>الحصص المسجلة</h5>
-          <button class="btn btn-light" (click)="openAddToLessonsModal()">
-            <i class="fas fa-plus me-2"></i>إضافة حصص جديدة
-          </button>
+          <div>
+            <button class="btn btn-light me-2" (click)="openAddToLessonsModal()">
+              <i class="fas fa-plus me-2"></i>إضافة حصص جديدة
+            </button>
+            <button class="btn btn-success" (click)="openBulkPaymentModal()">
+              <i class="fas fa-users me-2"></i>دفع جماعي جديد
+            </button>
+          </div>
         </div>
         <div class="card-body">
           <div *ngIf="studentClasses.length === 0" class="text-center py-5">
@@ -695,6 +996,7 @@
                   <th>السعر</th>
                   <th>المستوى</th>
                   <th>الحالة</th>
+                  <th>الإجراءات</th>
                 </tr>
               </thead>
               <tbody>
@@ -726,6 +1028,15 @@
                   <td>
                     <span class="badge bg-success">نشطة</span>
                   </td>
+                  <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                      <button class="btn btn-outline-info" 
+                              (click)="openClassPaymentsModal(classItem)"
+                              title="عرض مدفوعات الحصة">
+                        <i class="fas fa-eye"></i>
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -741,11 +1052,75 @@
           <h5 class="mb-0"><i class="fas fa-money-bill-wave me-2"></i>سجل المدفوعات</h5>
           <div>
             <button class="btn btn-light me-2" (click)="openAddPaymentModal()">
-              <i class="fas fa-plus me-2"></i>إضافة دفعة
+              <i class="fas fa-plus me-2"></i>دفعة فردية
+            </button>
+            <button class="btn btn-success" (click)="openBulkPaymentModal()">
+              <i class="fas fa-users me-2"></i>دفع جماعي جديد
             </button>
           </div>
         </div>
         <div class="card-body">
+          
+          <!-- Bulk Payment Selection Controls -->
+          <div class="bulk-pay-controls card mb-4">
+            <div class="card-header bg-light">
+              <h6 class="mb-0"><i class="fas fa-check-circle me-2"></i>تحديد مدفوعات للدفع الجماعي</h6>
+            </div>
+            <div class="card-body">
+              <div class="row align-items-center">
+                <div class="col-md-4 mb-3">
+                  <label class="form-label">التحديد حسب الشهر:</label>
+                  <select class="form-select" [(ngModel)]="selectedMonthForGroupPay" 
+                          (change)="selectPaymentsByMonth(selectedMonthForGroupPay)">
+                    <option value="">جميع الأشهر</option>
+                    <option *ngFor="let month of getUniqueMonths()" [value]="month">
+                      {{ month }}
+                    </option>
+                  </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                  <label class="form-label">التحديد حسب الحصة:</label>
+                  <select class="form-select" [(ngModel)]="selectedClassForGroupPay"
+                          (change)="selectPaymentsByClass(selectedClassForGroupPay)">
+                    <option value="all">جميع الحصص</option>
+                    <option *ngFor="let classItem of studentClasses" 
+                            [value]="classItem._id || classItem.id">
+                      {{ classItem.name }}
+                    </option>
+                  </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                  <div class="d-flex gap-2 mt-4">
+                    <button class="btn btn-outline-primary" (click)="selectAllPendingPayments()">
+                      <i class="fas fa-check-double me-2"></i>تحديد كل المعلق
+                    </button>
+                    <button class="btn btn-outline-secondary" (click)="selectedPaymentsForBulkPay = []">
+                      <i class="fas fa-times me-2"></i>إلغاء التحديد
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Selected Payments Summary -->
+              <div *ngIf="selectedPaymentsForBulkPay.length > 0" class="alert alert-success">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 class="mb-2"><i class="fas fa-check-circle me-2"></i>المدفوعات المحددة</h6>
+                    <p class="mb-0">
+                      <strong>{{ selectedPaymentsForBulkPay.length }}</strong> دفعة مبلغها 
+                      <strong>{{ getSelectedPaymentsTotal() | number:'1.0-0' }} د.ج</strong>
+                    </p>
+                  </div>
+                  <div>
+                    <button class="btn btn-success" (click)="openBulkPayConfirmation()">
+                      <i class="fas fa-money-check me-2"></i>دفع المحدد
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Payment Summary -->
           <div class="row mb-4">
             <div class="col-md-4">
@@ -783,82 +1158,186 @@
             </div>
           </div>
 
-          <!-- Payments Table -->
-          <div *ngIf="paymentHistory.length === 0" class="text-center py-5">
+          <!-- Class Payment Groups -->
+          <div *ngIf="classPaymentGroups.length === 0" class="text-center py-5">
             <i class="fas fa-money-bill-wave fa-3x text-muted mb-3"></i>
             <h5 class="text-muted">لا توجد مدفوعات مسجلة</h5>
             <p class="text-muted mb-4">ابدأ بتسجيل دفعة جديدة للطالب</p>
-            <button class="btn btn-primary" (click)="openAddPaymentModal()">
-              <i class="fas fa-plus-circle me-2"></i>إضافة دفعة جديدة
-            </button>
+            <div>
+              <button class="btn btn-primary me-2" (click)="openAddPaymentModal()">
+                <i class="fas fa-plus-circle me-2"></i>دفعة فردية
+              </button>
+              <button class="btn btn-success" (click)="openBulkPaymentModal()">
+                <i class="fas fa-users me-2"></i>دفع جماعي جديد
+              </button>
+            </div>
           </div>
 
-          <div *ngIf="paymentHistory.length > 0" class="table-responsive">
-            <table class="table table-hover">
-              <thead class="table-light">
-                <tr>
-                  <th>رقم الفاتورة</th>
-                  <th>التاريخ</th>
-                  <th>المبلغ</th>
-                  <th>الشهر</th>
-                  <th>الحصة</th>
-                  <th>طريقة الدفع</th>
-                  <th>الحالة</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let payment of paymentHistory">
-                  <td>
-                    <strong>{{ payment.invoiceNumber || 'غير محدد' }}</strong>
-                  </td>
-                  <td>
-                    {{ payment.paymentDate ? (payment.paymentDate | date:'dd/MM/yyyy') : 'لم يتم الدفع' }}
-                  </td>
-                  <td>
-                    <strong class="text-primary">{{ payment.amount | number:'1.0-0' }} د.ج</strong>
-                  </td>
-                  <td>{{ payment.month }}</td>
-                  <td>
-                    {{ payment.className || 'عام' }}
-                    <div *ngIf="payment.subject" class="text-muted small">
-                      {{ payment.subject }}
+          <div *ngIf="classPaymentGroups.length > 0">
+            <!-- Class Payment Groups Accordion -->
+            <div class="accordion payment-accordion" id="paymentsAccordion">
+              <div class="accordion-item" *ngFor="let group of classPaymentGroups; let i = index">
+                <h2 class="accordion-header">
+                  <button class="accordion-button" 
+                          type="button" 
+                          [class.collapsed]="!isClassGroupExpanded(group.classId)"
+                          (click)="toggleClassPaymentGroup(group.classId)"
+                          [attr.aria-expanded]="isClassGroupExpanded(group.classId)">
+                    <div class="d-flex justify-content-between align-items-center w-100">
+                      <div>
+                        <h6 class="mb-1">{{ group.className }}</h6>
+                        <div class="d-flex gap-3">
+                          <span class="badge bg-success">
+                            <i class="fas fa-check me-1"></i>
+                            مدفوع: {{ group.paidAmount | number:'1.0-0' }} د.ج
+                          </span>
+                          <span class="badge bg-warning">
+                            <i class="fas fa-clock me-1"></i>
+                            معلق: {{ group.pendingAmount | number:'1.0-0' }} د.ج
+                          </span>
+                          <span class="badge bg-primary">
+                            <i class="fas fa-list me-1"></i>
+                            {{ group.payments.length }} دفعة
+                          </span>
+                        </div>
+                      </div>
+                      <div class="text-end">
+                        <strong class="text-primary">{{ group.totalAmount | number:'1.0-0' }} د.ج</strong>
+                      </div>
                     </div>
-                  </td>
-                  <td>{{ getPaymentMethodLabel(payment.paymentMethod) }}</td>
-                  <td>
-                    <span class="badge" [ngClass]="getPaymentStatusClass(payment)">
-                      {{ getPaymentStatusText(payment) }}
-                    </span>
-                  </td>
-                  <td>
-                    <div class="btn-group btn-group-sm" role="group">
-                      <button class="btn btn-outline-primary" 
-                              *ngIf="payment.status !== 'paid'"
-                              (click)="payPayment(payment)"
-                              title="دفع">
-                        <i class="fas fa-money-check"></i>
-                      </button>
-                      <button class="btn btn-outline-info" 
-                              (click)="printPaymentReceipt(payment)"
-                              title="طباعة الإيصال">
-                        <i class="fas fa-print"></i>
-                      </button>
-                      <button class="btn btn-outline-warning" 
-                              (click)="openEditPaymentModal(payment)"
-                              title="تعديل">
-                        <i class="fas fa-edit"></i>
-                      </button>
-                      <button class="btn btn-outline-danger" 
-                              (click)="openDeleteConfirmModal(payment)"
-                              title="حذف">
-                        <i class="fas fa-trash"></i>
-                      </button>
+                  </button>
+                </h2>
+                <div class="accordion-collapse" [class.show]="isClassGroupExpanded(group.classId)">
+<!-- القسم المصحح في payments tab -->
+<div class="accordion-body">
+  <!-- Group Payments Table -->
+  <div class="table-responsive">
+    <table class="table table-hover table-sm">
+      <thead class="table-light">
+        <tr>
+          <th width="50">
+            <input type="checkbox" 
+                   class="form-check-input"
+                   [checked]="isAllPaymentsInGroupSelected(group)"
+                   (change)="toggleAllPaymentsInGroup(group)">
+          </th>
+          <th>رقم الفاتورة</th>
+          <th>التاريخ</th>
+          <th>المبلغ</th>
+          <th>الشهر</th>
+          <th>طريقة الدفع</th>
+          <th>الحالة</th>
+          <th>الإجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let payment of group.payments" 
+            [class.table-warning]="!isPaymentSelected(payment)"
+            [class.table-success]="isPaymentSelected(payment)">
+          <td>
+            <input type="checkbox" 
+                   class="form-check-input"
+                   [checked]="isPaymentSelected(payment)"
+                   (change)="togglePaymentSelection(payment)"
+                   [disabled]="payment.status === 'paid'">
+          </td>
+          <td>
+            <strong>{{ payment.invoiceNumber || 'غير محدد' }}</strong>
+          </td>
+          <td>
+            {{ payment.paymentDate ? (payment.paymentDate | date:'dd/MM/yyyy') : 'لم يتم الدفع' }}
+          </td>
+          <td>
+            <strong class="text-primary">{{ payment.amount | number:'1.0-0' }} د.ج</strong>
+          </td>
+          <td>{{ payment.month }}</td>
+          <td>{{ getPaymentMethodLabel(payment.paymentMethod) }}</td>
+          <td>
+            <span class="badge" [ngClass]="getPaymentStatusClass(payment)">
+              {{ getPaymentStatusText(payment) }}
+            </span>
+          </td>
+          <td>
+            <div class="btn-group btn-group-sm" role="group">
+              <button class="btn btn-outline-primary" 
+                      *ngIf="payment.status !== 'paid'"
+                      (click)="payPayment(payment)"
+                      title="دفع">
+                <i class="fas fa-money-check"></i>
+              </button>
+              <button class="btn btn-outline-info" 
+                      (click)="printPaymentReceipt(payment)"
+                      title="طباعة الإيصال">
+                <i class="fas fa-print"></i>
+              </button>
+              <button class="btn btn-outline-warning" 
+                      (click)="openEditPaymentModal(payment)"
+                      title="تعديل">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button class="btn btn-outline-danger" 
+                      (click)="openDeleteConfirmModal(payment)"
+                      title="حذف">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+      <tfoot *ngIf="group.payments.length > 0">
+        <tr class="table-secondary">
+          <td colspan="3" class="text-end">
+            <strong>المجموع:</strong>
+          </td>
+          <td>
+            <strong>{{ group.totalAmount | number:'1.0-0' }} د.ج</strong>
+          </td>
+          <td colspan="4"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Summary of All Payments -->
+            <div class="card mt-4">
+              <div class="card-header bg-secondary text-white">
+                <h6 class="mb-0"><i class="fas fa-chart-bar me-2"></i>ملخص شامل للمدفوعات</h6>
+              </div>
+              <div class="card-body">
+                <div class="row">
+                  <div class="col-md-6">
+                    <h6>حسب الحالة:</h6>
+                    <div class="d-flex flex-column gap-2">
+                      <div class="d-flex justify-content-between">
+                        <span>المدفوعات:</span>
+                        <strong class="text-success">{{ getTotalPaid() | number:'1.0-0' }} د.ج</strong>
+                      </div>
+                      <div class="d-flex justify-content-between">
+                        <span>المعلقة:</span>
+                        <strong class="text-warning">{{ getTotalPending() | number:'1.0-0' }} د.ج</strong>
+                      </div>
+                      <div class="d-flex justify-content-between border-top pt-2">
+                        <span>الإجمالي:</span>
+                        <strong class="text-primary">{{ (getTotalPaid() + getTotalPending()) | number:'1.0-0' }} د.ج</strong>
+                      </div>
                     </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  </div>
+                  <div class="col-md-6">
+                    <h6>حسب الحصص:</h6>
+                    <div class="d-flex flex-column gap-2">
+                      <div *ngFor="let group of classPaymentGroups" class="d-flex justify-content-between">
+                        <span>{{ group.className }}:</span>
+                        <strong>{{ group.totalAmount | number:'1.0-0' }} د.ج</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -931,6 +1410,7 @@
                           <i class="fas fa-money-check"></i>
                         </button>
                       </div>
+                  
                     </td>
                   </tr>
                 </tbody>

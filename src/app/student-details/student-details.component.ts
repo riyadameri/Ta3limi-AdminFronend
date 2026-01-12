@@ -4,6 +4,22 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import Swal from 'sweetalert2';
+import { environment } from '../../environments/environment.development';
+import { PrinterService, ReceiptData } from '../services/printer.service';
+
+
+
+
+interface ClassPaymentGroup {
+  classId: string;
+  className: string;
+  payments: Payment[];
+  totalAmount: number;
+  paidAmount: number;
+  pendingAmount: number;
+}
+
+
 
 // الواجهات
 interface Student {
@@ -113,6 +129,15 @@ interface RoundSelection {
   notes?: string;
 }
 
+interface BulkPaymentData {
+  studentIds: string[];
+  classId: string;
+  amount: number;
+  month: string;
+  paymentMethod: string;
+  notes?: string;
+}
+
 @Component({
   selector: 'app-student-details',
   standalone: true,
@@ -121,7 +146,7 @@ interface RoundSelection {
   styleUrls: ['./student-details.component.css']
 })
 export class StudentDetailsComponent implements OnInit {
-  private apiUrl = '/api';
+  private apiUrl = environment.apiUrl;
   
   student: Student | null = null;
   loading: boolean = false;
@@ -133,7 +158,16 @@ export class StudentDetailsComponent implements OnInit {
   showPaymentModal: boolean = false;
   showEditPaymentModal: boolean = false;
   showDeleteConfirmModal: boolean = false;
+  showBulkPaymentModal: boolean = false;
+  showClassPaymentsModal: boolean = false;
+  classPaymentGroups: ClassPaymentGroup[] = [];
+  selectedPaymentsForBulkPay: Payment[] = [];
+  showBulkPayConfirmation: boolean = false;
   
+  // Payment group selection
+  selectedMonthForGroupPay: string = '';
+  selectedClassForGroupPay: string = 'all';
+
   // Payment Form
   newPayment: any = {
     student: '',
@@ -143,11 +177,37 @@ export class StudentDetailsComponent implements OnInit {
     notes: ''
   };
   
+  // Bulk Payment Form
+  bulkPayment: BulkPaymentData = {
+    studentIds: [],
+    classId: '',
+    amount: 0,
+    month: '',
+    paymentMethod: 'cash',
+    notes: 'دفعة جماعية'
+  };
+  
   // Edit Payment
   editingPayment: Payment | null = null;
   
   // Delete Confirmation
   paymentToDelete: Payment | null = null;
+  
+  // Class Payments View
+  selectedClassForPayments: any = null;
+  classPayments: Payment[] = [];
+  
+  // Multiple Students Selection
+  allStudents: Student[] = [];
+  selectedStudents: Student[] = [];
+  filteredStudents: Student[] = [];
+  studentSearchTerm: string = '';
+  classForBulkPayment: Class | null = null;
+  
+  // Bulk Payment Processing
+  isProcessingBulkPayment: boolean = false;
+  bulkPaymentProgress: number = 0;
+  bulkPaymentResults: any[] = [];
   
   // Months for dropdown
   months = [
@@ -201,6 +261,7 @@ export class StudentDetailsComponent implements OnInit {
     notes: ''
   };
 
+  
   // Filter properties
   filterSubject: string = '';
   filterLevel: string = '';
@@ -222,11 +283,13 @@ export class StudentDetailsComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private http: HttpClient
+    private http: HttpClient,
+    private printerService: PrinterService
   ) {}
 
   ngOnInit(): void {
     this.loadStudentDetails();
+    this.loadAllStudents();
   }
 
   private getHeaders(): HttpHeaders {
@@ -266,6 +329,27 @@ export class StudentDetailsComponent implements OnInit {
     });
   }
 
+  loadAllStudents(): void {
+    this.http.get<any>(`${this.apiUrl}/students`, {
+      headers: this.getHeaders()
+    }).subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          this.allStudents = response.data;
+          this.filteredStudents = [...this.allStudents];
+        } else {
+          this.allStudents = [];
+          this.filteredStudents = [];
+        }
+      },
+      error: (error) => {
+        console.error('Error loading all students:', error);
+        this.allStudents = [];
+        this.filteredStudents = [];
+      }
+    });
+  }
+
   loadStudentClasses(studentId: string): void {
     this.http.get<any[]>(`${this.apiUrl}/students/${studentId}/classes`, {
       headers: this.getHeaders()
@@ -291,16 +375,331 @@ export class StudentDetailsComponent implements OnInit {
         
         if (response.success && response.payments) {
           this.paymentHistory = response.payments;
+          this.classPaymentGroups = this.groupPaymentsByClass(response.payments);
           console.log(`Loaded ${this.paymentHistory.length} payments`);
         } else {
           this.paymentHistory = [];
+          this.classPaymentGroups = [];
           console.log('No payments found or error in response');
         }
       },
       error: (error) => {
         console.error('Error loading payment history:', error);
         this.paymentHistory = [];
+        this.classPaymentGroups = [];
         Swal.fire('خطأ', 'فشل في تحميل سجل المدفوعات', 'error');
+      }
+    });
+  }
+  private groupPaymentsByClass(payments: Payment[]): ClassPaymentGroup[] {
+    const groups: { [key: string]: ClassPaymentGroup } = {};
+    
+    payments.forEach(payment => {
+      const classId = payment.class?._id || payment.class || 'general';
+      const className = payment.className || 'عام';
+      
+      if (!groups[classId]) {
+        groups[classId] = {
+          classId: classId,
+          className: className,
+          payments: [],
+          totalAmount: 0,
+          paidAmount: 0,
+          pendingAmount: 0
+        };
+      }
+      
+      groups[classId].payments.push(payment);
+      groups[classId].totalAmount += payment.amount;
+      
+      if (payment.status === 'paid') {
+        groups[classId].paidAmount += payment.amount;
+      } else {
+        groups[classId].pendingAmount += payment.amount;
+      }
+    });
+    
+    return Object.values(groups);
+  }
+
+  // Add method to toggle class payment group expansion
+  toggleClassPaymentGroup(classId: string): void {
+    const group = this.classPaymentGroups.find(g => g.classId === classId);
+    if (group) {
+      group['expanded'] = !group['expanded'];
+    }
+  }
+
+  isClassGroupExpanded(classId: string): boolean {
+    const group = this.classPaymentGroups.find(g => g.classId === classId);
+    return group ? group['expanded'] || false : false;
+  }
+
+  // Process bulk payment for selected payments
+  async processBulkPaySelected(): Promise<void> {
+    if (this.selectedPaymentsForBulkPay.length === 0) {
+      Swal.fire('خطأ', 'يرجى اختيار مدفوعات للدفع', 'error');
+      return;
+    }
+
+    const totalAmount = this.getSelectedPaymentsTotal();
+    const studentsCount = new Set(this.selectedPaymentsForBulkPay.map(p => 
+      p.student?._id || p.student
+    )).size;
+
+    Swal.fire({
+      title: 'تأكيد الدفع الجماعي',
+      html: `
+        <div class="text-start">
+          <p><strong>عدد المدفوعات المختارة:</strong> ${this.selectedPaymentsForBulkPay.length}</p>
+          <p><strong>عدد الطلاب:</strong> ${studentsCount}</p>
+          <p><strong>المبلغ الإجمالي:</strong> ${totalAmount.toLocaleString()} د.ج</p>
+          <p><strong>المدفوعات المختارة:</strong></p>
+          <div style="max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6; padding: 10px; border-radius: 5px;">
+            ${this.selectedPaymentsForBulkPay.map(p => `
+              <div class="mb-1">
+                • ${p.studentName || 'طالب'} - ${p.month} - ${p.amount.toLocaleString()} د.ج
+                ${p.className ? `(${p.className})` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'دفع المحدد',
+      cancelButtonText: 'إلغاء',
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      input: 'select',
+      inputOptions: {
+        'cash': 'نقداً',
+        'bank': 'تحويل بنكي',
+        'card': 'بطاقة ائتمان',
+        'online': 'دفع إلكتروني'
+      },
+      inputPlaceholder: 'اختر طريقة الدفع',
+      inputValue: 'cash'
+    }).then(async (result) => {
+      if (result.isConfirmed && result.value) {
+        const paymentMethod = result.value;
+        
+        Swal.fire({
+          title: 'جاري معالجة الدفعات...',
+          html: `
+            <div class="text-center">
+              <div class="spinner-border text-primary mb-3" role="status"></div>
+              <p>جاري دفع ${this.selectedPaymentsForBulkPay.length} دفعة...</p>
+              <div class="progress mt-3" style="height: 20px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                     style="width: 0%" id="bulk-pay-progress">0%</div>
+              </div>
+            </div>
+          `,
+          showConfirmButton: false,
+          allowOutsideClick: false
+        });
+
+        let successfulPayments = 0;
+        let failedPayments = 0;
+        const results: any[] = [];
+
+        // Process payments sequentially
+        for (let i = 0; i < this.selectedPaymentsForBulkPay.length; i++) {
+          const payment = this.selectedPaymentsForBulkPay[i];
+          const paymentId = payment._id || payment.id;
+          
+          if (!paymentId) {
+            failedPayments++;
+            results.push({
+              payment: payment.month,
+              success: false,
+              message: 'رقم الدفعة غير صالح'
+            });
+            continue;
+          }
+
+          try {
+            const paymentData = {
+              paymentMethod: paymentMethod,
+              paymentDate: new Date().toISOString(),
+              notes: `دفع جماعي - ${new Date().toLocaleDateString('ar-EG')}`
+            };
+
+            await this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/pay`, paymentData, {
+              headers: this.getHeaders()
+            }).toPromise();
+
+            successfulPayments++;
+            results.push({
+              payment: payment.month,
+              success: true,
+              message: 'تم الدفع بنجاح'
+            });
+
+            // Update progress
+            const progress = Math.round(((i + 1) / this.selectedPaymentsForBulkPay.length) * 100);
+            const progressBar = document.getElementById('bulk-pay-progress');
+            if (progressBar) {
+              progressBar.style.width = `${progress}%`;
+              progressBar.textContent = `${progress}%`;
+            }
+
+            // Small delay to prevent overwhelming the server
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+          } catch (error) {
+            failedPayments++;
+            results.push({
+              payment: payment.month,
+              success: false,
+              message: error instanceof Error ? error.message : 'فشل في الدفع'
+            });
+          }
+        }
+
+        // Close progress modal and show results
+        Swal.close();
+        
+        const resultsHtml = `
+          <div class="text-start">
+            <div class="alert ${successfulPayments > 0 ? 'alert-success' : 'alert-danger'}">
+              <h6><i class="fas ${successfulPayments > 0 ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
+                ${successfulPayments > 0 ? 'تمت الدفعات بنجاح' : 'فشل في بعض الدفعات'}
+              </h6>
+              <p class="mb-1"><strong>النجاحات:</strong> ${successfulPayments}</p>
+              <p class="mb-1"><strong>الفشل:</strong> ${failedPayments}</p>
+              <p class="mb-0"><strong>الإجمالي:</strong> ${this.selectedPaymentsForBulkPay.length}</p>
+            </div>
+            
+            ${failedPayments > 0 ? `
+              <div class="alert alert-warning mt-3">
+                <h6><i class="fas fa-exclamation-circle me-2"></i>تفاصيل الفشل:</h6>
+                <div class="mt-2" style="max-height: 150px; overflow-y: auto;">
+                  ${results.filter(r => !r.success).map(r => 
+                    `<div class="mb-1">• ${r.payment}: ${r.message}</div>`
+                  ).join('')}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+
+        Swal.fire({
+          title: 'نتائج الدفع الجماعي',
+          html: resultsHtml,
+          icon: successfulPayments > 0 ? 'success' : 'error',
+          showCancelButton: false,
+          confirmButtonText: 'حسناً',
+          didClose: () => {
+            // Refresh data
+            if (this.student) {
+              this.loadPaymentHistory(this.getStudentId());
+              this.loadStudentPaymentSystems(this.getStudentId());
+            }
+            this.selectedPaymentsForBulkPay = [];
+            this.closeBulkPayConfirmation();
+          }
+        });
+      }
+    });
+  }
+
+  // أضف هذه الدوال إلى الكلاس StudentDetailsComponent
+
+// Check if all payments in a group are selected
+isAllPaymentsInGroupSelected(group: ClassPaymentGroup): boolean {
+  return group.payments.every(payment => this.isPaymentSelected(payment));
+}
+
+// Toggle all payments in a group
+toggleAllPaymentsInGroup(group: ClassPaymentGroup): void {
+  const allSelected = this.isAllPaymentsInGroupSelected(group);
+  
+  group.payments.forEach(payment => {
+    if (allSelected) {
+      // Remove from selection
+      const index = this.selectedPaymentsForBulkPay.findIndex(p => 
+        (p._id || p.id) === (payment._id || payment.id)
+      );
+      if (index > -1) {
+        this.selectedPaymentsForBulkPay.splice(index, 1);
+      }
+    } else {
+      // Add to selection if not already added and not paid
+      if (!this.isPaymentSelected(payment) && payment.status !== 'paid') {
+        this.selectedPaymentsForBulkPay.push(payment);
+      }
+    }
+  });
+}
+
+isGroupAllSelected(group: ClassPaymentGroup): boolean {
+  if (!group.payments || group.payments.length === 0) return false;
+  return group.payments.every(p => this.isPaymentSelected(p));
+}
+
+toggleGroupSelection(group: ClassPaymentGroup): void {
+  const allSelected = this.isGroupAllSelected(group);
+  
+  if (allSelected) {
+    // Deselect all
+    group.payments.forEach(p => {
+      const index = this.selectedPaymentsForBulkPay.findIndex(sp => 
+        sp._id === p._id || sp.id === p.id
+      );
+      if (index > -1) {
+        this.selectedPaymentsForBulkPay.splice(index, 1);
+      }
+    });
+  } else {
+    // Select all (only pending payments)
+    group.payments.forEach(p => {
+      if (p.status !== 'paid' && !this.isPaymentSelected(p)) {
+        this.selectedPaymentsForBulkPay.push(p);
+      }
+    });
+  }
+}
+// Check if any payment in a group is selected
+isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
+  return group.payments.some(payment => this.isPaymentSelected(payment));
+}
+  // Get unique months from payments
+  getUniqueMonths(): string[] {
+    const months = new Set<string>();
+    this.paymentHistory.forEach(payment => {
+      if (payment.month) {
+        months.add(payment.month);
+      }
+    });
+    return Array.from(months).sort((a, b) => {
+      // Sort months chronologically
+      const monthNames = this.months;
+      const getMonthIndex = (monthStr: string) => {
+        const monthPart = monthStr.split(' ')[0];
+        return monthNames.indexOf(monthPart);
+      };
+      return getMonthIndex(a) - getMonthIndex(b);
+    });
+  }
+
+  loadClassPayments(classId: string): void {
+    if (!classId) return;
+    
+    this.http.get<any>(`${this.apiUrl}/payments/class/${classId}`, {
+      headers: this.getHeaders()
+    }).subscribe({
+      next: (response) => {
+        if (response.success && response.payments) {
+          this.classPayments = response.payments;
+        } else {
+          this.classPayments = [];
+        }
+      },
+      error: (error) => {
+        console.error('Error loading class payments:', error);
+        this.classPayments = [];
       }
     });
   }
@@ -427,7 +826,397 @@ export class StudentDetailsComponent implements OnInit {
       notes: ''
     };
   }
+  get groupedPayments(): any[] {
+    const groups: any = {};
+    
+    this.paymentHistory.forEach(payment => {
+      const classId = payment.class?._id || payment.class || 'general';
+      const className = payment.className || 'عام';
+      
+      if (!groups[classId]) {
+        groups[classId] = {
+          classId: classId,
+          className: className,
+          payments: [],
+          totalAmount: 0,
+          paidAmount: 0,
+          pendingAmount: 0,
+          expanded: false
+        };
+      }
+      
+      groups[classId].payments.push(payment);
+      groups[classId].totalAmount += payment.amount;
+      
+      if (payment.status === 'paid') {
+        groups[classId].paidAmount += payment.amount;
+      } else {
+        groups[classId].pendingAmount += payment.amount;
+      }
+    });
+    
+    return Object.values(groups);
+  }
 
+  // Add after ngOnInit()
+  togglePaymentSelection(payment: Payment): void {
+    const index = this.selectedPaymentsForBulkPay.findIndex(p => 
+      (p._id || p.id) === (payment._id || payment.id)
+    );
+    
+    if (index > -1) {
+      this.selectedPaymentsForBulkPay.splice(index, 1);
+    } else {
+      this.selectedPaymentsForBulkPay.push(payment);
+    }
+  }
+
+  isPaymentSelected(payment: Payment): boolean {
+    return this.selectedPaymentsForBulkPay.some(p => 
+      (p._id || p.id) === (payment._id || payment.id)
+    );
+  }
+
+  selectAllPendingPayments(): void {
+    this.selectedPaymentsForBulkPay = this.paymentHistory.filter(p => 
+      p.status !== 'paid'
+    );
+  }
+
+  selectPaymentsByMonth(month: string): void {
+    if (!month) {
+      this.selectedPaymentsForBulkPay = [];
+      return;
+    }
+    
+    this.selectedPaymentsForBulkPay = this.paymentHistory.filter(p => 
+      p.month === month && p.status !== 'paid'
+    );
+  }
+
+  selectPaymentsByClass(classId: string): void {
+    if (classId === 'all') {
+      this.selectAllPendingPayments();
+      return;
+    }
+    
+    this.selectedPaymentsForBulkPay = this.paymentHistory.filter(p => 
+      (p.class?._id === classId || p.class === classId) && p.status !== 'paid'
+    );
+  }
+
+  getSelectedPaymentsTotal(): number {
+    return this.selectedPaymentsForBulkPay.reduce((total, p) => total + p.amount, 0);
+  }
+
+  openBulkPayConfirmation(): void {
+    if (this.selectedPaymentsForBulkPay.length === 0) {
+      Swal.fire('تنبيه', 'يرجى اختيار مدفوعات للدفع', 'warning');
+      return;
+    }
+
+    this.showBulkPayConfirmation = true;
+  }
+
+  closeBulkPayConfirmation(): void {
+    this.showBulkPayConfirmation = false;
+  }
+
+  // ===== Bulk Payment Management =====
+  openBulkPaymentModal(): void {
+    const currentDate = new Date();
+    const currentMonth = this.months[currentDate.getMonth()];
+    const currentYear = currentDate.getFullYear();
+    
+    this.bulkPayment = {
+      studentIds: [],
+      classId: '',
+      amount: 0,
+      month: `${currentMonth} ${currentYear}`,
+      paymentMethod: 'cash',
+      notes: 'دفعة جماعية'
+    };
+    
+    // Auto-select current student
+    if (this.student) {
+      this.toggleStudentSelection(this.student);
+    }
+    
+    this.showBulkPaymentModal = true;
+  }
+
+  closeBulkPaymentModal(): void {
+    this.showBulkPaymentModal = false;
+    this.bulkPayment = {
+      studentIds: [],
+      classId: '',
+      amount: 0,
+      month: '',
+      paymentMethod: 'cash',
+      notes: ''
+    };
+    this.selectedStudents = [];
+    this.classForBulkPayment = null;
+    this.bulkPaymentResults = [];
+    this.bulkPaymentProgress = 0;
+  }
+
+  // Student selection for bulk payment
+  toggleStudentSelection(student: Student): void {
+    const studentId = student._id || student.id;
+    if (!studentId) return;
+    
+    const index = this.selectedStudents.findIndex(s => 
+      (s._id || s.id) === studentId
+    );
+    
+    if (index > -1) {
+      this.selectedStudents.splice(index, 1);
+      // Remove from bulkPayment.studentIds
+      const studentIdsIndex = this.bulkPayment.studentIds.indexOf(studentId);
+      if (studentIdsIndex > -1) {
+        this.bulkPayment.studentIds.splice(studentIdsIndex, 1);
+      }
+    } else {
+      this.selectedStudents.push(student);
+      this.bulkPayment.studentIds.push(studentId);
+    }
+  }
+
+  isStudentSelected(student: Student): boolean {
+    const studentId = student._id || student.id;
+    if (!studentId) return false;
+    
+    return this.selectedStudents.some(s => 
+      (s._id || s.id) === studentId
+    );
+  }
+
+  selectAllStudents(): void {
+    this.selectedStudents = [...this.filteredStudents];
+    this.bulkPayment.studentIds = this.filteredStudents
+      .map(s => s._id || s.id)
+      .filter(id => id !== undefined) as string[];
+  }
+
+  deselectAllStudents(): void {
+    this.selectedStudents = [];
+    this.bulkPayment.studentIds = [];
+  }
+
+  filterStudents(): void {
+    if (!this.studentSearchTerm.trim()) {
+      this.filteredStudents = [...this.allStudents];
+      return;
+    }
+    
+    const searchTerm = this.studentSearchTerm.toLowerCase();
+    this.filteredStudents = this.allStudents.filter(student => 
+      student.name.toLowerCase().includes(searchTerm) ||
+      student.studentId.toLowerCase().includes(searchTerm) ||
+      (student.parentName && student.parentName.toLowerCase().includes(searchTerm))
+    );
+  }
+
+  // Class selection for bulk payment
+  selectClassForBulkPayment(classItem: Class): void {
+    this.classForBulkPayment = classItem;
+    this.bulkPayment.classId = classItem._id || classItem.id || '';
+    this.bulkPayment.amount = classItem.price || 0;
+  }
+
+  // Process bulk payment
+  async processBulkPayment(): Promise<void> {
+    if (this.selectedStudents.length === 0) {
+      Swal.fire('خطأ', 'يرجى اختيار طالب واحد على الأقل', 'error');
+      return;
+    }
+
+    if (!this.bulkPayment.amount || this.bulkPayment.amount <= 0) {
+      Swal.fire('خطأ', 'يرجى إدخال مبلغ صحيح', 'error');
+      return;
+    }
+
+    if (!this.bulkPayment.month) {
+      Swal.fire('خطأ', 'يرجى اختيار الشهر', 'error');
+      return;
+    }
+
+    const confirmation = await Swal.fire({
+      title: 'تأكيد الدفع الجماعي',
+      html: `
+        <div class="text-start">
+          <p><strong>عدد الطلاب:</strong> ${this.selectedStudents.length}</p>
+          <p><strong>المبلغ للطالب الواحد:</strong> ${this.bulkPayment.amount.toLocaleString()} د.ج</p>
+          <p><strong>الإجمالي:</strong> ${(this.selectedStudents.length * this.bulkPayment.amount).toLocaleString()} د.ج</p>
+          <p><strong>الشهر:</strong> ${this.bulkPayment.month}</p>
+          <p><strong>طريقة الدفع:</strong> ${this.getPaymentMethodLabel(this.bulkPayment.paymentMethod)}</p>
+          ${this.classForBulkPayment ? `<p><strong>الحصة:</strong> ${this.classForBulkPayment.name}</p>` : ''}
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، دفع الجماعي',
+      cancelButtonText: 'إلغاء',
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33'
+    });
+
+    if (!confirmation.isConfirmed) return;
+
+    this.isProcessingBulkPayment = true;
+    this.bulkPaymentProgress = 0;
+    this.bulkPaymentResults = [];
+
+    const totalStudents = this.selectedStudents.length;
+    let successfulPayments = 0;
+    let failedPayments = 0;
+
+    // Create payment data array
+    const paymentsData = this.selectedStudents.map(student => ({
+      student: student._id || student.id,
+      class: this.bulkPayment.classId,
+      amount: this.bulkPayment.amount,
+      month: this.bulkPayment.month,
+      paymentMethod: this.bulkPayment.paymentMethod,
+      notes: `${this.bulkPayment.notes} - ${student.name}`
+    }));
+
+    // Process payments in batches
+    const batchSize = 5;
+    for (let i = 0; i < paymentsData.length; i += batchSize) {
+      const batch = paymentsData.slice(i, i + batchSize);
+      
+      try {
+        // Process batch concurrently
+        const batchPromises = batch.map(paymentData => 
+          this.http.post<any>(`${this.apiUrl}/payments`, paymentData, {
+            headers: this.getHeaders()
+          }).toPromise()
+        );
+
+        const batchResults = await Promise.allSettled(batchPromises);
+        
+        batchResults.forEach((result, index) => {
+          const studentIndex = i + index;
+          const student = this.selectedStudents[studentIndex];
+          
+          if (result.status === 'fulfilled' && result.value) {
+            successfulPayments++;
+            this.bulkPaymentResults.push({
+              student: student.name,
+              success: true,
+              message: 'تم الدفع بنجاح',
+              receiptNumber: result.value.payment?.invoiceNumber || 'غير محدد'
+            });
+            
+            // Print receipt if printer is available
+            if (this.printerService.checkConnectionStatus()) {
+              this.printBulkPaymentReceipt(student, result.value.payment);
+            }
+          } else {
+            failedPayments++;
+            this.bulkPaymentResults.push({
+              student: student.name,
+              success: false,
+              message: result.status === 'rejected' ? result.reason?.error?.message || 'فشل في الدفع' : 'فشل غير معروف'
+            });
+          }
+        });
+
+        // Update progress
+        this.bulkPaymentProgress = Math.round(((i + batch.length) / totalStudents) * 100);
+        
+        // Small delay between batches
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+      } catch (error) {
+        console.error('Error processing batch:', error);
+        failedPayments += batch.length;
+      }
+    }
+
+    this.isProcessingBulkPayment = false;
+
+    // Show results
+    const resultsHtml = `
+      <div class="text-start">
+        <div class="alert alert-success">
+          <h6><i class="fas fa-check-circle me-2"></i>تمت الدفعات بنجاح</h6>
+          <p class="mb-1"><strong>النجاحات:</strong> ${successfulPayments}</p>
+          <p class="mb-1"><strong>الفشل:</strong> ${failedPayments}</p>
+          <p class="mb-0"><strong>الإجمالي:</strong> ${totalStudents}</p>
+        </div>
+        
+        ${failedPayments > 0 ? `
+          <div class="alert alert-danger mt-3">
+            <h6><i class="fas fa-exclamation-triangle me-2"></i>فشل في بعض الدفعات:</h6>
+            <div class="mt-2" style="max-height: 200px; overflow-y: auto;">
+              ${this.bulkPaymentResults
+                .filter(r => !r.success)
+                .map(r => `<div class="mb-1">• ${r.student}: ${r.message}</div>`)
+                .join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+
+    Swal.fire({
+      title: 'نتائج الدفع الجماعي',
+      html: resultsHtml,
+      icon: successfulPayments > 0 ? 'success' : 'error',
+      showCancelButton: false,
+      confirmButtonText: 'حسناً',
+      didClose: () => {
+        // Refresh payment history for current student
+        if (this.student) {
+          this.loadPaymentHistory(this.getStudentId());
+          this.loadStudentPaymentSystems(this.getStudentId());
+        }
+        this.closeBulkPaymentModal();
+      }
+    });
+  }
+
+  // Print receipt for bulk payment
+  private async printBulkPaymentReceipt(student: Student, paymentData: any): Promise<void> {
+    try {
+      const receiptData: ReceiptData = {
+        receiptNumber: paymentData.invoiceNumber || `BULK-${Date.now().toString().slice(-8)}`,
+        date: new Date().toLocaleDateString('ar-EG'),
+        time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+        studentName: student.name,
+        studentId: student.studentId,
+        className: this.classForBulkPayment?.name || 'دفعة جماعية',
+        month: this.bulkPayment.month,
+        amount: this.bulkPayment.amount,
+        paymentMethod: this.bulkPayment.paymentMethod,
+        academicYear: student.academicYear,
+        parentPhone: student.parentPhone,
+        notes: `${this.bulkPayment.notes} - ${student.name}`
+      };
+
+      await this.printerService.printProfessionalReceipt(receiptData);
+    } catch (error) {
+      console.error('Error printing bulk payment receipt:', error);
+    }
+  }
+
+  // ===== Class Payments View =====
+  openClassPaymentsModal(classItem: any): void {
+    this.selectedClassForPayments = classItem;
+    this.loadClassPayments(classItem._id || classItem.id);
+    this.showClassPaymentsModal = true;
+  }
+
+  closeClassPaymentsModal(): void {
+    this.showClassPaymentsModal = false;
+    this.selectedClassForPayments = null;
+    this.classPayments = [];
+  }
+
+  // Edit Payment
   openEditPaymentModal(payment: Payment): void {
     this.editingPayment = { ...payment };
     this.showEditPaymentModal = true;
@@ -438,6 +1227,7 @@ export class StudentDetailsComponent implements OnInit {
     this.editingPayment = null;
   }
 
+  // Delete Payment
   openDeleteConfirmModal(payment: Payment): void {
     this.paymentToDelete = payment;
     this.showDeleteConfirmModal = true;
@@ -448,6 +1238,7 @@ export class StudentDetailsComponent implements OnInit {
     this.paymentToDelete = null;
   }
 
+  // Add Single Payment
   addPayment(): void {
     if (!this.student || !this.newPayment.amount || this.newPayment.amount <= 0) {
       Swal.fire('خطأ', 'يرجى إدخال مبلغ صحيح', 'error');
@@ -481,6 +1272,7 @@ export class StudentDetailsComponent implements OnInit {
 
         this.closePaymentModal();
         this.loadPaymentHistory(this.getStudentId());
+        this.loadStudentPaymentSystems(this.getStudentId());
       },
       error: (error) => {
         console.error('Error adding payment:', error);
@@ -489,6 +1281,7 @@ export class StudentDetailsComponent implements OnInit {
     });
   }
 
+  // Update Payment
   updatePayment(): void {
     if (!this.editingPayment || !this.editingPayment._id) return;
 
@@ -521,6 +1314,7 @@ export class StudentDetailsComponent implements OnInit {
 
         this.closeEditPaymentModal();
         this.loadPaymentHistory(this.getStudentId());
+        this.loadStudentPaymentSystems(this.getStudentId());
       },
       error: (error) => {
         console.error('Error updating payment:', error);
@@ -529,6 +1323,7 @@ export class StudentDetailsComponent implements OnInit {
     });
   }
 
+  // Delete Payment
   deletePayment(): void {
     if (!this.paymentToDelete) return;
 
@@ -556,6 +1351,7 @@ export class StudentDetailsComponent implements OnInit {
 
         this.closeDeleteConfirmModal();
         this.loadPaymentHistory(this.getStudentId());
+        this.loadStudentPaymentSystems(this.getStudentId());
       },
       error: (error) => {
         console.error('Error deleting payment:', error);
@@ -564,6 +1360,7 @@ export class StudentDetailsComponent implements OnInit {
     });
   }
 
+  // Pay Payment
   payPayment(payment: Payment): void {
     Swal.fire({
       title: 'تأكيد الدفع',
@@ -620,6 +1417,7 @@ export class StudentDetailsComponent implements OnInit {
             });
 
             this.loadPaymentHistory(this.getStudentId());
+            this.loadStudentPaymentSystems(this.getStudentId());
           },
           error: (error) => {
             console.error('Error paying payment:', error);
@@ -966,7 +1764,14 @@ export class StudentDetailsComponent implements OnInit {
         'card': 'بطاقة ائتمان',
         'online': 'دفع إلكتروني'
       },
-      inputPlaceholder: 'اختر طريقة الدفع'
+      inputPlaceholder: 'اختر طريقة الدفع',
+      inputValue: 'cash',
+      preConfirm: (paymentMethod) => {
+        if (!paymentMethod) {
+          Swal.showValidationMessage('يرجى اختيار طريقة الدفع');
+        }
+        return paymentMethod;
+      }
     }).then((result) => {
       if (result.isConfirmed && result.value) {
         const paymentData = {
@@ -992,20 +1797,41 @@ export class StudentDetailsComponent implements OnInit {
               Swal.fire({
                 icon: 'success',
                 title: 'تم الدفع بنجاح',
-                text: `تم دفع الجولة ${round.roundNumber} بقيمة ${round.totalAmount.toLocaleString()} د.ج`,
-                timer: 1500,
+                html: `
+                  <div class="text-start">
+                    <p>تم دفع الجولة ${round.roundNumber} بنجاح</p>
+                    <p><strong>المبلغ:</strong> ${round.totalAmount.toLocaleString()} د.ج</p>
+                    <p><strong>طريقة الدفع:</strong> ${this.getPaymentMethodLabel(result.value)}</p>
+                    ${response.receiptNumber ? `<p><strong>رقم الإيصال:</strong> ${response.receiptNumber}</p>` : ''}
+                  </div>
+                `,
+                timer: 3000,
                 showConfirmButton: false
               });
               
-              // Update data
-              const routeId = this.route.snapshot.paramMap.get('id');
-              if (routeId) {
-                this.loadStudentPaymentSystems(routeId);
+              // تحديث البيانات
+              const studentId = this.route.snapshot.paramMap.get('id');
+              if (studentId) {
+                this.loadStudentPaymentSystems(studentId);
+                this.loadPaymentHistory(studentId);
               }
             },
             error: (error) => {
               console.error('Error paying round:', error);
-              Swal.fire('خطأ', 'فشل في دفع الجولة', 'error');
+              
+              let errorMessage = 'فشل في دفع الجولة';
+              if (error.error?.error) {
+                errorMessage += `: ${error.error.error}`;
+              } else if (error.message) {
+                errorMessage += `: ${error.message}`;
+              }
+              
+              Swal.fire({
+                icon: 'error',
+                title: 'خطأ',
+                text: errorMessage,
+                confirmButtonText: 'حسناً'
+              });
             }
           });
         }
@@ -1159,83 +1985,32 @@ export class StudentDetailsComponent implements OnInit {
 
   // Print receipt
   printPaymentReceipt(payment: Payment): void {
-    const receiptContent = `
-      <!DOCTYPE html>
-      <html dir="rtl">
-      <head>
-        <meta charset="UTF-8">
-        <title>إيصال الدفع</title>
-        <style>
-          body { font-family: 'Arial', sans-serif; padding: 20px; }
-          .receipt { max-width: 600px; margin: 0 auto; border: 1px solid #ddd; padding: 20px; }
-          .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
-          .details { margin-bottom: 20px; }
-          .detail-row { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 5px 0; border-bottom: 1px solid #eee; }
-          .total { font-size: 24px; font-weight: bold; text-align: center; margin: 20px 0; padding: 20px; background: #f8f9fa; }
-          .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
-          .signature { margin-top: 50px; display: flex; justify-content: space-between; }
-          .signature-line { width: 200px; border-top: 1px solid #333; text-align: center; padding-top: 10px; }
-        </style>
-      </head>
-      <body>
-        <div class="receipt">
-          <div class="header">
-            <h2>إيصال دفع</h2>
-            <p>رقم الإيصال: ${payment.invoiceNumber || 'غير محدد'}</p>
-            <p>التاريخ: ${payment.formattedDate || new Date().toLocaleDateString('ar-EG')}</p>
-          </div>
-          
-          <div class="details">
-            <div class="detail-row">
-              <span>اسم الطالب:</span>
-              <span>${payment.studentName || this.student?.name}</span>
-            </div>
-            <div class="detail-row">
-              <span>رقم الطالب:</span>
-              <span>${payment.studentId || this.student?.studentId}</span>
-            </div>
-            ${payment.className ? `
-            <div class="detail-row">
-              <span>الحصة:</span>
-              <span>${payment.className}</span>
-            </div>
-            ` : ''}
-            <div class="detail-row">
-              <span>الشهر:</span>
-              <span>${payment.month}</span>
-            </div>
-            <div class="detail-row">
-              <span>طريقة الدفع:</span>
-              <span>${this.getPaymentMethodLabel(payment.paymentMethod)}</span>
-            </div>
-          </div>
-          
-          <div class="total">
-            المبلغ: ${payment.amount.toLocaleString()} د.ج
-          </div>
-          
-          <div class="signature">
-            <div class="signature-line">توقيع المسؤول</div>
-            <div class="signature-line">توقيع ولي الأمر</div>
-          </div>
-          
-          <div class="footer">
-            <p>شكراً لثقتكم بنا</p>
-            <p>هذا الإيصال وثيقة رسمية</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+    const receiptData: ReceiptData = {
+      receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
+      date: new Date().toLocaleDateString('ar-EG'),
+      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      studentName: payment.studentName || this.student?.name || '',
+      studentId: payment.studentId || this.student?.studentId || '',
+      className: payment.className || 'عام',
+      month: payment.month,
+      amount: payment.amount,
+      paymentMethod: payment.paymentMethod,
+      academicYear: this.student?.academicYear,
+      parentPhone: this.student?.parentPhone,
+      notes: payment.notes || 'دفعة فردية'
+    };
 
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(receiptContent);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
-      printWindow.close();
-    }
+    this.printerService.printProfessionalReceipt(receiptData).then(success => {
+      if (success) {
+        Swal.fire({
+          icon: 'success',
+          title: 'تمت الطباعة',
+          text: 'تم طباعة الإيصال بنجاح',
+          timer: 1500,
+          showConfirmButton: false
+        });
+      }
+    });
   }
 
   // Print student report

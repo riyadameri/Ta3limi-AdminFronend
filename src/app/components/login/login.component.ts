@@ -93,7 +93,7 @@ export class LoginComponent implements OnInit {
 
   onUsernameKeyPress(event: KeyboardEvent): void {
     if (event.key === 'Enter') document.getElementById('password')?.focus();
-  }
+  }l
 
   onPasswordKeyPress(event: KeyboardEvent): void {
     if (event.key === 'Enter') this.login();

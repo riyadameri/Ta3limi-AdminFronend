@@ -7,9 +7,6 @@ import Swal from 'sweetalert2';
 import { environment } from '../../environments/environment.development';
 import { PrinterService, ReceiptData } from '../services/printer.service';
 
-
-
-
 interface ClassPaymentGroup {
   classId: string;
   className: string;
@@ -19,9 +16,6 @@ interface ClassPaymentGroup {
   pendingAmount: number;
 }
 
-
-
-// الواجهات
 interface Student {
   _id?: string;
   id?: string;
@@ -391,6 +385,7 @@ export class StudentDetailsComponent implements OnInit {
       }
     });
   }
+
   private groupPaymentsByClass(payments: Payment[]): ClassPaymentGroup[] {
     const groups: { [key: string]: ClassPaymentGroup } = {};
     
@@ -422,7 +417,6 @@ export class StudentDetailsComponent implements OnInit {
     return Object.values(groups);
   }
 
-  // Add method to toggle class payment group expansion
   toggleClassPaymentGroup(classId: string): void {
     const group = this.classPaymentGroups.find(g => g.classId === classId);
     if (group) {
@@ -435,253 +429,575 @@ export class StudentDetailsComponent implements OnInit {
     return group ? group['expanded'] || false : false;
   }
 
-  // Process bulk payment for selected payments
   async processBulkPaySelected(): Promise<void> {
     if (this.selectedPaymentsForBulkPay.length === 0) {
-      Swal.fire('خطأ', 'يرجى اختيار مدفوعات للدفع', 'error');
+      Swal.fire({
+        icon: 'warning',
+        title: 'لا توجد مدفوعات مختارة',
+        text: 'يرجى اختيار مدفوعات للدفع أولاً',
+        confirmButtonText: 'حسناً'
+      });
       return;
     }
 
-    const totalAmount = this.getSelectedPaymentsTotal();
-    const studentsCount = new Set(this.selectedPaymentsForBulkPay.map(p => 
-      p.student?._id || p.student
-    )).size;
+    // التحقق من أن جميع المدفوعات المختارة معلقة
+    const hasPaidPayments = this.selectedPaymentsForBulkPay.some(p => p.status === 'paid');
+    if (hasPaidPayments) {
+      const unpaidPayments = this.selectedPaymentsForBulkPay.filter(p => p.status !== 'paid');
+      const { value: proceed } = await Swal.fire({
+        title: 'تحذير',
+        html: `
+          <div class="text-start">
+            <p class="text-warning"><i class="fas fa-exclamation-triangle me-2"></i>بعض المدفوعات المختارة مدفوعة مسبقاً</p>
+            <p><strong>المدفوعة:</strong> ${this.selectedPaymentsForBulkPay.length - unpaidPayments.length}</p>
+            <p><strong>المعلقة:</strong> ${unpaidPayments.length}</p>
+            <p>هل تريد المتابعة مع المدفوعات المعلقة فقط؟</p>
+          </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، متابعة',
+        cancelButtonText: 'إلغاء',
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33'
+      });
 
-    Swal.fire({
+      if (!proceed) return;
+      
+      // تحديث القائمة لتشمل المدفوعات المعلقة فقط
+      this.selectedPaymentsForBulkPay = unpaidPayments;
+    }
+
+    const totalAmount = this.getSelectedPaymentsTotal();
+    const uniqueStudents = new Set(this.selectedPaymentsForBulkPay.map(p => 
+      p.student?._id || p.student
+    ));
+
+    // عرض تفاصيل الدفع الجماعي مع خيار الطباعة
+    const { value: printChoice } = await Swal.fire({
       title: 'تأكيد الدفع الجماعي',
       html: `
         <div class="text-start">
-          <p><strong>عدد المدفوعات المختارة:</strong> ${this.selectedPaymentsForBulkPay.length}</p>
-          <p><strong>عدد الطلاب:</strong> ${studentsCount}</p>
-          <p><strong>المبلغ الإجمالي:</strong> ${totalAmount.toLocaleString()} د.ج</p>
-          <p><strong>المدفوعات المختارة:</strong></p>
-          <div style="max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6; padding: 10px; border-radius: 5px;">
-            ${this.selectedPaymentsForBulkPay.map(p => `
-              <div class="mb-1">
-                • ${p.studentName || 'طالب'} - ${p.month} - ${p.amount.toLocaleString()} د.ج
-                ${p.className ? `(${p.className})` : ''}
-              </div>
-            `).join('')}
+          <div class="alert alert-info">
+            <h6><i class="fas fa-info-circle me-2"></i>تفاصيل الدفع الجماعي</h6>
+            <p class="mb-1"><strong>عدد المدفوعات:</strong> ${this.selectedPaymentsForBulkPay.length}</p>
+            <p class="mb-1"><strong>عدد الطلاب:</strong> ${uniqueStudents.size}</p>
+            <p class="mb-1"><strong>المبلغ الإجمالي:</strong> ${totalAmount.toLocaleString('ar-SA')} د.ج</p>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label"><strong>طريقة الدفع:</strong></label>
+            <select class="form-select" id="paymentMethod">
+              <option value="cash">نقداً</option>
+              <option value="bank">تحويل بنكي</option>
+              <option value="card">بطاقة ائتمان</option>
+              <option value="online">دفع إلكتروني</option>
+              <option value="mobile">دفع محمول</option>
+            </select>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label"><strong>ملاحظات:</strong></label>
+            <textarea class="form-control" id="paymentNotes" rows="2" placeholder="ملاحظات حول الدفع..."></textarea>
+          </div>
+          
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="autoPrint" checked>
+            <label class="form-check-label" for="autoPrint">
+              <i class="fas fa-print me-2 text-primary"></i>طباعة الإيصالات بعد الدفع تلقائياً
+            </label>
+          </div>
+          
+          <div class="alert alert-warning">
+            <i class="fas fa-exclamation-circle me-2"></i>
+            <small>سيتم دفع ${this.selectedPaymentsForBulkPay.length} دفعة بقيمة إجمالية ${totalAmount.toLocaleString('ar-SA')} د.ج</small>
           </div>
         </div>
       `,
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'دفع المحدد',
-      cancelButtonText: 'إلغاء',
+      confirmButtonText: '<i class="fas fa-money-check me-2"></i>دفع وطباعة',
+      cancelButtonText: '<i class="fas fa-money-bill me-2"></i>دفع فقط',
+      showDenyButton: true,
+      denyButtonText: '<i class="fas fa-times me-2"></i>إلغاء',
       confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      input: 'select',
-      inputOptions: {
-        'cash': 'نقداً',
-        'bank': 'تحويل بنكي',
-        'card': 'بطاقة ائتمان',
-        'online': 'دفع إلكتروني'
-      },
-      inputPlaceholder: 'اختر طريقة الدفع',
-      inputValue: 'cash'
-    }).then(async (result) => {
-      if (result.isConfirmed && result.value) {
-        const paymentMethod = result.value;
+      cancelButtonColor: '#28a745',
+      denyButtonColor: '#d33',
+      width: '600px',
+      preConfirm: () => {
+        const paymentMethod = (document.getElementById('paymentMethod') as HTMLSelectElement).value;
+        const paymentNotes = (document.getElementById('paymentNotes') as HTMLTextAreaElement).value;
+        const autoPrint = (document.getElementById('autoPrint') as HTMLInputElement).checked;
         
-        Swal.fire({
-          title: 'جاري معالجة الدفعات...',
-          html: `
-            <div class="text-center">
-              <div class="spinner-border text-primary mb-3" role="status"></div>
-              <p>جاري دفع ${this.selectedPaymentsForBulkPay.length} دفعة...</p>
-              <div class="progress mt-3" style="height: 20px;">
-                <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                     style="width: 0%" id="bulk-pay-progress">0%</div>
-              </div>
-            </div>
-          `,
-          showConfirmButton: false,
-          allowOutsideClick: false
-        });
+        if (!paymentMethod) {
+          Swal.showValidationMessage('يرجى اختيار طريقة الدفع');
+          return false;
+        }
+        
+        return { paymentMethod, paymentNotes, autoPrint };
+      }
+    });
 
-        let successfulPayments = 0;
-        let failedPayments = 0;
-        const results: any[] = [];
+    // إلغاء العملية
+    if (printChoice === undefined || printChoice === false) {
+      return;
+    }
 
-        // Process payments sequentially
-        for (let i = 0; i < this.selectedPaymentsForBulkPay.length; i++) {
-          const payment = this.selectedPaymentsForBulkPay[i];
-          const paymentId = payment._id || payment.id;
+    const { paymentMethod, paymentNotes, autoPrint } = printChoice;
+    const actionType = printChoice.isConfirmed ? 'pay_and_print' : 'pay_only';
+    // عرض نافذة التقدم
+    Swal.fire({
+      title: 'جاري معالجة الدفعات...',
+      html: `
+        <div class="text-center">
+          <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">جاري المعالجة...</span>
+          </div>
+          <h5 class="mb-2">${actionType === 'pay_and_print' ? 'دفع وطباعة' : 'دفع'} جماعي</h5>
+          <p>جاري معالجة ${this.selectedPaymentsForBulkPay.length} دفعة...</p>
           
-          if (!paymentId) {
-            failedPayments++;
-            results.push({
-              payment: payment.month,
-              success: false,
-              message: 'رقم الدفعة غير صالح'
-            });
-            continue;
-          }
+          <div class="progress mt-4" style="height: 25px; border-radius: 12px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                 style="width: 0%; font-weight: bold; font-size: 14px;" 
+                 id="bulk-pay-progress">0%</div>
+          </div>
+          
+          <div class="row mt-4">
+            <div class="col-6 text-end">
+              <small class="text-muted">النجاح:</small>
+              <h5 class="text-success" id="success-count">0</h5>
+            </div>
+            <div class="col-6 text-start">
+              <small class="text-muted">الفشل:</small>
+              <h5 class="text-danger" id="fail-count">0</h5>
+            </div>
+          </div>
+          
+          <div class="mt-3">
+            <small class="text-muted" id="current-payment">جاري بدء المعالجة...</small>
+          </div>
+        </div>
+      `,
+      showConfirmButton: false,
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      width: '500px'
+    });
 
-          try {
-            const paymentData = {
-              paymentMethod: paymentMethod,
-              paymentDate: new Date().toISOString(),
-              notes: `دفع جماعي - ${new Date().toLocaleDateString('ar-EG')}`
-            };
+    // متغيرات التتبع
+    let successfulPayments = 0;
+    let failedPayments = 0;
+    const results: any[] = [];
+    const paidPayments: Payment[] = [];
 
-            await this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/pay`, paymentData, {
-              headers: this.getHeaders()
-            }).toPromise();
+    try {
+      // معالجة المدفوعات بالتتابع
+      for (let i = 0; i < this.selectedPaymentsForBulkPay.length; i++) {
+        const payment = this.selectedPaymentsForBulkPay[i];
+        const paymentId = payment._id || payment.id;
+        
+        // تحديث شريط التقدم
+        const progress = Math.round(((i + 1) / this.selectedPaymentsForBulkPay.length) * 100);
+        this.updateProgress(progress, i + 1, successfulPayments, failedPayments, payment);
 
-            successfulPayments++;
-            results.push({
-              payment: payment.month,
-              success: true,
-              message: 'تم الدفع بنجاح'
-            });
-
-            // Update progress
-            const progress = Math.round(((i + 1) / this.selectedPaymentsForBulkPay.length) * 100);
-            const progressBar = document.getElementById('bulk-pay-progress');
-            if (progressBar) {
-              progressBar.style.width = `${progress}%`;
-              progressBar.textContent = `${progress}%`;
-            }
-
-            // Small delay to prevent overwhelming the server
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-          } catch (error) {
-            failedPayments++;
-            results.push({
-              payment: payment.month,
-              success: false,
-              message: error instanceof Error ? error.message : 'فشل في الدفع'
-            });
-          }
+        if (!paymentId) {
+          failedPayments++;
+          results.push({
+            payment: payment.month,
+            student: payment.studentName,
+            success: false,
+            message: 'رقم الدفعة غير صالح',
+            error: 'ID_NOT_FOUND'
+          });
+          continue;
         }
 
-        // Close progress modal and show results
-        Swal.close();
-        
-        const resultsHtml = `
-          <div class="text-start">
-            <div class="alert ${successfulPayments > 0 ? 'alert-success' : 'alert-danger'}">
-              <h6><i class="fas ${successfulPayments > 0 ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
-                ${successfulPayments > 0 ? 'تمت الدفعات بنجاح' : 'فشل في بعض الدفعات'}
-              </h6>
-              <p class="mb-1"><strong>النجاحات:</strong> ${successfulPayments}</p>
-              <p class="mb-1"><strong>الفشل:</strong> ${failedPayments}</p>
-              <p class="mb-0"><strong>الإجمالي:</strong> ${this.selectedPaymentsForBulkPay.length}</p>
-            </div>
-            
-            ${failedPayments > 0 ? `
-              <div class="alert alert-warning mt-3">
-                <h6><i class="fas fa-exclamation-circle me-2"></i>تفاصيل الفشل:</h6>
-                <div class="mt-2" style="max-height: 150px; overflow-y: auto;">
-                  ${results.filter(r => !r.success).map(r => 
-                    `<div class="mb-1">• ${r.payment}: ${r.message}</div>`
-                  ).join('')}
-                </div>
-              </div>
-            ` : ''}
-          </div>
-        `;
+        try {
+          const paymentData = {
+            paymentMethod: paymentMethod,
+            paymentDate: new Date().toISOString(),
+            notes: paymentNotes || `دفع جماعي - ${new Date().toLocaleDateString('ar-SA')}`
+          };
 
-        Swal.fire({
-          title: 'نتائج الدفع الجماعي',
-          html: resultsHtml,
-          icon: successfulPayments > 0 ? 'success' : 'error',
-          showCancelButton: false,
-          confirmButtonText: 'حسناً',
-          didClose: () => {
-            // Refresh data
-            if (this.student) {
-              this.loadPaymentHistory(this.getStudentId());
-              this.loadStudentPaymentSystems(this.getStudentId());
-            }
-            this.selectedPaymentsForBulkPay = [];
-            this.closeBulkPayConfirmation();
+          // إرسال طلب الدفع
+          const response = await this.http.put<any>(
+            `${this.apiUrl}/payments/${paymentId}/pay`,
+            paymentData,
+            { headers: this.getHeaders() }
+          ).toPromise();
+
+          successfulPayments++;
+          
+          // تخزين البيانات للطباعة
+          const paidPayment: Payment = {
+            ...payment,
+            paymentMethod: paymentMethod,
+            paymentDate: new Date(),
+            invoiceNumber: response.invoiceNumber || `INV-${Date.now().toString().slice(-8)}-${i}`,
+            notes: paymentData.notes
+          };
+          paidPayments.push(paidPayment);
+          
+          results.push({
+            payment: payment.month,
+            student: payment.studentName,
+            success: true,
+            message: 'تم الدفع بنجاح',
+            receiptNumber: response.invoiceNumber
+          });
+
+        } catch (error: any) {
+          failedPayments++;
+          
+          let errorMessage = 'فشل في الدفع';
+          if (error.error?.message) {
+            errorMessage = error.error.message;
+          } else if (error.message) {
+            errorMessage = error.message;
           }
-        });
+          
+          results.push({
+            payment: payment.month,
+            student: payment.studentName,
+            success: false,
+            message: errorMessage,
+            error: error.error?.code || 'UNKNOWN_ERROR'
+          });
+        }
+
+        // تأخير بسيط بين كل عملية
+        await this.delay(100);
+      }
+
+      // إغلاق نافذة التقدم
+      Swal.close();
+
+      // عرض النتائج
+      await this.showBulkPayResults(successfulPayments, failedPayments, results, paidPayments);
+
+      // الطباعة التلقائية إذا تم اختيارها
+      if (autoPrint && actionType === 'pay_and_print' && successfulPayments > 0) {
+        await this.printMultipleReceipts(paidPayments);
+      }
+
+      // تحديث البيانات
+      if (successfulPayments > 0 && this.student) {
+        await this.refreshData();
+      }
+
+    } catch (error) {
+      console.error('خطأ في المعالجة الجماعية:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'خطأ في المعالجة',
+        text: 'حدث خطأ غير متوقع أثناء معالجة الدفعات',
+        confirmButtonText: 'حسناً'
+      });
+    } finally {
+      // إعادة تعيين القائمة المختارة
+      if (successfulPayments > 0) {
+        this.selectedPaymentsForBulkPay = [];
+      }
+      this.closeBulkPayConfirmation();
+    }
+  }
+
+  // دالة مساعدة لتحديث شريط التقدم
+  private updateProgress(
+    progress: number, 
+    current: number, 
+    success: number, 
+    fail: number, 
+    payment: Payment
+  ): void {
+    const progressBar = document.getElementById('bulk-pay-progress');
+    const successCount = document.getElementById('success-count');
+    const failCount = document.getElementById('fail-count');
+    const currentPayment = document.getElementById('current-payment');
+
+    if (progressBar) {
+      progressBar.style.width = `${progress}%`;
+      progressBar.textContent = `${progress}%`;
+    }
+    
+    if (successCount) {
+      successCount.textContent = success.toString();
+    }
+    
+    if (failCount) {
+      failCount.textContent = fail.toString();
+    }
+    
+    if (currentPayment) {
+      currentPayment.textContent = 
+        `جاري معالجة: ${current}/${this.selectedPaymentsForBulkPay.length} - ${payment.month} - ${payment.amount.toLocaleString('ar-SA')} د.ج`;
+    }
+  }
+
+  // دالة مساعدة للتأخير
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // دالة لعرض نتائج الدفع الجماعي
+  private async showBulkPayResults(
+    successCount: number,
+    failCount: number,
+    results: any[],
+    paidPayments: Payment[]
+  ): Promise<void> {
+    const failedResults = results.filter(r => !r.success);
+    
+    const resultsHtml = `
+      <div class="text-start">
+        <div class="alert ${successCount > 0 ? 'alert-success' : 'alert-danger'}">
+          <h5><i class="fas ${successCount > 0 ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
+            ${successCount > 0 ? 'تمت الدفعات بنجاح' : 'فشل في الدفعات'}
+          </h5>
+          <div class="row mt-3">
+            <div class="col-4 text-center">
+              <h2 class="text-success">${successCount}</h2>
+              <small>النجاحات</small>
+            </div>
+            <div class="col-4 text-center">
+              <h2 class="text-danger">${failCount}</h2>
+              <small>الفشل</small>
+            </div>
+            <div class="col-4 text-center">
+              <h2 class="text-primary">${successCount + failCount}</h2>
+              <small>الإجمالي</small>
+            </div>
+          </div>
+        </div>
+        
+        ${failedResults.length > 0 ? `
+          <div class="alert alert-warning mt-3">
+            <h6><i class="fas fa-exclamation-circle me-2"></i>تفاصيل الدفعات الفاشلة:</h6>
+            <div class="mt-2" style="max-height: 200px; overflow-y: auto;">
+              ${failedResults.map(r => `
+                <div class="mb-2 p-2 border-start border-warning border-3 bg-light">
+                  <div class="d-flex justify-content-between">
+                    <strong>${r.student || 'طالب'}</strong>
+                    <small class="text-danger">${r.error || 'خطأ'}</small>
+                  </div>
+                  <div class="small text-muted">${r.payment}: ${r.message}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        <div class="alert alert-info mt-3">
+          <h6><i class="fas fa-info-circle me-2"></i>الإجراءات المتاحة:</h6>
+          <div class="d-flex flex-wrap gap-2 mt-2">
+            ${successCount > 0 ? `
+              <button class="btn btn-success btn-sm" onclick="window.printResultsAction('print')">
+                <i class="fas fa-print me-1"></i>طباعة الإيصالات
+              </button>
+              <button class="btn btn-info btn-sm" onclick="window.printResultsAction('view')">
+                <i class="fas fa-eye me-1"></i>عرض التفاصيل
+              </button>
+            ` : ''}
+            <button class="btn btn-secondary btn-sm" onclick="window.printResultsAction('close')">
+              <i class="fas fa-times me-1"></i>إغلاق
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await Swal.fire({
+      title: 'نتائج الدفع الجماعي',
+      html: resultsHtml,
+      icon: successCount > 0 ? 'success' : 'error',
+      showConfirmButton: false,
+      width: '700px',
+      didOpen: () => {
+        // إضافة الدوال للسياق العالمي
+        (window as any).printResultsAction = (action: string) => {
+          Swal.close();
+          if (action === 'print' && successCount > 0) {
+            this.printMultipleReceipts(paidPayments);
+          } else if (action === 'view' && successCount > 0) {
+            this.viewBulkPayDetails(paidPayments, results);
+          }
+        };
+      },
+      didClose: () => {
+        // تنظيف الدوال من السياق العالمي
+        delete (window as any).printResultsAction;
       }
     });
   }
 
-  // أضف هذه الدوال إلى الكلاس StudentDetailsComponent
+  // دالة مساعدة لعرض تفاصيل الدفع الجماعي
+  private viewBulkPayDetails(paidPayments: Payment[], results: any[]): void {
+    const detailsHtml = `
+      <div class="text-start">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>اسم الطالب</th>
+                <th>الشهر</th>
+                <th>المبلغ</th>
+                <th>رقم الفاتورة</th>
+                <th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${results.map((r, index) => `
+                <tr class="${r.success ? 'table-success' : 'table-danger'}">
+                  <td>${index + 1}</td>
+                  <td>${r.student || 'غير محدد'}</td>
+                  <td>${r.payment}</td>
+                  <td>${paidPayments[index]?.amount?.toLocaleString('ar-SA') || '0'} د.ج</td>
+                  <td>${r.receiptNumber || 'بدون'}</td>
+                  <td>
+                    <span class="badge ${r.success ? 'bg-success' : 'bg-danger'}">
+                      ${r.success ? 'ناجح' : 'فاشل'}
+                    </span>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
 
-// Check if all payments in a group are selected
-isAllPaymentsInGroupSelected(group: ClassPaymentGroup): boolean {
-  return group.payments.every(payment => this.isPaymentSelected(payment));
-}
-
-// Toggle all payments in a group
-toggleAllPaymentsInGroup(group: ClassPaymentGroup): void {
-  const allSelected = this.isAllPaymentsInGroupSelected(group);
-  
-  group.payments.forEach(payment => {
-    if (allSelected) {
-      // Remove from selection
-      const index = this.selectedPaymentsForBulkPay.findIndex(p => 
-        (p._id || p.id) === (payment._id || payment.id)
-      );
-      if (index > -1) {
-        this.selectedPaymentsForBulkPay.splice(index, 1);
+    Swal.fire({
+      title: 'تفاصيل الدفع الجماعي',
+      html: detailsHtml,
+      width: '800px',
+      showConfirmButton: true,
+      confirmButtonText: 'حسناً',
+      showCancelButton: true,
+      cancelButtonText: 'طباعة التقرير'
+    }).then(result => {
+      if (result.dismiss === Swal.DismissReason.cancel) {
+        this.printBulkPayReport(paidPayments, results);
       }
-    } else {
-      // Add to selection if not already added and not paid
-      if (!this.isPaymentSelected(payment) && payment.status !== 'paid') {
-        this.selectedPaymentsForBulkPay.push(payment);
+    });
+  }
+
+  // دالة مساعدة لطباعة تقرير الدفع الجماعي
+  private printBulkPayReport(paidPayments: Payment[], results: any[]): void {
+    // تنفيذ طباعة التقرير
+    console.log('طباعة تقرير الدفع الجماعي:', { paidPayments, results });
+    // يمكن تنفيذ طباعة تقرير PDF أو طباعة مباشرة
+  }
+
+  // دالة مساعدة لتحديث البيانات
+  private async refreshData(): Promise<void> {
+    if (this.student) {
+      this.loadPaymentHistory(this.getStudentId());
+      this.loadStudentPaymentSystems(this.getStudentId());
+      
+      // تحديث تلقائي بعد 2 ثانية للتأكد من تحديث البيانات
+      await this.delay(2000);
+      this.loadPaymentHistory(this.getStudentId());
+    }
+  }
+
+  // دالة طباعة إيصالات متعددة
+  private async printMultipleReceipts(payments: Payment[]): Promise<void> {
+    if (!payments || payments.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'لا توجد إيصالات للطباعة',
+        text: 'لا توجد مدفوعات مدفوعة للطباعة',
+        confirmButtonText: 'حسناً'
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'جاري الطباعة...',
+      html: `
+        <div class="text-center">
+          <div class="spinner-border text-primary mb-3" role="status">
+            <span class="visually-hidden">جاري الطباعة...</span>
+          </div>
+          <p>جاري طباعة ${payments.length} إيصال...</p>
+          <div class="progress" style="height: 20px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                 style="width: 0%" id="print-progress">0%</div>
+          </div>
+        </div>
+      `,
+      showConfirmButton: false,
+      allowOutsideClick: false
+    });
+
+    let printedCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < payments.length; i++) {
+      const payment = payments[i];
+      
+      try {
+        const receiptData: ReceiptData = {
+          receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}-${i}`,
+          date: new Date().toLocaleDateString('en-US'),
+          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          studentName: payment.studentName || this.student?.name || '',
+          studentId: payment.studentId || this.student?.studentId || '',
+          className: payment.className || 'عام',
+          month: payment.month,
+          amount: payment.amount,
+          paymentMethod: payment.paymentMethod || 'cash',
+          academicYear: this.student?.academicYear,
+          parentPhone: this.student?.parentPhone,
+          notes: `دفعة جماعية - ${payment.notes || ''}`
+        };
+
+        await this.printerService.printProfessionalReceipt(receiptData);
+        printedCount++;
+
+        // تحديث شريط التقدم
+        const progress = Math.round(((i + 1) / payments.length) * 100);
+        const progressBar = document.getElementById('print-progress');
+        if (progressBar) {
+          progressBar.style.width = `${progress}%`;
+          progressBar.textContent = `${progress}%`;
+        }
+
+        // تأخير بين كل طباعة
+        await this.delay(500);
+
+      } catch (error) {
+        console.error(`فشل طباعة إيصال ${i + 1}:`, error);
+        failedCount++;
       }
     }
-  });
-}
 
-isGroupAllSelected(group: ClassPaymentGroup): boolean {
-  if (!group.payments || group.payments.length === 0) return false;
-  return group.payments.every(p => this.isPaymentSelected(p));
-}
+    Swal.close();
 
-toggleGroupSelection(group: ClassPaymentGroup): void {
-  const allSelected = this.isGroupAllSelected(group);
-  
-  if (allSelected) {
-    // Deselect all
-    group.payments.forEach(p => {
-      const index = this.selectedPaymentsForBulkPay.findIndex(sp => 
-        sp._id === p._id || sp.id === p.id
-      );
-      if (index > -1) {
-        this.selectedPaymentsForBulkPay.splice(index, 1);
-      }
-    });
-  } else {
-    // Select all (only pending payments)
-    group.payments.forEach(p => {
-      if (p.status !== 'paid' && !this.isPaymentSelected(p)) {
-        this.selectedPaymentsForBulkPay.push(p);
-      }
+    // عرض نتائج الطباعة
+    Swal.fire({
+      title: 'نتائج الطباعة',
+      html: `
+        <div class="text-start">
+          <div class="alert ${printedCount > 0 ? 'alert-success' : 'alert-danger'}">
+            <h6><i class="fas ${printedCount > 0 ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
+              ${printedCount > 0 ? 'تمت الطباعة بنجاح' : 'فشل في الطباعة'}
+            </h6>
+            <p class="mb-1"><strong>المطبوع:</strong> ${printedCount}</p>
+            <p class="mb-1"><strong>الفشل:</strong> ${failedCount}</p>
+            <p class="mb-0"><strong>الإجمالي:</strong> ${payments.length}</p>
+          </div>
+        </div>
+      `,
+      icon: printedCount > 0 ? 'success' : 'error',
+      showConfirmButton: true,
+      confirmButtonText: 'حسناً'
     });
   }
-}
-// Check if any payment in a group is selected
-isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
-  return group.payments.some(payment => this.isPaymentSelected(payment));
-}
-  // Get unique months from payments
-  getUniqueMonths(): string[] {
-    const months = new Set<string>();
-    this.paymentHistory.forEach(payment => {
-      if (payment.month) {
-        months.add(payment.month);
-      }
-    });
-    return Array.from(months).sort((a, b) => {
-      // Sort months chronologically
-      const monthNames = this.months;
-      const getMonthIndex = (monthStr: string) => {
-        const monthPart = monthStr.split(' ')[0];
-        return monthNames.indexOf(monthPart);
-      };
-      return getMonthIndex(a) - getMonthIndex(b);
-    });
+
+  getSelectedPaymentsTotal(): number {
+    return this.selectedPaymentsForBulkPay.reduce((total, p) => total + p.amount, 0);
   }
 
   loadClassPayments(classId: string): void {
@@ -797,7 +1113,6 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
     this.router.navigate(['/home/students-management']);
   }
 
-  // ===== Payment Management =====
   openAddPaymentModal(): void {
     if (!this.student) return;
     
@@ -814,6 +1129,7 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
     };
     
     this.showPaymentModal = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   closePaymentModal(): void {
@@ -826,39 +1142,84 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
       notes: ''
     };
   }
-  get groupedPayments(): any[] {
-    const groups: any = {};
-    
-    this.paymentHistory.forEach(payment => {
-      const classId = payment.class?._id || payment.class || 'general';
-      const className = payment.className || 'عام';
-      
-      if (!groups[classId]) {
-        groups[classId] = {
-          classId: classId,
-          className: className,
-          payments: [],
-          totalAmount: 0,
-          paidAmount: 0,
-          pendingAmount: 0,
-          expanded: false
-        };
-      }
-      
-      groups[classId].payments.push(payment);
-      groups[classId].totalAmount += payment.amount;
-      
-      if (payment.status === 'paid') {
-        groups[classId].paidAmount += payment.amount;
-      } else {
-        groups[classId].pendingAmount += payment.amount;
-      }
-    });
-    
-    return Object.values(groups);
+
+  isGroupAllSelected(group: ClassPaymentGroup): boolean {
+    if (!group.payments || group.payments.length === 0) return false;
+    return group.payments.every(p => this.isPaymentSelected(p));
   }
 
-  // Add after ngOnInit()
+  toggleGroupSelection(group: ClassPaymentGroup): void {
+    const allSelected = this.isGroupAllSelected(group);
+    
+    if (allSelected) {
+      // Deselect all
+      group.payments.forEach(p => {
+        const index = this.selectedPaymentsForBulkPay.findIndex(sp => 
+          sp._id === p._id || sp.id === p.id
+        );
+        if (index > -1) {
+          this.selectedPaymentsForBulkPay.splice(index, 1);
+        }
+      });
+    } else {
+      // Select all (only pending payments)
+      group.payments.forEach(p => {
+        if (p.status !== 'paid' && !this.isPaymentSelected(p)) {
+          this.selectedPaymentsForBulkPay.push(p);
+        }
+      });
+    }
+  }
+
+  isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
+    return group.payments.some(payment => this.isPaymentSelected(payment));
+  }
+
+  // Get unique months from payments
+  getUniqueMonths(): string[] {
+    const months = new Set<string>();
+    this.paymentHistory.forEach(payment => {
+      if (payment.month) {
+        months.add(payment.month);
+      }
+    });
+    return Array.from(months).sort((a, b) => {
+      const monthNames = this.months;
+      const getMonthIndex = (monthStr: string) => {
+        const monthPart = monthStr.split(' ')[0];
+        return monthNames.indexOf(monthPart);
+      };
+      return getMonthIndex(a) - getMonthIndex(b);
+    });
+  }
+
+  // Check if all payments in a group are selected
+  isAllPaymentsInGroupSelected(group: ClassPaymentGroup): boolean {
+    return group.payments.every(payment => this.isPaymentSelected(payment));
+  }
+
+  // Toggle all payments in a group
+  toggleAllPaymentsInGroup(group: ClassPaymentGroup): void {
+    const allSelected = this.isAllPaymentsInGroupSelected(group);
+    
+    group.payments.forEach(payment => {
+      if (allSelected) {
+        // Remove from selection
+        const index = this.selectedPaymentsForBulkPay.findIndex(p => 
+          (p._id || p.id) === (payment._id || payment.id)
+        );
+        if (index > -1) {
+          this.selectedPaymentsForBulkPay.splice(index, 1);
+        }
+      } else {
+        // Add to selection if not already added and not paid
+        if (!this.isPaymentSelected(payment) && payment.status !== 'paid') {
+          this.selectedPaymentsForBulkPay.push(payment);
+        }
+      }
+    });
+  }
+
   togglePaymentSelection(payment: Payment): void {
     const index = this.selectedPaymentsForBulkPay.findIndex(p => 
       (p._id || p.id) === (payment._id || payment.id)
@@ -905,17 +1266,14 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
     );
   }
 
-  getSelectedPaymentsTotal(): number {
-    return this.selectedPaymentsForBulkPay.reduce((total, p) => total + p.amount, 0);
-  }
-
   openBulkPayConfirmation(): void {
     if (this.selectedPaymentsForBulkPay.length === 0) {
       Swal.fire('تنبيه', 'يرجى اختيار مدفوعات للدفع', 'warning');
       return;
     }
-
+  
     this.showBulkPayConfirmation = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   closeBulkPayConfirmation(): void {
@@ -943,8 +1301,9 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
     }
     
     this.showBulkPaymentModal = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
-
+  
   closeBulkPaymentModal(): void {
     this.showBulkPaymentModal = false;
     this.bulkPayment = {
@@ -1208,8 +1567,9 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
     this.selectedClassForPayments = classItem;
     this.loadClassPayments(classItem._id || classItem.id);
     this.showClassPaymentsModal = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
-
+  
   closeClassPaymentsModal(): void {
     this.showClassPaymentsModal = false;
     this.selectedClassForPayments = null;
@@ -1218,10 +1578,11 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
 
   // Edit Payment
   openEditPaymentModal(payment: Payment): void {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     this.editingPayment = { ...payment };
     this.showEditPaymentModal = true;
   }
-
+  
   closeEditPaymentModal(): void {
     this.showEditPaymentModal = false;
     this.editingPayment = null;
@@ -1229,6 +1590,7 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
 
   // Delete Payment
   openDeleteConfirmModal(payment: Payment): void {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     this.paymentToDelete = payment;
     this.showDeleteConfirmModal = true;
   }
@@ -1283,6 +1645,7 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
 
   // Update Payment
   updatePayment(): void {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     if (!this.editingPayment || !this.editingPayment._id) return;
 
     if (!this.editingPayment.amount || this.editingPayment.amount <= 0) {
@@ -1360,7 +1723,7 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
     });
   }
 
-  // Pay Payment
+  // Pay Payment with automatic printing
   payPayment(payment: Payment): void {
     Swal.fire({
       title: 'تأكيد الدفع',
@@ -1373,10 +1736,13 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
       `,
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'دفع',
-      cancelButtonText: 'إلغاء',
+      confirmButtonText: 'دفع وطباعة',
+      cancelButtonText: 'دفع فقط',
+      showDenyButton: true,
+      denyButtonText: 'إلغاء',
       confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
+      denyButtonColor: '#d33',
+      cancelButtonColor: '#6c757d',
       input: 'select',
       inputOptions: {
         'cash': 'نقداً',
@@ -1388,42 +1754,56 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
       inputValue: 'cash'
     }).then((result) => {
       if (result.isConfirmed && result.value) {
-        const paymentData = {
-          paymentMethod: result.value,
-          paymentDate: new Date().toISOString(),
-          notes: 'تم الدفع من خلال النظام'
-        };
+        // الدفع والطباعة
+        this.processPaymentWithPrint(payment, result.value, true);
+      } else if (result.dismiss === Swal.DismissReason.cancel) {
+        // الدفع فقط
+        this.processPaymentWithPrint(payment, result.value || 'cash', false);
+      }
+    });
+  }
 
+  private processPaymentWithPrint(payment: Payment, method: string, shouldPrint: boolean): void {
+    const paymentData = {
+      paymentMethod: method,
+      paymentDate: new Date().toISOString(),
+      notes: 'تم الدفع من خلال النظام'
+    };
+
+    Swal.fire({
+      title: 'جاري الدفع...',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    const paymentId = payment._id || payment.id;
+    
+    this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/pay`, paymentData, {
+      headers: this.getHeaders()
+    }).subscribe({
+      next: async (response) => {
         Swal.fire({
-          title: 'جاري الدفع...',
-          allowOutsideClick: false,
-          didOpen: () => {
-            Swal.showLoading();
-          }
+          icon: 'success',
+          title: 'نجاح',
+          text: 'تم دفع الدفعة بنجاح',
+          timer: 1500,
+          showConfirmButton: false
         });
 
-        const paymentId = payment._id || payment.id;
+        // تحديث البيانات
+        this.loadPaymentHistory(this.getStudentId());
+        this.loadStudentPaymentSystems(this.getStudentId());
         
-        this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/pay`, paymentData, {
-          headers: this.getHeaders()
-        }).subscribe({
-          next: (response) => {
-            Swal.fire({
-              icon: 'success',
-              title: 'نجاح',
-              text: 'تم دفع الدفعة بنجاح',
-              timer: 1500,
-              showConfirmButton: false
-            });
-
-            this.loadPaymentHistory(this.getStudentId());
-            this.loadStudentPaymentSystems(this.getStudentId());
-          },
-          error: (error) => {
-            console.error('Error paying payment:', error);
-            Swal.fire('خطأ', 'فشل في دفع الدفعة', 'error');
-          }
-        });
+        // الطباعة التلقائية إذا طلب المستخدم
+        if (shouldPrint && response.payment) {
+          await this.printPaymentReceipt(response.payment);
+        }
+      },
+      error: (error) => {
+        console.error('Error paying payment:', error);
+        Swal.fire('خطأ', 'فشل في دفع الدفعة', 'error');
       }
     });
   }
@@ -1438,6 +1818,7 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
     this.filterLevel = '';
     
     this.loadAvailableClasses();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   
   closeAddToLessonsModal(): void {
@@ -1568,6 +1949,7 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
     };
     
     this.showRoundSelectionModal = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   
   // Close round selection modal
@@ -1987,8 +2369,8 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
   printPaymentReceipt(payment: Payment): void {
     const receiptData: ReceiptData = {
       receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
-      date: new Date().toLocaleDateString('ar-EG'),
-      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      date: new Date().toLocaleDateString('en-US'),
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
       studentName: payment.studentName || this.student?.name || '',
       studentId: payment.studentId || this.student?.studentId || '',
       className: payment.className || 'عام',
@@ -2155,5 +2537,65 @@ isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
       </body>
       </html>
     `;
+  }
+
+  // دالة للتحقق من وجود مدفوعات مدفوعة
+  hasPaidPaymentsSelected(): boolean {
+    return this.selectedPaymentsForBulkPay.some(p => p.status === 'paid');
+  }
+
+  // دالة للحصول على المدفوعات المدفوعة المحددة
+  getPaidSelectedPayments(): Payment[] {
+    return this.selectedPaymentsForBulkPay.filter(p => p.status === 'paid');
+  }
+
+  // دالة طباعة المدفوعات المحددة
+  async printSelectedPaymentsReceipt(): Promise<void> {
+    const paidPayments = this.getPaidSelectedPayments();
+    
+    if (paidPayments.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'لا توجد مدفوعات مدفوعة',
+        text: 'يرجى تحديد مدفوعات مدفوعة للطباعة',
+        confirmButtonText: 'حسناً'
+      });
+      return;
+    }
+
+    Swal.fire({
+      title: 'طباعة متعددة',
+      html: `
+        <div class="text-start">
+          <p><strong>عدد الإيصالات:</strong> ${paidPayments.length}</p>
+          <p><strong>المبلغ الإجمالي:</strong> ${this.getSelectedPaymentsTotal().toLocaleString()} د.ج</p>
+          <div style="max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6; padding: 10px; border-radius: 5px; margin-top: 10px;">
+            ${paidPayments.map(p => `
+              <div class="mb-1">
+                • ${p.studentName || this.student?.name || 'طالب'} - ${p.month} - ${p.amount.toLocaleString()} د.ج
+                ${p.className ? `(${p.className})` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'طباعة جميع الإيصالات',
+      cancelButtonText: 'طباعة إيصال واحد',
+      showDenyButton: true,
+      denyButtonText: 'إلغاء',
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#28a745',
+      denyButtonColor: '#d33'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        // طباعة جميع الإيصالات
+        await this.printMultipleReceipts(paidPayments);
+      } else if (result.dismiss === Swal.DismissReason.cancel) {
+        // طباعة إيصال واحد
+        this.printPaymentReceipt(paidPayments[0]);
+      }
+    });
   }
 }

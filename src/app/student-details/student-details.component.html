@@ -1102,22 +1102,31 @@
               </div>
               
               <!-- Selected Payments Summary -->
-              <div *ngIf="selectedPaymentsForBulkPay.length > 0" class="alert alert-success">
-                <div class="d-flex justify-content-between align-items-center">
-                  <div>
-                    <h6 class="mb-2"><i class="fas fa-check-circle me-2"></i>المدفوعات المحددة</h6>
-                    <p class="mb-0">
-                      <strong>{{ selectedPaymentsForBulkPay.length }}</strong> دفعة مبلغها 
-                      <strong>{{ getSelectedPaymentsTotal() | number:'1.0-0' }} د.ج</strong>
-                    </p>
-                  </div>
-                  <div>
-                    <button class="btn btn-success" (click)="openBulkPayConfirmation()">
-                      <i class="fas fa-money-check me-2"></i>دفع المحدد
-                    </button>
-                  </div>
-                </div>
-              </div>
+<!-- بعد زر دفع المحدد في قسم المدفوعات المحددة -->
+<div *ngIf="selectedPaymentsForBulkPay.length > 0" class="alert alert-success">
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <h6 class="mb-2"><i class="fas fa-check-circle me-2"></i>المدفوعات المحددة</h6>
+      <p class="mb-0">
+        <strong>{{ selectedPaymentsForBulkPay.length }}</strong> دفعة مبلغها 
+        <strong>{{ getSelectedPaymentsTotal() | number:'1.0-0' }} د.ج</strong>
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      <!-- زر الطباعة المميز -->
+      <button class="btn btn-warning btn-lg" 
+              (click)="printSelectedPaymentsReceipt()"
+              [disabled]="!hasPaidPaymentsSelected()"
+              title="طباعة إيصالات المدفوعات المدفوعة">
+        <i class="fas fa-print me-2"></i>طباعة المحدد
+      </button>
+      
+      <button class="btn btn-success" (click)="openBulkPayConfirmation()">
+        <i class="fas fa-money-check me-2"></i>دفع المحدد
+      </button>
+    </div>
+  </div>
+</div>
             </div>
           </div>
 
@@ -1257,31 +1266,41 @@
               {{ getPaymentStatusText(payment) }}
             </span>
           </td>
-          <td>
-            <div class="btn-group btn-group-sm" role="group">
-              <button class="btn btn-outline-primary" 
-                      *ngIf="payment.status !== 'paid'"
-                      (click)="payPayment(payment)"
-                      title="دفع">
-                <i class="fas fa-money-check"></i>
-              </button>
-              <button class="btn btn-outline-info" 
-                      (click)="printPaymentReceipt(payment)"
-                      title="طباعة الإيصال">
-                <i class="fas fa-print"></i>
-              </button>
-              <button class="btn btn-outline-warning" 
-                      (click)="openEditPaymentModal(payment)"
-                      title="تعديل">
-                <i class="fas fa-edit"></i>
-              </button>
-              <button class="btn btn-outline-danger" 
-                      (click)="openDeleteConfirmModal(payment)"
-                      title="حذف">
-                <i class="fas fa-trash"></i>
-              </button>
-            </div>
-          </td>
+<!-- في جدول المدفوعات، تحديث قسم الإجراءات -->
+<td>
+  <div class="btn-group btn-group-sm" role="group">
+    <button class="btn btn-outline-primary" 
+            *ngIf="payment.status !== 'paid'"
+            (click)="payPayment(payment)"
+            title="دفع">
+      <i class="fas fa-money-check"></i>
+    </button>
+    
+    <!-- زر الطباعة بعد الدفع -->
+    <button class="btn btn-outline-success" 
+            *ngIf="payment.status === 'paid'"
+            (click)="printPaymentReceipt(payment)"
+            title="طباعة الإيصال">
+      <i class="fas fa-print"></i>
+    </button>
+    
+    <button class="btn btn-outline-info" 
+            (click)="printPaymentReceipt(payment)"
+            title="طباعة الإيصال">
+      <i class="fas fa-print"></i>
+    </button>
+    <button class="btn btn-outline-warning" 
+            (click)="openEditPaymentModal(payment)"
+            title="تعديل">
+      <i class="fas fa-edit"></i>
+    </button>
+    <button class="btn btn-outline-danger" 
+            (click)="openDeleteConfirmModal(payment)"
+            title="حذف">
+      <i class="fas fa-trash"></i>
+    </button>
+  </div>
+</td>
         </tr>
       </tbody>
       <tfoot *ngIf="group.payments.length > 0">

@@ -82,39 +82,114 @@ body.no-scroll {
   }
 
   /* في styles.css أو global styles */
-.student-modal-overlay {
-  z-index: 9999 !important;
-}
 
-.modal {
-  z-index: 10000 !important;
-}
-
-/* تأكد من أن المكون الرئيسي لا يغطي المودال */
-app-students-management {
-  position: relative;
-  z-index: 1;
-}
-
-
-
-/* في styles.css أو global styles */
-
-/* إعادة تعيين كامل لـ z-index للمودالات */
-.student-modal-overlay {
-  z-index: 9999999999 !important;
+  /* إصلاح مشكلة التراكب للمودالات */
+.custom-overlay {
   position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  background: rgba(0, 0, 0, 0.8) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 9999 !important; /* زيادة قيمة z-index */
+  overflow-y: auto !important;
+  padding: 20px !important;
+  backdrop-filter: blur(5px) !important;
 }
 
-.modal {
-  z-index: 10000000000 !important;
+/* تأكد من أن المودال في المقدمة */
+.custom-overlay .overlay-wrapper {
   position: relative !important;
+  z-index: 10000 !important;
+  max-width: 90% !important;
+  max-height: 90vh !important;
+  margin: auto !important;
+  animation: modalSlideIn 0.3s ease-out !important;
 }
 
-/* إخفاء التمرير عند فتح المودال */
-body.no-scroll {
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* منع تمرير الخلفية عند فتح المودال */
+body.modal-open {
   overflow: hidden !important;
   position: fixed !important;
   width: 100% !important;
   height: 100% !important;
+}
+
+/* تأكد من أن content-area لا يتداخل مع المودال */
+.content-area {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* تحسين شكل المودال */
+.custom-overlay .overlay-card {
+  background: white !important;
+  border-radius: 15px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3) !important;
+  overflow: hidden !important;
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* تحسين الهيدر */
+.custom-overlay .overlay-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  flex-shrink: 0 !important;
+}
+
+/* تحسين البودي */
+.custom-overlay .overlay-body {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  max-height: calc(90vh - 120px) !important;
+}
+
+/* تحسين الفوتر */
+.custom-overlay .overlay-footer {
+  position: sticky !important;
+  bottom: 0 !important;
+  background: white !important;
+  z-index: 10 !important;
+  flex-shrink: 0 !important;
+}
+
+/* إصلاح مشكلة الجوال */
+@media (max-width: 768px) {
+  .custom-overlay {
+    padding: 10px !important;
+    align-items: flex-start !important; /* للجوال: ابدأ من الأعلى */
+  }
+  
+  .custom-overlay .overlay-wrapper {
+    max-width: 100% !important;
+    max-height: 100vh !important;
+    margin: 0 !important;
+  }
+  
+  .custom-overlay .overlay-card {
+    border-radius: 0 !important;
+    max-height: 100vh !important;
+    min-height: 100vh !important;
+  }
+  
+  .custom-overlay .overlay-body {
+    max-height: calc(100vh - 120px) !important;
+  }
 }

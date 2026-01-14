@@ -182,8 +182,8 @@ private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement>
   
   // معلومات المؤسسة
   ctx.font = '16px "Arial", sans-serif';
-  ctx.fillText('الجزائر، ولاية تقرت', canvas.width / 2, 45);
-  ctx.fillText('الهاتف: 0559581957', canvas.width / 2, 65);
+  ctx.fillText('الجزائر ، ولاية تقرت', canvas.width / 2, 45);
+  ctx.fillText('الهاتف : 0673586274', canvas.width / 2, 65);
   
   // خط فاصل
   this.drawDoubleLine(ctx, 10, 85, canvas.width - 20);
@@ -205,8 +205,8 @@ private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement>
   
   const infoItems = [
     { label: 'رقم الإيصال:', value: data.receiptNumber },
-    { label: 'التاريخ:', value: data.date },
-    { label: 'الوقت:', value: data.time },
+    { label: 'التاريخ:', value: this.formatArabicNumber(data.date) },
+    { label: 'الوقت:', value: this.formatArabicNumber(data.time) },
     { label: 'طريقة الدفع:', value: this.translatePaymentMethod(data.paymentMethod) }
   ];
   

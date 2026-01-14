@@ -1,255 +1,313 @@
-<div class="cards-management-container">
-    <!-- Header -->
-    <div class="header">
-      <h2>إدارة البطاقات</h2>
-      <div class="actions">
-        <button class="btn btn-primary" (click)="showAddAuthorizedCardModal = true">
-          <i class="fas fa-plus"></i> إضافة بطاقة مصرحة
-        </button>
-        <button class="btn btn-secondary" (click)="loadCards()">
-          <i class="fas fa-sync-alt"></i> تحديث
-        </button>
+<div class="cards-management">
+  <!-- Header Section -->
+  <div class="header">
+    <h1>
+      <i class="fas fa-id-card"></i>
+      إدارة البطاقات
+    </h1>
+    <p class="subtitle">إدارة بطاقات الطلاب وتعيينها</p>
+  </div>
+
+  <!-- Main Content -->
+  <div class="content">
+    <!-- Detection Section -->
+    <div class="detection-section card mb-4">
+      <div class="card-header bg-primary text-white">
+        <i class="fas fa-search"></i>
+        كشف البطاقات
+      </div>
+      <div class="card-body">
+        <div class="row align-items-center">
+          <div class="col-md-8">
+            <div class="detection-status">
+              <div class="status-indicator" [class.active]="detectionActive"></div>
+              <span class="status-text">{{ detectionStatus || 'جاهز للكشف' }}</span>
+            </div>
+            
+            <div *ngIf="isCardDetected" class="detected-card alert alert-success mt-3">
+              <i class="fas fa-check-circle"></i>
+              <strong>تم اكتشاف بطاقة:</strong> {{ detectedCardUid }}
+            </div>
+          </div>
+          
+          <div class="col-md-4 text-end">
+            <button 
+              class="btn btn-success me-2" 
+              (click)="startCardDetection()"
+              [disabled]="detectionActive">
+              <i class="fas fa-play"></i> بدء الكشف
+            </button>
+            <button 
+              class="btn btn-danger" 
+              (click)="stopCardDetection()"
+              [disabled]="!detectionActive">
+              <i class="fas fa-stop"></i> إيقاف
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-  
-    <!-- Search Section -->
-    <div class="search-section card">
-      <div class="search-input">
-        <input 
-          type="text" 
-          [(ngModel)]="searchUid" 
-          placeholder="ابحث برقم البطاقة للتحقق من التصريح"
-          class="form-control"
-        >
-        <button class="btn btn-info" (click)="checkCardAuthorization()">
-          <i class="fas fa-search"></i> تحقق
-        </button>
-      </div>
-    </div>
-  
-    <!-- Tabs -->
-    <div class="tabs">
-      <div class="tab active">البطاقات المسجلة</div>
-      <div class="tab" (click)="loadAuthorizedCards()">البطاقات المصرحة</div>
-    </div>
-  
-    <!-- Cards Table -->
-    <div class="table-container card">
-      <div class="table-header">
-        <h3>البطاقات المسجلة للطلاب</h3>
-        <div class="table-actions">
+
+    <!-- Search and Create Section -->
+    <div class="row mb-4">
+      <div class="col-md-4">
+        <div class="input-group">
           <input 
             type="text" 
-            [(ngModel)]="searchStudentTerm" 
-            (input)="filterStudents()"
-            placeholder="ابحث عن طالب..."
-            class="form-control search-input"
-          >
+            class="form-control" 
+            placeholder="بحث برقم البطاقة..." 
+            [(ngModel)]="searchUid"
+            (keyup.enter)="checkCard()">
+          <button class="btn btn-outline-primary" (click)="checkCard()">
+            <i class="fas fa-search"></i> بحث
+          </button>
         </div>
       </div>
-  
-      <div class="table-responsive" *ngIf="!loading; else loadingTemplate">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>رقم البطاقة</th>
-              <th>الطالب</th>
-              <th>تاريخ الإصدار</th>
-              <th>الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let card of cards">
-              <td>{{ card.uid }}</td>
-              <td>{{ getStudentName(card.student?._id || card.student) }}</td>
-              <td>{{ formatDate(card.issueDate) }}</td>
-              <td class="actions">
-                <button class="btn btn-sm btn-info" (click)="viewCardDetails(card)">
-                  <i class="fas fa-eye"></i> عرض
-                </button>
-                <button 
-                  class="btn btn-sm btn-warning" 
-                  (click)="selectedCard = card; showAssignCardModal = true"
-                >
-                  <i class="fas fa-exchange-alt"></i> إعادة تعيين
-                </button>
-                <button class="btn btn-sm btn-danger" (click)="deleteCard(card._id, 'regular')">
-                  <i class="fas fa-trash"></i> حذف
-                </button>
-              </td>
-            </tr>
-            <tr *ngIf="cards.length === 0">
-              <td colspan="4" class="text-center">لا توجد بطاقات مسجلة</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-  
-      <ng-template #loadingTemplate>
-        <div class="loading">
-          <div class="spinner"></div>
-          <p>جاري تحميل البيانات...</p>
-        </div>
-      </ng-template>
-    </div>
-  
-    <!-- Authorized Cards Table -->
-    <div class="table-container card mt-4">
-      <div class="table-header">
-        <h3>البطاقات المصرحة</h3>
-        <div class="filters">
-          <label class="checkbox-label">
-            <input type="checkbox" [(ngModel)]="filterActive" (change)="applyFilters()">
-            <span>النشطة فقط</span>
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" [(ngModel)]="filterExpired" (change)="applyFilters()">
-            <span>المُنتهية الصلاحية</span>
-          </label>
-        </div>
-      </div>
-  
-      <div class="table-responsive">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>رقم البطاقة</th>
-              <th>اسم البطاقة</th>
-              <th>الوصف</th>
-              <th>تاريخ الانتهاء</th>
-              <th>الحالة</th>
-              <th>الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let card of authorizedCards">
-              <td>{{ card.uid }}</td>
-              <td>{{ card.cardName }}</td>
-              <td>{{ card.description || '-' }}</td>
-              <td>{{ formatDate(card.expirationDate) }}</td>
-              <td>
-                <span class="badge" [class.badge-success]="card.active && !isCardExpired(card.expirationDate)"
-                                   [class.badge-danger]="!card.active || isCardExpired(card.expirationDate)">
-                  {{ card.active && !isCardExpired(card.expirationDate) ? 'نشطة' : 'غير نشطة' }}
-                </span>
-              </td>
-              <td class="actions">
-                <button class="btn btn-sm btn-danger" (click)="deleteCard(card._id, 'authorized')">
-                  <i class="fas fa-trash"></i> حذف
-                </button>
-              </td>
-            </tr>
-            <tr *ngIf="authorizedCards.length === 0">
-              <td colspan="6" class="text-center">لا توجد بطاقات مصرحة</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  
-    <!-- Assign Card Modal -->
-    <div class="give-cards-to-student modal" *ngIf="showAssignCardModal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>تعيين بطاقة لطالب</h3>
-          <button class="close-btn" (click)="showAssignCardModal = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>البطاقة المحددة:</label>
-            <input type="text" class="form-control" [value]="selectedCard?.uid" disabled>
-          </div>
-          
-          <div class="form-group">
-            <label>اختر الطالب:</label>
-            <select class="form-control" [(ngModel)]="selectedStudentId">
-              <option value="">-- اختر طالب --</option>
-              <option *ngFor="let student of filteredStudents" [value]="student._id">
-                {{ student.name }} ({{ student.studentId }}) - {{ student.parentPhone }}
-              </option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" (click)="showAssignCardModal = false">إلغاء</button>
-          <button class="btn btn-primary" (click)="assignCardToStudent()">تعيين</button>
+      
+      <div class="col-md-8">
+        <div class="input-group">
+          <input 
+            type="text" 
+            class="form-control" 
+            placeholder="إدخال رقم البطاقة الجديدة..." 
+            [(ngModel)]="newCardUid">
+          <select class="form-select" [(ngModel)]="selectedStudentId">
+            <option value="">اختر طالباً (اختياري)</option>
+            <option *ngFor="let student of students" [value]="student._id">
+              {{ student.name }} - {{ student.studentId }}
+            </option>
+          </select>
+          <button class="btn btn-primary" (click)="createCard()">
+            <i class="fas fa-plus"></i> إضافة بطاقة
+          </button>
         </div>
       </div>
     </div>
-  
-    <!-- Add Authorized Card Modal -->
-    <div class="give-cards-to-student modal" *ngIf="showAddAuthorizedCardModal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>إضافة بطاقة مصرحة جديدة</h3>
-          <button class="close-btn" (click)="showAddAuthorizedCardModal = false">&times;</button>
+
+    <!-- Cards List -->
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+          <i class="fas fa-list"></i>
+          قائمة البطاقات
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>رقم البطاقة (UID) *</label>
-            <input type="text" class="form-control" [(ngModel)]="newAuthorizedCard.uid" required>
-          </div>
-          
-          <div class="form-group">
-            <label>اسم البطاقة *</label>
-            <input type="text" class="form-control" [(ngModel)]="newAuthorizedCard.cardName" required>
-          </div>
-          
-          <div class="form-group">
-            <label>الوصف</label>
-            <textarea class="form-control" [(ngModel)]="newAuthorizedCard.description" rows="2"></textarea>
-          </div>
-          
-          <div class="form-group">
-            <label>تاريخ الانتهاء *</label>
-            <input type="date" class="form-control" [(ngModel)]="newAuthorizedCard.expirationDate" required>
-          </div>
-          
-          <div class="form-group">
-            <label>ملاحظات</label>
-            <textarea class="form-control" [(ngModel)]="newAuthorizedCard.notes" rows="3"></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" (click)="showAddAuthorizedCardModal = false">إلغاء</button>
-          <button class="btn btn-primary" (click)="addAuthorizedCard()">إضافة</button>
+        <div>
+          <span class="badge bg-primary">{{ cards.length }} بطاقة</span>
         </div>
       </div>
-    </div>
-  
-    <!-- Card Details Modal -->
-    <div class="give-cards-to-student modal" *ngIf="showCardDetailsModal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>تفاصيل البطاقة</h3>
-          <button class="close-btn" (click)="showCardDetailsModal = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div *ngIf="selectedCard">
-            <div class="detail-item">
-              <strong>رقم البطاقة:</strong>
-              <span>{{ selectedCard.uid }}</span>
-            </div>
-            
-            <div class="detail-item">
-              <strong>اسم الطالب:</strong>
-              <span>{{ getStudentName(selectedCard.student?._id || selectedCard.student) }}</span>
-            </div>
-            
-            <div class="detail-item">
-              <strong>تاريخ الإصدار:</strong>
-              <span>{{ formatDate(selectedCard.issueDate) }}</span>
-            </div>
-            
-            <div class="detail-item">
-              <strong>حالة البطاقة:</strong>
-              <span class="badge badge-success">مفعلة</span>
-            </div>
+      
+      <div class="card-body">
+        <div *ngIf="loading" class="text-center py-4">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">جاري التحميل...</span>
           </div>
+          <p class="mt-2">جاري تحميل البطاقات...</p>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-primary" (click)="showCardDetailsModal = false">إغلاق</button>
+
+        <div *ngIf="!loading && cards.length === 0" class="text-center py-4">
+          <i class="fas fa-id-card-slash fa-3x text-muted"></i>
+          <p class="mt-2">لا توجد بطاقات مسجلة</p>
+        </div>
+
+        <div *ngIf="!loading && cards.length > 0" class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>رقم البطاقة</th>
+                <th>الطالب</th>
+                <th>تاريخ الإصدار</th>
+                <th>الحالة</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let card of cards" [class.table-success]="card.isDetected">
+                <td>
+                  <strong>{{ card.uid }}</strong>
+                  <span *ngIf="card.isDetected" class="badge bg-success ms-2">
+                    <i class="fas fa-wifi"></i> مكتشفة
+                  </span>
+                </td>
+                <td>
+                  <div *ngIf="getStudentName(card) !== 'غير معين'">
+                    {{ getStudentName(card) }}
+                    <small class="text-muted d-block">{{ card.student && typeof card.student === 'object' ? card.student.studentId : '' }}</small>
+                  </div>
+                  <span *ngIf="getStudentName(card) === 'غير معين'" class="text-danger">
+                    غير معين
+                  </span>
+                </td>
+                <td>{{ formatDate(card.issueDate) }}</td>
+                <td>
+                  <span class="badge" [ngClass]="{
+                    'bg-success': getStudentName(card) !== 'غير معين',
+                    'bg-warning': getStudentName(card) === 'غير معين'
+                  }">
+                    {{ getStudentName(card) !== 'غير معين' ? 'معينة' : 'غير معينة' }}
+                  </span>
+                </td>
+                <td>
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-info" (click)="viewCardDetails(card)">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                    
+                    <button 
+                      class="btn btn-outline-primary" 
+                      (click)="selectedCard = card; selectedStudentId = ''; showAssignCardModal = true"
+                      [disabled]="getStudentName(card) !== 'غير معين'">
+                      <i class="fas fa-user-plus"></i>
+                    </button>
+                    
+                    <button 
+                      class="btn btn-outline-warning" 
+                      (click)="unassignCard(card._id)"
+                      [disabled]="getStudentName(card) === 'غير معين'">
+                      <i class="fas fa-user-minus"></i>
+                    </button>
+                    
+                    <button class="btn btn-outline-danger" (click)="deleteCard(card._id)">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Assign Card Modal -->
+  <div class="modal-overlay" *ngIf="showAssignCardModal" (click)="showAssignCardModal = false">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-user-plus"></i>
+          تعيين بطاقة لطالب
+        </h5>
+        <button type="button" class="btn-close" (click)="showAssignCardModal = false"></button>
+      </div>
+      
+      <div class="modal-body">
+        <div *ngIf="selectedCard" class="card-info mb-3">
+          <div class="alert alert-info">
+            <i class="fas fa-id-card"></i>
+            <strong>رقم البطاقة:</strong> {{ selectedCard.uid }}
+          </div>
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">بحث عن طالب:</label>
+          <input 
+            type="text" 
+            class="form-control" 
+            placeholder="ابحث باسم الطالب أو رقمه..."
+            [(ngModel)]="searchStudentTerm"
+            (input)="filterStudents()">
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">اختر طالباً:</label>
+          <select class="form-select" [(ngModel)]="selectedStudentId">
+            <option value="">اختر طالباً</option>
+            <option *ngFor="let student of filteredStudents" [value]="student._id">
+              {{ student.name }} - {{ student.studentId }} ({{ student.parentPhone || 'لا يوجد هاتف' }})
+            </option>
+          </select>
+        </div>
+        
+        <div *ngIf="filteredStudents.length === 0" class="alert alert-warning">
+          <i class="fas fa-exclamation-triangle"></i>
+          لا توجد نتائج بحث
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="showAssignCardModal = false">
+          إلغاء
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-primary" 
+          (click)="assignCardToStudent()"
+          [disabled]="!selectedStudentId">
+          تعيين
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card Details Modal -->
+  <div class="modal-overlay" *ngIf="showCardDetailsModal" (click)="showCardDetailsModal = false">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-info-circle"></i>
+          تفاصيل البطاقة
+        </h5>
+        <button type="button" class="btn-close" (click)="showCardDetailsModal = false"></button>
+      </div>
+      
+      <div class="modal-body" *ngIf="selectedCard">
+        <div class="card-details">
+          <div class="detail-item">
+            <span class="label">رقم البطاقة:</span>
+            <span class="value">{{ selectedCard.uid }}</span>
+          </div>
+          
+          <div class="detail-item">
+            <span class="label">تاريخ الإصدار:</span>
+            <span class="value">{{ formatDate(selectedCard.issueDate) }}</span>
+          </div>
+          
+          <div class="detail-item">
+            <span class="label">الطالب:</span>
+            <span class="value" [ngClass]="{'text-danger': getStudentName(selectedCard) === 'غير معين'}">
+              {{ getStudentName(selectedCard) }}
+            </span>
+          </div>
+          
+          <div *ngIf="selectedCard.student && typeof selectedCard.student === 'object'" class="student-info mt-4">
+            <h6><i class="fas fa-user-graduate"></i> معلومات الطالب:</h6>
+            <div class="row mt-2">
+              <div class="col-md-6">
+                <div class="detail-item">
+                  <span class="label">رقم الطالب:</span>
+                  <span class="value">{{ selectedCard.student.studentId }}</span>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="detail-item">
+                  <span class="label">هاتف ولي الأمر:</span>
+                  <span class="value">{{ selectedCard.student.parentPhone || 'غير متوفر' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button 
+          type="button" 
+          class="btn btn-warning" 
+          (click)="unassignCard(selectedCard!._id); showCardDetailsModal = false"
+          *ngIf="getStudentName(selectedCard!) !== 'غير معين'">
+          <i class="fas fa-user-minus"></i> إلغاء التعيين
+        </button>
+        <button 
+          type="button" 
+          class="btn btn-primary" 
+          (click)="selectedCard = null; selectedStudentId = ''; showAssignCardModal = true; showCardDetailsModal = false"
+          *ngIf="getStudentName(selectedCard!) === 'غير معين'">
+          <i class="fas fa-user-plus"></i> تعيين لطالب
+        </button>
+        <button type="button" class="btn btn-danger" (click)="deleteCard(selectedCard!._id); showCardDetailsModal = false">
+          <i class="fas fa-trash"></i> حذف البطاقة
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

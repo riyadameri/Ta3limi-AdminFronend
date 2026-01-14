@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment.development';
+import { catchError, of } from 'rxjs';
 @Component({
   selector: 'app-dashboard',
   imports: [CommonModule, FormsModule],
@@ -79,22 +80,33 @@ export class DashboardComponent implements OnInit, OnDestroy {
       clearTimeout(this.rfidTimer);
     }
   }
-
+  private cacheExpiry = 5 * 60 * 1000; // 5 minutes
+  private lastCacheTime = 0;
+  
   // تحميل جميع بيانات Dashboard
   loadDashboardData() {
     // Use the aggregated endpoint for dashboard stats
-    this.http.get<any>(`${environment.apiUrl}/dashboard/daily-stats`).subscribe({
+    const token = localStorage.getItem('token'); // أو الطريقة التي تستخدمها لتخزين التوكن
+    this.http.get<any>(`${environment.apiUrl}/dashboard/daily-stats`)
+    .pipe(
+      catchError(error => {
+        console.error('Error loading dashboard stats:', error);
+        this.showNotification('error', 'فشل تحميل بيانات Dashboard');
+        return of({
+          success: false,
+          dailyStats: this.dailyStats,
+          currentStudents: this.currentStudents
+        });
+      })
+    )
+    .subscribe({
       next: (data) => {
         if (data.success) {
           this.dailyStats = data.dailyStats;
           this.currentStudents = data.currentStudents;
         }
-      },
-      error: (err) => {
-        console.error('Error loading dashboard stats:', err);
       }
     });
-  
     // Keep other endpoints as they are
     this.loadTodayClasses();
     this.loadLateStudents();
@@ -341,26 +353,38 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   // معالجة بطاقة RFID
-  processRFIDCard(uid: string) {
-    this.http.get<any>(`${this.apiUrl}/cards/uid/${uid}`).subscribe({
-      next: (data) => {
-        if (data.student) {
-          this.scannedStudent = data;
-          this.showStudentCard(data);
-          
-          // تسجيل الحضور تلقائياً
-          this.recordAttendance(data.student._id);
-        } else {
-          this.showUnknownCard(uid);
-        }
-      },
-      error: (err) => {
-        console.error('Error processing RFID card:', err);
-        this.showNotification('error', 'خطأ في معالجة البطاقة');
-        this.rfidStatus = 'Error processing card';
-      }
-    });
+// Add this to prevent multiple simultaneous scans
+private isProcessingRFID = false;
+
+// In processRFIDCard method
+processRFIDCard(uid: string) {
+  if (this.isProcessingRFID) {
+    return;
   }
+  
+  this.isProcessingRFID = true;
+  
+  this.http.get<any>(`${this.apiUrl}/cards/uid/${uid}`).subscribe({
+    next: (data) => {
+      if (data.student) {
+        this.scannedStudent = data;
+        this.showStudentCard(data);
+        
+        // تسجيل الحضور تلقائياً
+        this.recordAttendance(data.student._id);
+      } else {
+        this.showUnknownCard(uid);
+      }
+      this.isProcessingRFID = false;
+    },
+    error: (err) => {
+      console.error('Error processing RFID card:', err);
+      this.showNotification('error', 'خطأ في معالجة البطاقة');
+      this.rfidStatus = 'Error processing card';
+      this.isProcessingRFID = false;
+    }
+  });
+}
 
   // عرض معلومات الطالب المكتشف
   showStudentCard(studentData: any) {

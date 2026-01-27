@@ -13,6 +13,7 @@ import { StudentDetailsComponent } from './student-details/student-details.compo
 import { AddStudentToClassesModalComponent } from './add-student-to-classes-modal/add-student-to-classes-modal.component';
 import { AccountingComponent } from './components/accounting/accounting.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
+import { LessonDetailComponent } from './lesson-detail/lesson-detail.component';
 export const routes: Routes = [
   // المسار الافتراضي - إعادة توجيه إلى login
   { path: '', redirectTo: '/login', pathMatch: 'full' },
@@ -42,6 +43,10 @@ export const routes: Routes = [
       { path: 'rooms-management', component: RoomsManagementComponent },
       { path: 'payments-management', component: PaymentsManagementComponent },
       { path: 'cards-management', component: CardsManagementComponent },
+      { 
+        path: 'lesson-detail/:lessonId', 
+        component: LessonDetailComponent 
+      },
       
       // مسار افتراضي داخل home
       { path: '', redirectTo: 'lesson-management', pathMatch: 'full' }

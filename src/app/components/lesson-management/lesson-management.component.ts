@@ -6,6 +6,7 @@ import { StudentsService, Student } from '../../services/students.service';
 import { LiveClassesService, LiveClass, Attendance } from '../../services/live-classes.service';
 import { PaymentsService } from '../../services/payments.service';
 import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 @Component({
   selector: 'app-lesson-management',
   imports: [CommonModule, FormsModule],
@@ -111,7 +112,8 @@ export class LessonManagementComponent implements OnInit {
     private studentsService: StudentsService,
     private liveClassesService: LiveClassesService,
     private paymentsService: PaymentsService,
-    private http: HttpClient
+    private http: HttpClient ,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
@@ -159,7 +161,6 @@ export class LessonManagementComponent implements OnInit {
       },
       error: (error) => {
         console.error('Error loading classes:', error);
-        alert('فشل في تحميل الحصص');
       }
     });
   }
@@ -172,7 +173,6 @@ export class LessonManagementComponent implements OnInit {
       },
       error: (error) => {
         console.error('Error loading students:', error);
-        alert('فشل في تحميل الطلاب');
       }
     });
   }
@@ -184,7 +184,6 @@ export class LessonManagementComponent implements OnInit {
       },
       error: (error) => {
         console.error('Error loading teachers:', error);
-        alert('فشل في تحميل المعلمين');
       }
     });
   }
@@ -196,7 +195,6 @@ export class LessonManagementComponent implements OnInit {
       },
       error: (error) => {
         console.error('Error loading classrooms:', error);
-        alert('فشل في تحميل القاعات');
       }
     });
   }
@@ -947,4 +945,10 @@ export class LessonManagementComponent implements OnInit {
     }
     return 0;
   }
+
+// Navigate to lesson details
+viewLessonDetails(lessonId: string): void {
+  this.router.navigate(['/home/lesson-detail', lessonId]);
+}
+  
 }

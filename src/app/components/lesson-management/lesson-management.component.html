@@ -391,8 +391,8 @@
           </div>
           
           <div class="card-actions">
-            <button class="btn-action" (click)="selectClass(cls); $event.stopPropagation()">
-              👁️ تفاصيل
+            <button class="btn-action" (click)="viewLessonDetails(cls._id); $event.stopPropagation()">
+              👁️ تفاصيل ودفع
             </button>
             <button class="btn-action btn-danger" 
                     (click)="deleteClass(cls._id); $event.stopPropagation()">

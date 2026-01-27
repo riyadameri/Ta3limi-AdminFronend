@@ -1,0 +1,356 @@
+<div class="lesson-detail-container">
+    <!-- Loading State -->
+    <div class="loading-overlay" *ngIf="isLoading">
+      <div class="loading-spinner">⏳</div>
+      <p>جاري التحميل...</p>
+    </div>
+  
+    <!-- Header -->
+    <div class="header-section">
+      <div class="header-left">
+        <button class="btn btn-back" (click)="goBack()">
+          ↩ رجوع
+        </button>
+        <h1 class="page-title">تفاصيل الحصة</h1>
+      </div>
+      
+      <div class="header-right" *ngIf="lesson">
+        <div class="lesson-info-card">
+          <h2>{{lesson.name}}</h2>
+          <div class="lesson-meta">
+            <span class="meta-item">📚 {{lesson.subject}}</span>
+            <span class="meta-item">👨‍🏫 {{getTeacherName(lesson.teacher)}}</span>
+            <span class="meta-item">💰 {{lesson.price}} د.ج</span>
+            <span class="meta-item" [class]="'payment-' + (lesson.paymentSystem || 'monthly')">
+              {{lesson.paymentSystem === 'monthly' ? 'شهري' : 'جولاتي'}}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Navigation Tabs -->
+    <div class="navigation-tabs">
+      <button class="tab-btn" [class.active]="viewMode === 'details'" 
+              (click)="setViewMode('details')">
+        👨‍🎓 الطلاب
+      </button>
+      <button class="tab-btn" [class.active]="viewMode === 'payments'" 
+              (click)="setViewMode('payments')">
+        💰 المدفوعات
+      </button>
+      <button class="tab-btn" [class.active]="viewMode === 'attendance'" 
+              (click)="setViewMode('attendance')">
+        📊 الحضور
+      </button>
+    </div>
+  
+    <!-- Month Filter -->
+    <div class="month-filter-section" *ngIf="viewMode === 'payments' || viewMode === 'details'">
+      <div class="filter-card">
+        <h3>📅 تصفية حسب الشهر</h3>
+        <div class="filter-controls">
+          <select [(ngModel)]="selectedMonth" (change)="loadPayments()" class="month-select">
+            <option *ngFor="let month of monthOptions" [value]="month.value">
+              {{month.label}}
+            </option>
+          </select>
+          <span class="current-month">
+            الشهر المحدد: {{getMonthName(selectedMonth)}}
+          </span>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Students List Section -->
+    <div class="section-container" *ngIf="viewMode === 'details'">
+      <!-- Search Bar -->
+      <div class="search-section">
+        <div class="search-box">
+          <input type="text" [(ngModel)]="searchTerm" 
+                 (input)="filterStudents()"
+                 placeholder="🔍 ابحث عن طالب بالاسم أو الرقم أو هاتف ولي الأمر">
+        </div>
+        <div class="stats-card">
+          <div class="stat-item">
+            <span class="stat-label">عدد الطلاب:</span>
+            <span class="stat-value">{{filteredStudents.length}}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">الحصة:</span>
+            <span class="stat-value">{{lesson?.name}}</span>
+          </div>
+        </div>
+      </div>
+  
+      <!-- Students Grid -->
+      <div class="students-grid">
+        <div class="student-card" *ngFor="let student of filteredStudents"
+             [class.selected]="selectedStudent?._id === student._id"
+             (click)="selectStudentForPayment(student)">
+          
+          <div class="student-header">
+            <h3>{{student.name}}</h3>
+            <span class="student-id">{{student.studentId}}</span>
+          </div>
+          
+          <div class="student-body">
+            <div class="info-row">
+              <span class="label">ولي الأمر:</span>
+              <span class="value">{{student.parentName}}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">الهاتف:</span>
+              <span class="value">{{student.parentPhone}}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">السنة:</span>
+              <span class="value">{{student.academicYear}}</span>
+            </div>
+            
+            <!-- Payment Status -->
+            <div class="payment-status" *ngIf="hasPaymentForSelectedMonth(student._id)">
+              <div class="status-row">
+                <span class="label">المدفوع:</span>
+                <span class="value paid">{{getStudentTotalPaid(student._id)}} د.ج</span>
+              </div>
+              <div class="status-row">
+                <span class="label">المتبقي:</span>
+                <span class="value pending">{{getStudentPendingAmount(student._id)}} د.ج</span>
+              </div>
+            </div>
+            
+            <div class="no-payment" *ngIf="!hasPaymentForSelectedMonth(student._id)">
+              <span class="label">لا توجد دفعات لهذا الشهر</span>
+            </div>
+          </div>
+          
+          <div class="student-actions">
+            <button class="btn-action btn-pay" 
+                    (click)="selectStudentForPayment(student); $event.stopPropagation()">
+              💰 دفع
+            </button>
+            <button class="btn-action btn-details"
+                    (click)="viewStudentDetails(student); $event.stopPropagation()">
+              👁️ تفاصيل
+            </button>
+          </div>
+        </div>
+      </div>
+  
+      <!-- Empty State -->
+      <div class="empty-state" *ngIf="filteredStudents.length === 0 && !isLoading">
+        <div class="empty-icon">👨‍🎓</div>
+        <h3>لا يوجد طلاب مسجلين في هذه الحصة</h3>
+        <p>يمكنك إضافة طلاب من صفحة إدارة الحصص</p>
+        <button class="btn btn-primary" (click)="goBack()">
+          ↩ العودة لإدارة الحصص
+        </button>
+      </div>
+    </div>
+  
+    <!-- Payments Section -->
+    <div class="section-container" *ngIf="viewMode === 'payments'">
+      <div class="payments-section">
+        <!-- Payment Summary -->
+        <div class="summary-cards">
+          <div class="summary-card">
+            <div class="summary-icon">💰</div>
+            <div class="summary-info">
+              <h3>{{monthlyPayments.length}}</h3>
+              <p>دفعات شهرية</p>
+            </div>
+          </div>
+          
+          <div class="summary-card">
+            <div class="summary-icon">🔄</div>
+            <div class="summary-info">
+              <h3>{{roundPayments.length}}</h3>
+              <p>دفعات جولات</p>
+            </div>
+          </div>
+          
+          <div class="summary-card">
+            <div class="summary-icon">✅</div>
+            <div class="summary-info">
+              <h3>{{paidPaymentsCount}}</h3>
+              <p>مدفوعة</p>
+            </div>
+          </div>
+          
+          <div class="summary-card">
+            <div class="summary-icon">⏳</div>
+            <div class="summary-info">
+              <h3>{{pendingPaymentsCount}}</h3>
+              <p>معلقة</p>
+            </div>
+          </div>
+        </div>
+  
+        <!-- Payment Form -->
+        <div class="payment-form-card" *ngIf="selectedStudent">
+          <h3>💰 دفع للطالب: {{selectedStudent.name}}</h3>
+          
+          <div class="form-group">
+            <label>المبلغ (د.ج):</label>
+            <input type="number" [(ngModel)]="paymentForm.amount" 
+                   [placeholder]="'السعر: ' + (lesson?.price || 0) + ' د.ج'">
+          </div>
+          
+          <div class="form-group">
+            <label>طريقة الدفع:</label>
+            <select [(ngModel)]="paymentForm.paymentMethod">
+              <option value="cash">نقدي</option>
+              <option value="bank">تحويل بنكي</option>
+              <option value="online">دفع إلكتروني</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label>تاريخ الدفع:</label>
+            <input type="date" [(ngModel)]="paymentForm.paymentDate">
+          </div>
+          
+          <div class="form-group full-width">
+            <label>ملاحظات:</label>
+            <textarea [(ngModel)]="paymentForm.notes" rows="2"></textarea>
+          </div>
+          
+          <div class="form-actions">
+            <button class="btn btn-primary" (click)="payForStudent()" 
+                    [disabled]="!paymentForm.amount || paymentForm.amount <= 0">
+              💾 حفظ الدفع
+            </button>
+            <button class="btn btn-secondary" (click)="resetPaymentForm()">
+              ❌ إلغاء
+            </button>
+          </div>
+        </div>
+  
+        <!-- Monthly Payments Table -->
+        <div class="payments-table" *ngIf="monthlyPayments.length > 0">
+          <h3>📅 الدفعات الشهرية لشهر {{getMonthName(selectedMonth)}}</h3>
+          
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>اسم الطالب</th>
+                  <th>رقم الطالب</th>
+                  <th>المبلغ</th>
+                  <th>الشهر</th>
+                  <th>الحالة</th>
+                  <th>تاريخ الدفع</th>
+                  <th>طريقة الدفع</th>
+                  <th>الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let payment of monthlyPayments" [class]="getStatusClass(payment.status)">
+                  <td>{{getStudentName(payment.student)}}</td>
+                  <td>{{getStudentId(payment.student)}}</td>
+                  <td>{{payment.amount}} د.ج</td>
+                  <td>{{payment.month || 'غير محدد'}}</td>
+                  <td>
+                    <span class="payment-status" [class]="getStatusClass(payment.status)">
+                      {{getStatusText(payment.status)}}
+                    </span>
+                  </td>
+                  <td>
+                    {{getPaymentDate(payment.paymentDate)}}
+                  </td>
+                  <td>{{getPaymentMethodText(payment.paymentMethod)}}</td>
+                  <td>
+                    <button class="btn-action btn-pay" 
+                            *ngIf="payment.status !== 'paid'"
+                            (click)="selectPaymentForStudent(payment)">
+                      💰 دفع
+                    </button>
+                    <button class="btn-action btn-info" 
+                            *ngIf="payment.status === 'paid'">
+                      ✅ مدفوع
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+  
+        <!-- Round Payments Table -->
+        <div class="payments-table" *ngIf="roundPayments.length > 0">
+          <h3>🔄 دفعات الجولات</h3>
+          
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>اسم الطالب</th>
+                  <th>رقم الطالب</th>
+                  <th>المبلغ</th>
+                  <th>رقم الجولة</th>
+                  <th>الحالة</th>
+                  <th>تاريخ الدفع</th>
+                  <th>الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let payment of roundPayments" [class]="getStatusClass(payment.status)">
+                  <td>{{getStudentName(payment.student)}}</td>
+                  <td>{{getStudentId(payment.student)}}</td>
+                  <td>{{payment.amount}} د.ج</td>
+                  <td>{{payment.month || 'غير محدد'}}</td>
+                  <td>
+                    <span class="payment-status" [class]="getStatusClass(payment.status)">
+                      {{getStatusText(payment.status)}}
+                    </span>
+                  </td>
+                  <td>
+                    {{getPaymentDate(payment.paymentDate)}}
+                  </td>
+                  <td>
+                    <button class="btn-action btn-pay" 
+                            *ngIf="payment.status !== 'paid'"
+                            (click)="selectPaymentForStudent(payment)">
+                      💰 دفع
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+  
+        <!-- No Payments Message -->
+        <div class="empty-state" *ngIf="payments.length === 0 && !isLoading">
+          <div class="empty-icon">💰</div>
+          <h3>لا توجد دفعات مسجلة</h3>
+          <p>اختر طالباً واضغط على زر الدفع لإنشاء دفعة جديدة</p>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Attendance Section -->
+    <div class="section-container" *ngIf="viewMode === 'attendance'">
+      <div class="attendance-section">
+        <h2>📊 الحضور والغياب</h2>
+        
+        <div class="info-box">
+          <p>للعرض والتحكم في الحضور والغياب، يرجى زيارة صفحة "الحصص الحية"</p>
+          <button class="btn btn-primary" (click)="goToLiveClasses()">
+            🎥 الذهاب للحصص الحية
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Footer Actions -->
+    <div class="footer-actions">
+      <button class="btn btn-secondary" (click)="exportPayments()">
+        📊 تصدير المدفوعات
+      </button>
+      <button class="btn btn-primary" (click)="setViewMode('payments')">
+        💰 عرض جميع المدفوعات
+      </button>
+    </div>
+  </div>

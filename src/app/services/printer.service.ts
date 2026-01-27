@@ -2,6 +2,39 @@ import { Injectable, NgZone } from '@angular/core';
 import Swal from 'sweetalert2';
 
 declare const navigator: any;
+// في printer.service.ts، أضف هذه الواجهة
+export interface BulkReceiptData {
+  receiptNumber: string;
+  date: string;
+  time: string;
+  totalAmount: number;
+  paymentCount: number;
+  studentCount: number;
+  paymentMethod: string;
+  payments: {
+    studentName: string;
+    studentId: string;
+    className: string;
+    month: string;
+    amount: number;
+    notes?: string;
+  }[];
+  notes?: string;
+}
+export interface StudentReceiptData {
+  studentName: string;
+  studentId: string;
+  receiptNumber: string;
+  date: string;
+  time: string;
+  className: string;
+  month: string;
+  amount: number;
+  paymentMethod: string;
+  academicYear?: string;
+  parentPhone?: string;
+  notes?: string;
+}
 
 export interface ReceiptData {
   receiptNumber: string;
@@ -50,6 +83,85 @@ export class PrinterService {
   }
 
   /**
+ * طباعة Canvas مباشرة على الطابعة الحرارية
+ */
+  async printCanvasDirect(canvas: HTMLCanvasElement): Promise<boolean> {
+    try {
+      if (!this.isConnected) {
+        const connected = await this.connectToThermalPrinter();
+        if (!connected) {
+          throw new Error('فشل الاتصال بالطابعة');
+        }
+      }
+
+      const width = canvas.width;
+      const height = canvas.height;
+      
+      const ctx = canvas.getContext('2d')!;
+      const imageData = ctx.getImageData(0, 0, width, height);
+      
+      const widthBytes = Math.ceil(width / 8);
+      const rasterData = new Uint8Array(widthBytes * height);
+      rasterData.fill(0);
+      
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          const red = imageData.data[i];
+          const green = imageData.data[i + 1];
+          const blue = imageData.data[i + 2];
+          
+          const gray = Math.floor((red * 0.3 + green * 0.59 + blue * 0.11));
+          
+          if (gray < 200) {
+            const byteIndex = Math.floor(y * widthBytes + x / 8);
+            const bitIndex = 7 - (x % 8);
+            rasterData[byteIndex] |= (1 << bitIndex);
+          }
+        }
+      }
+
+      await this.writer.write(new Uint8Array([0x1B, 0x40]));
+      await this.writer.write(new Uint8Array([0x1B, 0x33, 0x24]));
+      
+      const header = new Uint8Array([
+        0x1D, 0x76, 0x30, 0x00,
+        widthBytes & 0xFF,
+        (widthBytes >> 8) & 0xFF,
+        height & 0xFF,
+        (height >> 8) & 0xFF
+      ]);
+      
+      await this.writer.write(header);
+      
+      const CHUNK_SIZE = 1024;
+      for (let i = 0; i < rasterData.length; i += CHUNK_SIZE) {
+        const chunk = rasterData.slice(i, i + CHUNK_SIZE);
+        await this.writer.write(chunk);
+        await this.delay(10);
+      }
+      
+      await this.writer.write(new Uint8Array([0x1B, 0x64, 0x05]));
+      await this.writer.write(new Uint8Array([0x1D, 0x56, 0x41, 0x03]));
+      
+      return true;
+      
+    } catch (error) {
+      console.error('خطأ في طباعة Canvas:', error);
+      return false;
+    }
+  }
+
+
+
+/**
+ * تأخير
+ */
+private delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+  /**
    * الاتصال بالطابعة الحرارية
    */
   async connectToThermalPrinter(baudRate: number = 115200): Promise<boolean> {
@@ -70,9 +182,8 @@ export class PrinterService {
 
       this.writer = this.port.writable.getWriter();
       
-      // تهيئة الطابعة
-      await this.writer.write(new Uint8Array([0x1B, 0x40])); // Initialize
-      await this.writer.write(new Uint8Array([0x1B, 0x33, 0x18])); // Set line spacing
+      await this.writer.write(new Uint8Array([0x1B, 0x40]));
+      await this.writer.write(new Uint8Array([0x1B, 0x33, 0x18]));
 
       this.isConnected = true;
 
@@ -96,6 +207,8 @@ export class PrinterService {
       return false;
     }
   }
+
+
 
   /**
    * إنشاء QR Code باستخدام Canvas
@@ -154,13 +267,418 @@ export class PrinterService {
     });
   }
 
+  private ensureArabicNumbers(str: string): string {
+    // أرقام هندية إلى عربية
+    const hindiToArabic: { [key: string]: string } = {
+      '٠': '0',
+      '١': '1', 
+      '٢': '2',
+      '٣': '3',
+      '٤': '4',
+      '٥': '5',
+      '٦': '6',
+      '٧': '7',
+      '٨': '8',
+      '٩': '9'
+    };
+    
+    return str.split('').map(char => hindiToArabic[char] || char).join('');
+  }
+  
+  /**
+   * تنسيق المبلغ بفواصل آلاف بالأرقام العربية
+   */
+  private formatAmountWithCommas(amount: number): string {
+    // تنسيق الرقم بفواصل الآلاف
+    return amount.toLocaleString('ar-SA');
+  }
+  
+  /**
+   * تحويل الأرقام إلى عربية صحيحة (من هندية إلى عربية)
+   */
+  private formatArabicNumber(num: string): string {
+    const hindiNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    const arabicNumerals = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  
+    return num.split('').map(char => {
+      const index = hindiNumerals.indexOf(char);
+      return index !== -1 ? arabicNumerals[index] : char;
+    }).join('');
+  }
+  
+  /**
+   * تنسيق المبلغ بالأرقام العربية مع فواصل
+   */
+  private formatAmountArabic(amount: number): string {
+    // تنسيق الرقم بفواصل الآلاف بالأرقام العربية
+    const formatted = amount.toLocaleString('ar-SA');
+    
+    // تحويل الأرقام الهندية إلى عربية
+    const hindiToArabic: { [key: string]: string } = {
+      '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+      '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
+    };
+    
+    // تحويل كل رقم
+    const arabicFormatted = formatted.split('').map(char => 
+      hindiToArabic[char] || char
+    ).join('');
+    
+    return arabicFormatted + ' د.ج';
+  }
+
+  
+  private formatNumberArabic(num: string | number): string {
+    const numStr = typeof num === 'number' ? num.toString() : num;
+    if (!numStr) return '';
+    
+    const hindiToArabic: { [key: string]: string } = {
+      '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+      '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
+    };
+    
+    return numStr.split('').map(char => 
+      hindiToArabic[char] || char
+    ).join('');
+  }
+  private formatDateTimeArabic(dateTime: string): string {
+    if (!dateTime) return dateTime;
+    
+    const hindiToArabic: { [key: string]: string } = {
+      '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+      '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+      '٠٠': '00', '٠١': '01', '٠٢': '02', '٠٣': '03', '٠٤': '04',
+      '٠٥': '05', '٠٦': '06', '٠٧': '07', '٠٨': '08', '٠٩': '09'
+    };
+    
+    // تحويل الأرقام الهندية إلى عربية
+    let result = dateTime;
+    Object.keys(hindiToArabic).forEach(hindi => {
+      const arabic = hindiToArabic[hindi];
+      result = result.replace(new RegExp(hindi, 'g'), arabic);
+    });
+    
+    return result;
+  }
+
+  
+  /**
+ * إنشاء إيصال واحد لدفعات متعددة
+ */
+  async createBulkReceiptCanvas(data: BulkReceiptData): Promise<HTMLCanvasElement> {
+    const paymentRowHeight = 35;
+    const headerHeight = 380;
+    const notesHeight = data.notes ? this.calculateNotesHeight(data.notes, this.CANVAS_WIDTH - 30, 16) : 0;
+    const dynamicHeight = headerHeight + (data.payments.length * paymentRowHeight) + notesHeight + 150;
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = this.CANVAS_WIDTH;
+    canvas.height = Math.max(dynamicHeight, 800);
+    
+    const ctx = canvas.getContext('2d')!;
+    
+    // خلفية بيضاء
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // === تنسيق النص ===
+    ctx.fillStyle = '#000000';
+    ctx.textBaseline = 'top';
+    
+    // === رأس الإيصال ===
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 30px "Arial", sans-serif';
+    ctx.fillText('أكاديمية الرواد للتعليم والمعارف', canvas.width / 2, 10);
+    
+    // معلومات المؤسسة
+    ctx.font = '16px "Arial", sans-serif';
+    ctx.fillText('الجزائر ، ولاية تقرت', canvas.width / 2, 45);
+    ctx.fillText('الهاتف : 0673586274', canvas.width / 2, 65);
+    
+    // خط فاصل
+    this.drawDoubleLine(ctx, 10, 85, canvas.width - 20);
+    
+    // === معلومات الإيصال ===
+    let yPos = 105;
+    
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 22px "Arial", sans-serif';
+    ctx.fillText('إيصـــــــال دفـــــــع جماعي', canvas.width / 2, yPos);
+    
+    yPos += 30;
+    this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
+    yPos += 10;
+    
+    // معلومات أساسية بالأرقام العربية
+    ctx.textAlign = 'right';
+    ctx.font = '18px "Arial", sans-serif';
+    
+    const infoItems = [
+      { label: 'رقم الإيصال:', value: this.formatNumberArabic(data.receiptNumber) },
+      { label: 'التاريخ:', value: this.formatDateTimeArabic(data.date) },
+      { label: 'الوقت:', value: this.formatDateTimeArabic(data.time) },
+      { label: 'طريقة الدفع:', value: this.translatePaymentMethod(data.paymentMethod) },
+      { label: 'عدد الدفعات:', value: this.formatNumberArabic(data.paymentCount.toString()) },
+      { label: 'عدد الطلاب:', value: this.formatNumberArabic(data.studentCount.toString()) }
+    ];
+    
+    infoItems.forEach(item => {
+      ctx.fillText(`${item.label} ${item.value}`, canvas.width - 15, yPos);
+      yPos += 25;
+    });
+    
+    yPos += 10;
+    this.drawDoubleLine(ctx, 10, yPos, canvas.width - 20);
+    yPos += 20;
+    
+    // === تفاصيل الدفعات ===
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 22px "Arial", sans-serif';
+    ctx.fillText('تفاصيل الدفعات', canvas.width / 2, yPos);
+    yPos += 35;
+    
+    // أبعاد الأعمدة
+    const columnWidths = {
+      studentName: (canvas.width - 30) * 0.4,
+      className: (canvas.width - 30) * 0.25,
+      month: (canvas.width - 30) * 0.25,
+      amount: (canvas.width - 30) * 0.1
+    };
+    
+    // رأس الجدول
+    ctx.fillStyle = '#2C3E50';
+    ctx.fillRect(15, yPos, canvas.width - 30, 35);
+    
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 16px "Arial", sans-serif';
+    
+    // أعمدة الجدول
+    let xPos = 20;
+    
+    // عمود الشهر
+    ctx.textAlign = 'left';
+    ctx.fillText('الشهر', xPos, yPos + 10);
+    xPos += columnWidths.month;
+    
+    // عمود الحصة
+    ctx.textAlign = 'center';
+    ctx.fillText('الحصة', xPos + columnWidths.className / 2, yPos + 10);
+    xPos += columnWidths.className;
+    
+    // عمود المبلغ (بالأرقام العربية)
+    ctx.textAlign = 'center';
+    ctx.fillText('المبلغ', xPos + columnWidths.amount / 2, yPos + 10);
+    xPos += columnWidths.amount;
+    
+    // عمود اسم الطالب
+    ctx.textAlign = 'right';
+    ctx.fillText('اسم الطالب', canvas.width - 20, yPos + 10);
+    
+    yPos += 35;
+    
+    // صفوف البيانات
+    data.payments.forEach((payment, index) => {
+      // تناوب ألوان الصفوف
+      if (index % 2 === 0) {
+        ctx.fillStyle = '#F8F9FA';
+      } else {
+        ctx.fillStyle = '#FFFFFF';
+      }
+      
+      ctx.fillRect(15, yPos, canvas.width - 30, 35);
+      
+      // حدود الصف
+      ctx.fillStyle = '#000000';
+      ctx.strokeStyle = '#DEE2E6';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(15, yPos, canvas.width - 30, 35);
+      
+      // إعادة ضبط X لكل عمود
+      let cellX = 20;
+      
+      // بيانات الشهر
+      ctx.textAlign = 'left';
+      ctx.font = '16px "Arial", sans-serif';
+      ctx.fillText(payment.month, cellX, yPos + 10);
+      cellX += columnWidths.month;
+      
+      // بيانات الحصة
+      ctx.textAlign = 'center';
+      ctx.fillText(payment.className, cellX + columnWidths.className / 2, yPos + 10);
+      cellX += columnWidths.className;
+      
+      // بيانات المبلغ (بالأرقام العربية)
+      ctx.textAlign = 'center';
+      const amountText = this.formatAmountArabic(payment.amount);
+      ctx.fillText(amountText, cellX + columnWidths.amount / 2, yPos + 10);
+      cellX += columnWidths.amount;
+      
+      // بيانات اسم الطالب
+      ctx.textAlign = 'right';
+      ctx.fillText(payment.studentName, canvas.width - 20, yPos + 10);
+      
+      yPos += 35;
+    });
+    
+    yPos += 20;
+    
+    // === الإجمالي ===
+    this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
+    yPos += 20;
+    
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 24px "Arial", sans-serif';
+    ctx.fillStyle = '#000000';
+    ctx.fillText('المجموع الإجمالي:', canvas.width / 2, yPos);
+    
+    yPos += 50;
+    this.drawSingleLine(ctx, 10, yPos, canvas.width - 20, '#FF0000');
+    yPos += 30;
+    
+    ctx.font = 'bold 28px "Arial", sans-serif';
+    ctx.fillStyle = '#E74C3C';
+    const totalAmountText = this.formatAmountArabic(data.totalAmount);
+    ctx.fillText(`${totalAmountText} دينار جزائري`, canvas.width / 2, yPos);
+    
+    yPos += 40;
+    
+    // === الملاحظات ===
+    if (data.notes && data.notes.trim()) {
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 18px "Arial", sans-serif';
+      ctx.fillStyle = '#2C3E50';
+      ctx.fillText('ملاحظات:', canvas.width - 15, yPos);
+      yPos += 25;
+      
+      ctx.font = '16px "Arial", sans-serif';
+      ctx.fillStyle = '#000000';
+      
+      const lines = this.splitTextIntoLines(ctx, data.notes, canvas.width - 30, 16);
+      
+      lines.forEach((lineText: string) => {
+        if (yPos < canvas.height - 150) {
+          ctx.fillText(lineText.trim(), canvas.width - 15, yPos);
+          yPos += 22;
+        }
+      });
+      
+      yPos += 10;
+    }
+    
+    // === التذييل ===
+    ctx.textAlign = 'center';
+    ctx.font = '16px "Arial", sans-serif';
+    ctx.fillStyle = '#2C3E50';
+    
+    const footerItems = [
+      'دفع جماعي - نظام إدارة التعليم',
+      'مطور بواسطة: ريدوكس',
+      'هذا إيصال رسمي - يرجى الاحتفاظ به للمراجعة',
+      `عدد الدفعات: ${this.formatNumberArabic(data.paymentCount.toString())} | عدد الطلاب: ${this.formatNumberArabic(data.studentCount.toString())}`
+    ];
+    
+    let footerY = canvas.height - 120;
+    footerItems.forEach(item => {
+      ctx.fillText(item, canvas.width / 2, footerY);
+      footerY += 25;
+    });
+    
+    // === رسالة الشكر ===
+    ctx.font = 'bold 18px "Arial", sans-serif';
+    ctx.fillStyle = '#27AE60';
+    ctx.fillText('شكراً لثقتكم thank for your trust ', canvas.width / 2, canvas.height - 30);
+    
+    return canvas;
+  }
+
+/**
+ * طباعة إيصال واحد لدفعات متعددة
+ */
+
+
+private formatAmountEnglish(amount: number): string {
+  // تنسيق الأرقام بالإنجليزية مع فواصل
+  return amount.toLocaleString('en-US') + ' د.ج';
+}
+private splitTextIntoLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, fontSize: number): string[] {
+  ctx.font = `${fontSize}px "Arial", sans-serif`;
+  const words = text.split(' ');
+  let line = '';
+  const lines: string[] = [];
+  
+  for (const word of words) {
+    const testLine = line + word + ' ';
+    const metrics = ctx.measureText(testLine);
+    
+    if (metrics.width > maxWidth && line !== '') {
+      lines.push(line);
+      line = word + ' ';
+    } else {
+      line = testLine;
+    }
+  }
+  
+  if (line) {
+    lines.push(line);
+  }
+  
+  return lines;
+}
+private calculateNotesHeight(notes: string, maxWidth: number, fontSize: number): number {
+  // حساب ارتفاع الملاحظات ديناميكياً
+  const tempCanvas = document.createElement('canvas');
+  const tempCtx = tempCanvas.getContext('2d')!;
+  tempCtx.font = `${fontSize}px "Arial", sans-serif`;
+  
+  const lines = this.splitTextIntoLines(tempCtx, notes, maxWidth, fontSize);
+  return (lines.length * 22) + 40; // 22px لكل سطر + 40px للرأس والهامش
+}
+
+
+
+async printBulkReceipt(data: BulkReceiptData): Promise<boolean> {
+  if (!this.isConnected) {
+    const connected = await this.connectToThermalPrinter();
+    if (!connected) {
+      this.showError('فشل الاتصال بالطابعة');
+      return false;
+    }
+  }
+
+  try {
+    this.showLoading('جاري إنشاء الإيصال الجماعي...');
+
+    // إنشاء Canvas للإيصال الجماعي
+    const canvas = await this.createBulkReceiptCanvas(data);
+    
+    // تحويل Canvas إلى صورة نقطية
+    const rasterData = this.canvasToRaster(canvas);
+    
+    this.showLoading('جاري الطباعة...');
+    
+    // طباعة الصورة النقطية
+    const success = await this.printRasterImage(rasterData, canvas);
+    
+    if (success) {
+      this.showSuccessToast('تم طباعة الإيصال الجماعي بنجاح');
+      return true;
+    } else {
+      throw new Error('فشل الطباعة');
+    }
+
+  } catch (err: any) {
+    this.handleError(err);
+    return false;
+  }
+}
+
   /**
    * إنشاء وإعداد Canvas للفاتورة بتصميم احترافي
    */
 /**
  * إنشاء وإعداد Canvas للفاتورة بتصميم احترافي
  */
-private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
+async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
   const canvas = document.createElement('canvas');
   canvas.width = this.CANVAS_WIDTH;
   canvas.height = this.CANVAS_HEIGHT;
@@ -199,14 +717,14 @@ private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement>
   this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
   yPos += 10;
   
-  // معلومات أساسية
+  // معلومات أساسية بالأرقام العربية
   ctx.textAlign = 'right';
   ctx.font = '18px "Arial", sans-serif';
   
   const infoItems = [
-    { label: 'رقم الإيصال:', value: data.receiptNumber },
-    { label: 'التاريخ:', value: this.formatArabicNumber(data.date) },
-    { label: 'الوقت:', value: this.formatArabicNumber(data.time) },
+    { label: 'رقم الإيصال:', value: this.formatNumberArabic(data.receiptNumber) },
+    { label: 'التاريخ:', value: this.formatDateTimeArabic(data.date) },
+    { label: 'الوقت:', value: this.formatDateTimeArabic(data.time) },
     { label: 'طريقة الدفع:', value: this.translatePaymentMethod(data.paymentMethod) }
   ];
   
@@ -228,10 +746,10 @@ private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement>
   
   const studentInfo = [
     { label: 'الاســـم:', value: data.studentName },
-    { label: 'رقم التسجيل:', value: data.studentId },
+    { label: 'رقم التسجيل:', value: this.formatNumberArabic(data.studentId) },
     { label: 'الصف:', value: data.className },
     { label: 'المستوى:', value: data.academicYear || 'غير محدد' },
-    { label: 'هاتف ولي الأمر:', value: data.parentPhone || 'غير محدد' }
+    { label: 'هاتف ولي الأمر:', value: this.formatNumberArabic(data.parentPhone || 'غير محدد') }
   ];
   
   studentInfo.forEach(item => {
@@ -267,7 +785,7 @@ private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement>
   
   yPos += 35;
   
-  // صف البيانات
+  // صف البيانات - المبلغ بالأرقام العربية
   ctx.fillStyle = '#FFFFFF';
   ctx.strokeStyle = '#000000';
   ctx.lineWidth = 1;
@@ -279,7 +797,7 @@ private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement>
   ctx.fillText(data.className, canvas.width - 25, yPos + 10);
   
   ctx.textAlign = 'center';
-  ctx.fillText(this.formatArabicNumber(data.amount.toString()), canvas.width / 2, yPos + 10);
+  ctx.fillText(this.formatAmountArabic(data.amount), canvas.width / 2, yPos + 10);
   
   ctx.textAlign = 'left';
   ctx.fillText('1', 30, yPos + 10);
@@ -308,7 +826,7 @@ private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement>
   
   ctx.font = 'bold 28px "Arial", sans-serif';
   ctx.fillStyle = '#E74C3C';
-  ctx.fillText(`${(data.amount.toLocaleString('en-US'))} دينار جزائري`, canvas.width / 2, yPos);
+  ctx.fillText(this.formatAmountArabic(data.amount), canvas.width / 2, yPos);
   
   yPos += 40;
   
@@ -327,11 +845,11 @@ private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement>
     ctx.font = '16px "Arial", sans-serif';
     ctx.fillStyle = '#000000';
     
-    // تقسيم النص إذا كان طويلاً - تعريف نوع المصفوفة بشكل صريح
+    // تقسيم النص إذا كان طويلاً
     const maxWidth = canvas.width - 30;
     const words = data.notes.split(' ');
     let line = '';
-    const lines: string[] = []; // تعريف صريح للنوع
+    const lines: string[] = [];
     
     for (const word of words) {
       const testLine = line + word + ' ';
@@ -351,7 +869,7 @@ private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement>
     
     // رسم الأسطر
     lines.forEach((lineText: string, index: number) => {
-      if (yPos < canvas.height - 150) { // تأكد من عدم تجاوز المساحة
+      if (yPos < canvas.height - 150) {
         ctx.fillText(lineText.trim(), canvas.width - 15, yPos);
         yPos += 22;
       }
@@ -399,18 +917,11 @@ private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement>
   return canvas;
 }
 
+
   /**
    * تحويل الأرقام إلى عربية صحيحة
    */
-  private formatArabicNumber(num: string): string {
-    const westernNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-    const arabicNumerals = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-    return num.split('').map(char => {
-      const index = westernNumerals.indexOf(char);
-      return index !== -1 ? arabicNumerals[index] : char;
-    }).join('');
-  }
 
   /**
    * تحسين تحويل Canvas إلى صورة نقطية للطابعة الحرارية
@@ -550,33 +1061,36 @@ private async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement>
    * رسم خط مفرد
    */
   private drawSingleLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, color: string = '#000000'): void {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + width, y);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
     ctx.stroke();
   }
-
+  
   /**
    * رسم خط مزدوج
    */
-  private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number): void {
-    ctx.beginPath();
-    ctx.strokeStyle = '#000000';
+  private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, color: string = '#000000'): void {
+    ctx.strokeStyle = color;
     ctx.lineWidth = 1;
     
     // الخط العلوي
+    ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + width, y);
+    ctx.stroke();
     
     // الخط السفلي
-    ctx.moveTo(x, y + 3);
-    ctx.lineTo(x + width, y + 3);
-    
+    ctx.beginPath();
+    ctx.moveTo(x, y + 2);
+    ctx.lineTo(x + width, y + 2);
     ctx.stroke();
   }
-
+  
+  
   /**
    * رسم خط زخرفي
    */

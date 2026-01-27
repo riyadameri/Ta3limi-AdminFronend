@@ -193,3 +193,278 @@ body.modal-open {
     max-height: calc(100vh - 120px) !important;
   }
 }
+
+
+
+
+
+/* ========== تحسينات عامة للجداول ========== */
+:host ::ng-deep .table-responsive {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+:host ::ng-deep .payment-table {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* رأس الجدول */
+:host ::ng-deep .payment-table thead th {
+  background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  padding: 14px 10px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  border: none !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}
+
+/* خلايا الجدول */
+:host ::ng-deep .payment-table tbody td {
+  padding: 12px 10px !important;
+  vertical-align: middle !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+  font-size: 13.5px !important;
+  line-height: 1.5 !important;
+  background-color: white !important;
+  transition: all 0.2s ease !important;
+}
+
+:host ::ng-deep .payment-table tbody tr:hover td {
+  background-color: #f8f9fa !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+}
+
+/* تحديد عرض الأعمدة لمنع التداخل */
+:host ::ng-deep .payment-table th:nth-child(1),
+:host ::ng-deep .payment-table td:nth-child(1) {
+  width: 60px !important; /* التحديد */
+  min-width: 60px !important;
+  max-width: 60px !important;
+}
+
+:host ::ng-deep .payment-table th:nth-child(2),
+:host ::ng-deep .payment-table td:nth-child(2) {
+  width: 150px !important; /* اسم الطالب */
+  min-width: 150px !important;
+  max-width: 150px !important;
+}
+
+:host ::ng-deep .payment-table th:nth-child(3),
+:host ::ng-deep .payment-table td:nth-child(3) {
+  width: 120px !important; /* الحصة */
+  min-width: 120px !important;
+  max-width: 120px !important;
+}
+
+:host ::ng-deep .payment-table th:nth-child(4),
+:host ::ng-deep .payment-table td:nth-child(4) {
+  width: 110px !important; /* الشهر */
+  min-width: 110px !important;
+  max-width: 110px !important;
+}
+
+:host ::ng-deep .payment-table th:nth-child(5),
+:host ::ng-deep .payment-table td:nth-child(5) {
+  width: 100px !important; /* المبلغ */
+  min-width: 100px !important;
+  max-width: 100px !important;
+  text-align: center !important;
+}
+
+:host ::ng-deep .payment-table th:nth-child(6),
+:host ::ng-deep .payment-table td:nth-child(6) {
+  width: 100px !important; /* الحالة */
+  min-width: 100px !important;
+  max-width: 100px !important;
+  text-align: center !important;
+}
+
+:host ::ng-deep .payment-table th:nth-child(7),
+:host ::ng-deep .payment-table td:nth-child(7) {
+  width: 80px !important; /* الإجراءات */
+  min-width: 80px !important;
+  max-width: 80px !important;
+  text-align: center !important;
+}
+
+/* ========== تحسين محتوى الخلايا ========== */
+/* قص النص الطويل */
+:host ::ng-deep .truncate-text {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
+  display: block !important;
+}
+
+/* المبالغ */
+:host ::ng-deep .amount-cell {
+  font-family: 'Courier New', monospace !important;
+  font-weight: bold !important;
+  color: #2c3e50 !important;
+  direction: ltr !important;
+  text-align: right !important;
+  padding-right: 15px !important;
+}
+
+/* الحالة */
+:host ::ng-deep .status-badge {
+  display: inline-block !important;
+  padding: 5px 12px !important;
+  border-radius: 20px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  min-width: 80px !important;
+  text-align: center !important;
+}
+
+:host ::ng-deep .status-paid {
+  background-color: #d4f7e2 !important;
+  color: #0d8b4a !important;
+  border: 1px solid #a3e9c4 !important;
+}
+
+:host ::ng-deep .status-pending {
+  background-color: #fff8e1 !important;
+  color: #f57c00 !important;
+  border: 1px solid #ffd54f !important;
+}
+
+:host ::ng-deep .status-late {
+  background-color: #ffebee !important;
+  color: #d32f2f !important;
+  border: 1px solid #ff8a80 !important;
+}
+
+/* ========== خاصية التمرير ========== */
+:host ::ng-deep .table-scroll-container {
+  max-height: 400px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  border: 1px solid #dee2e6 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05) !important;
+}
+
+:host ::ng-deep .table-scroll-container::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+}
+
+:host ::ng-deep .table-scroll-container::-webkit-scrollbar-track {
+  background: #f5f5f5 !important;
+  border-radius: 5px !important;
+}
+
+:host ::ng-deep .table-scroll-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1 !important;
+  border-radius: 5px !important;
+  border: 2px solid #f5f5f5 !important;
+}
+
+:host ::ng-deep .table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8 !important;
+}
+
+/* ========== تنسيق شريط العناوين ========== */
+:host ::ng-deep .payment-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  padding: 15px 20px !important;
+  border-radius: 8px 8px 0 0 !important;
+  margin-bottom: 0 !important;
+}
+
+:host ::ng-deep .payment-header h5 {
+  margin: 0 !important;
+  font-weight: 600 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+/* ========== تنسيق الأزرار ========== */
+:host ::ng-deep .payment-actions {
+  display: flex !important;
+  gap: 8px !important;
+  justify-content: center !important;
+  flex-wrap: nowrap !important;
+}
+
+:host ::ng-deep .payment-actions .btn {
+  padding: 6px 12px !important;
+  font-size: 12.5px !important;
+  min-width: 70px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+}
+
+/* ========== تخصيص Checkbox ========== */
+:host ::ng-deep .custom-checkbox {
+  width: 20px !important;
+  height: 20px !important;
+  cursor: pointer !important;
+  accent-color: #3498db !important;
+  margin: 0 auto !important;
+  display: block !important;
+}
+
+/* ========== التأثيرات المرئية ========== */
+:host ::ng-deep .payment-row-selected {
+  background-color: #e3f2fd !important;
+  border-left: 4px solid #2196f3 !important;
+}
+
+:host ::ng-deep .payment-row-selected td {
+  background-color: #e3f2fd !important;
+}
+
+/* ========== تحسين الطباعة ========== */
+@media print {
+  :host ::ng-deep .payment-table {
+    font-size: 12px !important;
+  }
+  
+  :host ::ng-deep .payment-table th,
+  :host ::ng-deep .payment-table td {
+    padding: 8px 6px !important;
+  }
+}
+
+/* ========== تصميم متجاوب ========== */
+@media (max-width: 768px) {
+  :host ::ng-deep .payment-table th,
+  :host ::ng-deep .payment-table td {
+    font-size: 12px !important;
+    padding: 10px 6px !important;
+  }
+  
+  :host ::ng-deep .payment-table th:nth-child(1),
+  :host ::ng-deep .payment-table td:nth-child(1) {
+    width: 50px !important;
+  }
+  
+  :host ::ng-deep .payment-table th:nth-child(2),
+  :host ::ng-deep .payment-table td:nth-child(2) {
+    width: 120px !important;
+  }
+}
+
+
+
+

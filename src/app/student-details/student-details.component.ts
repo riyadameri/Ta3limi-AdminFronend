@@ -5,7 +5,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import Swal from 'sweetalert2';
 import { environment } from '../../environments/environment.development';
-import { PrinterService, ReceiptData } from '../services/printer.service';
+import { PrinterService, ReceiptData, BulkReceiptData } from '../services/printer.service';
 
 interface ClassPaymentGroup {
   classId: string;
@@ -130,6 +130,13 @@ interface BulkPaymentData {
   month: string;
   paymentMethod: string;
   notes?: string;
+}
+
+interface PaymentReceiptOption {
+  label: string;
+  value: 'single' | 'multiple';
+  description: string;
+  icon: string;
 }
 
 @Component({
@@ -273,6 +280,24 @@ export class StudentDetailsComponent implements OnInit {
   
   // Current date
   currentDate = new Date();
+
+  // Payment receipt options
+  receiptOptions: PaymentReceiptOption[] = [
+    {
+      label: 'إيصال واحد لجميع الدفعات',
+      value: 'single',
+      description: 'طباعة جميع الدفعات في إيصال واحد مع تفاصيل كل دفعة',
+      icon: 'fas fa-receipt'
+    },
+    {
+      label: 'إيصالات منفصلة لكل دفعة',
+      value: 'multiple',
+      description: 'طباعة إيصال منفصل لكل دفعة',
+      icon: 'fas fa-copy'
+    }
+  ];
+
+  selectedReceiptOption: 'single' | 'multiple' = 'single';
 
   constructor(
     private route: ActivatedRoute,
@@ -473,9 +498,9 @@ export class StudentDetailsComponent implements OnInit {
       p.student?._id || p.student
     ));
 
-    // عرض تفاصيل الدفع الجماعي مع خيار الطباعة
-    const { value: printChoice } = await Swal.fire({
-      title: 'تأكيد الدفع الجماعي',
+    // عرض خيارات الدفع والطباعة
+    const { value: userChoice } = await Swal.fire({
+      title: 'خيارات الدفع الجماعي',
       html: `
         <div class="text-start">
           <div class="alert alert-info">
@@ -497,15 +522,16 @@ export class StudentDetailsComponent implements OnInit {
           </div>
           
           <div class="mb-3">
-            <label class="form-label"><strong>ملاحظات:</strong></label>
-            <textarea class="form-control" id="paymentNotes" rows="2" placeholder="ملاحظات حول الدفع..."></textarea>
+            <label class="form-label"><strong>خيار الطباعة:</strong></label>
+            <select class="form-select" id="printOption">
+              <option value="single">إيصال واحد لجميع الدفعات</option>
+              <option value="multiple">إيصالات منفصلة لكل دفعة</option>
+            </select>
           </div>
           
-          <div class="form-check mb-3">
-            <input class="form-check-input" type="checkbox" id="autoPrint" checked>
-            <label class="form-check-label" for="autoPrint">
-              <i class="fas fa-print me-2 text-primary"></i>طباعة الإيصالات بعد الدفع تلقائياً
-            </label>
+          <div class="mb-3">
+            <label class="form-label"><strong>ملاحظات:</strong></label>
+            <textarea class="form-control" id="paymentNotes" rows="2" placeholder="ملاحظات حول الدفع..."></textarea>
           </div>
           
           <div class="alert alert-warning">
@@ -516,35 +542,29 @@ export class StudentDetailsComponent implements OnInit {
       `,
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: '<i class="fas fa-money-check me-2"></i>دفع وطباعة',
-      cancelButtonText: '<i class="fas fa-money-bill me-2"></i>دفع فقط',
-      showDenyButton: true,
-      denyButtonText: '<i class="fas fa-times me-2"></i>إلغاء',
+      confirmButtonText: 'دفع',
+      cancelButtonText: 'إلغاء',
       confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#28a745',
-      denyButtonColor: '#d33',
+      cancelButtonColor: '#d33',
       width: '600px',
       preConfirm: () => {
         const paymentMethod = (document.getElementById('paymentMethod') as HTMLSelectElement).value;
+        const printOption = (document.getElementById('printOption') as HTMLSelectElement).value;
         const paymentNotes = (document.getElementById('paymentNotes') as HTMLTextAreaElement).value;
-        const autoPrint = (document.getElementById('autoPrint') as HTMLInputElement).checked;
         
         if (!paymentMethod) {
           Swal.showValidationMessage('يرجى اختيار طريقة الدفع');
           return false;
         }
         
-        return { paymentMethod, paymentNotes, autoPrint };
+        return { paymentMethod, printOption, paymentNotes };
       }
     });
 
-    // إلغاء العملية
-    if (printChoice === undefined || printChoice === false) {
-      return;
-    }
+    if (!userChoice) return;
 
-    const { paymentMethod, paymentNotes, autoPrint } = printChoice;
-    const actionType = printChoice.isConfirmed ? 'pay_and_print' : 'pay_only';
+    const { paymentMethod, printOption, paymentNotes } = userChoice;
+
     // عرض نافذة التقدم
     Swal.fire({
       title: 'جاري معالجة الدفعات...',
@@ -553,7 +573,7 @@ export class StudentDetailsComponent implements OnInit {
           <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
             <span class="visually-hidden">جاري المعالجة...</span>
           </div>
-          <h5 class="mb-2">${actionType === 'pay_and_print' ? 'دفع وطباعة' : 'دفع'} جماعي</h5>
+          <h5 class="mb-2">دفع جماعي</h5>
           <p>جاري معالجة ${this.selectedPaymentsForBulkPay.length} دفعة...</p>
           
           <div class="progress mt-4" style="height: 25px; border-radius: 12px;">
@@ -584,19 +604,16 @@ export class StudentDetailsComponent implements OnInit {
       width: '500px'
     });
 
-    // متغيرات التتبع
     let successfulPayments = 0;
     let failedPayments = 0;
     const results: any[] = [];
     const paidPayments: Payment[] = [];
 
     try {
-      // معالجة المدفوعات بالتتابع
       for (let i = 0; i < this.selectedPaymentsForBulkPay.length; i++) {
         const payment = this.selectedPaymentsForBulkPay[i];
         const paymentId = payment._id || payment.id;
         
-        // تحديث شريط التقدم
         const progress = Math.round(((i + 1) / this.selectedPaymentsForBulkPay.length) * 100);
         this.updateProgress(progress, i + 1, successfulPayments, failedPayments, payment);
 
@@ -619,7 +636,6 @@ export class StudentDetailsComponent implements OnInit {
             notes: paymentNotes || `دفع جماعي - ${new Date().toLocaleDateString('ar-SA')}`
           };
 
-          // إرسال طلب الدفع
           const response = await this.http.put<any>(
             `${this.apiUrl}/payments/${paymentId}/pay`,
             paymentData,
@@ -628,7 +644,6 @@ export class StudentDetailsComponent implements OnInit {
 
           successfulPayments++;
           
-          // تخزين البيانات للطباعة
           const paidPayment: Payment = {
             ...payment,
             paymentMethod: paymentMethod,
@@ -665,22 +680,22 @@ export class StudentDetailsComponent implements OnInit {
           });
         }
 
-        // تأخير بسيط بين كل عملية
         await this.delay(100);
       }
 
-      // إغلاق نافذة التقدم
       Swal.close();
 
-      // عرض النتائج
-      await this.showBulkPayResults(successfulPayments, failedPayments, results, paidPayments);
-
-      // الطباعة التلقائية إذا تم اختيارها
-      if (autoPrint && actionType === 'pay_and_print' && successfulPayments > 0) {
+      // العرض التلقائي للنتائج
+      if (printOption === 'single' && successfulPayments > 0) {
+        // طباعة إيصال واحد لجميع الدفعات
+        await this.printSingleReceiptForMultiplePayments(paidPayments, paymentMethod, paymentNotes);      } else if (printOption === 'multiple' && successfulPayments > 0) {
+        // طباعة إيصالات منفصلة
         await this.printMultipleReceipts(paidPayments);
       }
 
-      // تحديث البيانات
+      // عرض النتائج النهائية
+      await this.showBulkPayResults(successfulPayments, failedPayments, results, paidPayments);
+
       if (successfulPayments > 0 && this.student) {
         await this.refreshData();
       }
@@ -694,7 +709,6 @@ export class StudentDetailsComponent implements OnInit {
         confirmButtonText: 'حسناً'
       });
     } finally {
-      // إعادة تعيين القائمة المختارة
       if (successfulPayments > 0) {
         this.selectedPaymentsForBulkPay = [];
       }
@@ -788,19 +802,19 @@ export class StudentDetailsComponent implements OnInit {
         ` : ''}
         
         <div class="alert alert-info mt-3">
-          <h6><i class="fas fa-info-circle me-2"></i>الإجراءات المتاحة:</h6>
+          <h6><i class="fas fa-info-circle me-2"></i>خيارات الطباعة الإضافية:</h6>
           <div class="d-flex flex-wrap gap-2 mt-2">
             ${successCount > 0 ? `
-              <button class="btn btn-success btn-sm" onclick="window.printResultsAction('print')">
-                <i class="fas fa-print me-1"></i>طباعة الإيصالات
+              <button class="btn btn-success btn-sm" onclick="window.printResultsAction('single')">
+                <i class="fas fa-receipt me-1"></i>طباعة إيصال واحد
               </button>
-              <button class="btn btn-info btn-sm" onclick="window.printResultsAction('view')">
-                <i class="fas fa-eye me-1"></i>عرض التفاصيل
+              <button class="btn btn-info btn-sm" onclick="window.printResultsAction('multiple')">
+                <i class="fas fa-copy me-1"></i>طباعة إيصالات منفصلة
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="window.printResultsAction('close')">
+                <i class="fas fa-times me-1"></i>إغلاق
               </button>
             ` : ''}
-            <button class="btn btn-secondary btn-sm" onclick="window.printResultsAction('close')">
-              <i class="fas fa-times me-1"></i>إغلاق
-            </button>
           </div>
         </div>
       </div>
@@ -814,12 +828,14 @@ export class StudentDetailsComponent implements OnInit {
       width: '700px',
       didOpen: () => {
         // إضافة الدوال للسياق العالمي
-        (window as any).printResultsAction = (action: string) => {
+        (window as any).printResultsAction = async (action: string) => {
           Swal.close();
-          if (action === 'print' && successCount > 0) {
-            this.printMultipleReceipts(paidPayments);
-          } else if (action === 'view' && successCount > 0) {
-            this.viewBulkPayDetails(paidPayments, results);
+          if (action === 'single' && successCount > 0) {
+            await this.printSingleReceiptForMultiplePayments(paidPayments, 
+              paidPayments[0]?.paymentMethod || 'cash', 
+              'دفع جماعي إضافي');
+          } else if (action === 'multiple' && successCount > 0) {
+            await this.printMultipleReceipts(paidPayments);
           }
         };
       },
@@ -830,78 +846,7 @@ export class StudentDetailsComponent implements OnInit {
     });
   }
 
-  // دالة مساعدة لعرض تفاصيل الدفع الجماعي
-  private viewBulkPayDetails(paidPayments: Payment[], results: any[]): void {
-    const detailsHtml = `
-      <div class="text-start">
-        <div class="table-responsive">
-          <table class="table table-sm table-hover">
-            <thead class="table-light">
-              <tr>
-                <th>#</th>
-                <th>اسم الطالب</th>
-                <th>الشهر</th>
-                <th>المبلغ</th>
-                <th>رقم الفاتورة</th>
-                <th>الحالة</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${results.map((r, index) => `
-                <tr class="${r.success ? 'table-success' : 'table-danger'}">
-                  <td>${index + 1}</td>
-                  <td>${r.student || 'غير محدد'}</td>
-                  <td>${r.payment}</td>
-                  <td>${paidPayments[index]?.amount?.toLocaleString('ar-SA') || '0'} د.ج</td>
-                  <td>${r.receiptNumber || 'بدون'}</td>
-                  <td>
-                    <span class="badge ${r.success ? 'bg-success' : 'bg-danger'}">
-                      ${r.success ? 'ناجح' : 'فاشل'}
-                    </span>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
-
-    Swal.fire({
-      title: 'تفاصيل الدفع الجماعي',
-      html: detailsHtml,
-      width: '800px',
-      showConfirmButton: true,
-      confirmButtonText: 'حسناً',
-      showCancelButton: true,
-      cancelButtonText: 'طباعة التقرير'
-    }).then(result => {
-      if (result.dismiss === Swal.DismissReason.cancel) {
-        this.printBulkPayReport(paidPayments, results);
-      }
-    });
-  }
-
-  // دالة مساعدة لطباعة تقرير الدفع الجماعي
-  private printBulkPayReport(paidPayments: Payment[], results: any[]): void {
-    // تنفيذ طباعة التقرير
-    console.log('طباعة تقرير الدفع الجماعي:', { paidPayments, results });
-    // يمكن تنفيذ طباعة تقرير PDF أو طباعة مباشرة
-  }
-
-  // دالة مساعدة لتحديث البيانات
-  private async refreshData(): Promise<void> {
-    if (this.student) {
-      this.loadPaymentHistory(this.getStudentId());
-      this.loadStudentPaymentSystems(this.getStudentId());
-      
-      // تحديث تلقائي بعد 2 ثانية للتأكد من تحديث البيانات
-      await this.delay(2000);
-      this.loadPaymentHistory(this.getStudentId());
-    }
-  }
-
-  // دالة طباعة إيصالات متعددة
+  // دالة طباعة إيصالات متعددة منفصلة
   private async printMultipleReceipts(payments: Payment[]): Promise<void> {
     if (!payments || payments.length === 0) {
       Swal.fire({
@@ -994,6 +939,456 @@ export class StudentDetailsComponent implements OnInit {
       showConfirmButton: true,
       confirmButtonText: 'حسناً'
     });
+  }
+
+  /**
+   * طباعة إيصال واحد لدفعات متعددة
+   */
+  private async printSingleReceiptForMultiplePayments(
+    payments: Payment[], 
+    paymentMethod: string,
+    notes?: string
+  ): Promise<void> {
+    if (!payments || payments.length === 0) return;
+  
+    try {
+      Swal.fire({
+        title: 'جاري إنشاء الإيصال الموحد...',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        }
+      });
+  
+      // تجميع بيانات الدفعات
+      const uniqueStudents = new Set(payments.map(p => p.studentName || this.student?.name || ''));
+      const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+      
+      // إنشاء بيانات الإيصال الموحد
+      const bulkReceiptData: BulkReceiptData = {
+        receiptNumber: `BLK-${Date.now().toString().slice(-8)}`,
+        date: new Date().toLocaleDateString('ar-SA'),
+        time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
+        totalAmount: totalAmount,
+        paymentCount: payments.length,
+        studentCount: uniqueStudents.size,
+        paymentMethod: paymentMethod,
+        payments: payments.map(p => ({
+          studentName: p.studentName || this.student?.name || 'طالب',
+          studentId: p.studentId || this.student?.studentId || '',
+          className: p.className || 'عام',
+          month: p.month,
+          amount: p.amount,
+          notes: p.notes
+        })),
+        notes: notes || `دفع جماعي لـ ${payments.length} دفعة`
+      };
+  
+      // طباعة الإيصال الموحد
+      const success = await this.printBulkReceipt(bulkReceiptData);
+  
+      if (success) {
+        Swal.fire({
+          icon: 'success',
+          title: 'تم الطباعة',
+          text: 'تم طباعة الإيصال الموحد بنجاح',
+          timer: 1500,
+          showConfirmButton: false
+        });
+      } else {
+        throw new Error('فشل في طباعة الإيصال');
+      }
+  
+    } catch (error) {
+      console.error('خطأ في طباعة الإيصال الموحد:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'خطأ في الطباعة',
+        text: 'فشل في طباعة الإيصال الموحد',
+        confirmButtonText: 'حسناً'
+      });
+    }
+  }
+
+  /**
+   * طباعة إيصال موحد للدفعات المتعددة
+   */
+/**
+ * طباعة إيصال موحد للدفعات المتعددة
+ */
+/**
+ * طباعة إيصال موحد للدفعات المتعددة
+ */
+
+/**
+ * ضمان استخدام الأرقام العربية في التاريخ والوقت
+ */
+private ensureArabicNumbers(text: string): string {
+  if (!text) return text;
+  
+  const hindiToArabic: { [key: string]: string } = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
+  };
+  
+  return text.split('').map(char => hindiToArabic[char] || char).join('');
+}
+
+private async printBulkReceipt(data: BulkReceiptData): Promise<boolean> {
+  try {
+    // تأكد من أن الطابعة متصلة
+    if (!this.printerService.checkConnectionStatus()) {
+      const connected = await this.printerService.connectToThermalPrinter();
+      if (!connected) {
+        throw new Error('فشل الاتصال بالطابعة');
+      }
+    }
+
+    // إنشاء Canvas للإيصال الموحد
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    
+    // إعدادات Canvas (80mm)
+    const width = 576;
+    const lineHeight = 25;
+    const headerHeight = 100;
+    const footerHeight = 40;
+    const paymentRowHeight = 50; // زيادة ارتفاع الصف ليتسع للشهر والمبلغ
+    const tableHeight = (data.payments.length * paymentRowHeight) + 30;
+    
+    const height = headerHeight + 200 + tableHeight + footerHeight;
+    
+    canvas.width = width;
+    canvas.height = height;
+    
+    // خلفية بيضاء
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, width, height);
+    
+    // === رأس الإيصال ===
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 24px Arial';
+    ctx.fillText('أكاديمية الرواد للتعليم والمعارف', width / 2, 20);
+    
+    ctx.font = '16px Arial';
+    ctx.fillText('الجزائر ، ولاية تقرت', width / 2, 45);
+    ctx.fillText('الهاتف : 0673586274', width / 2, 65);
+    
+    // خط فاصل
+    this.drawLine(ctx, 20, 85, width - 20, 85);
+    
+    // === معلومات الإيصال ===
+    let yPos = 105;
+    
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 20px Arial';
+    ctx.fillText('ِِA إيصـــال دفـــع جماعي', width / 2, yPos);
+    
+    yPos += 25;
+    this.drawLine(ctx, 20, yPos, width - 20, yPos);
+    yPos += 15;
+    
+    // معلومات أساسية
+    ctx.textAlign = 'right';
+    ctx.font = '16px Arial';
+    
+    const infoItems = [
+      { label: 'رقم الإيصال:', value: data.receiptNumber },
+      { label: 'التاريخ:', value: data.date },
+      { label: 'الوقت:', value: data.time },
+      { label: 'طريقة الدفع:', value: this.translatePaymentMethod(data.paymentMethod) },
+      { label: 'عدد الدفعات:', value: data.paymentCount.toString() },
+      { label: 'عدد الطلاب:', value: data.studentCount.toString() }
+    ];
+    
+    infoItems.forEach(item => {
+      ctx.fillText(`${item.label} ${item.value}`, width - 25, yPos);
+      yPos += 22;
+    });
+    
+    yPos += 10;
+    this.drawLine(ctx, 20, yPos, width - 20, yPos);
+    yPos += 20;
+    
+    // === تفاصيل الدفعات ===
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 18px Arial';
+    ctx.fillText('تفاصيل الدفعات', width / 2, yPos);
+    yPos += 30;
+    
+    // جدول الدفعات - تعديل الأعمدة لمنع التداخل
+    ctx.fillStyle = '#2C3E50';
+    ctx.fillRect(20, yPos, width - 40, 30);
+    
+    // تقسيم الأعمدة بوضوح
+    const columnWidth = (width - 40) / 4;
+    
+    // رؤوس الأعمدة
+    ctx.fillStyle = '#FFFFFF';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 16px Arial';
+    
+    // العمود الأول: اسم الطالب
+    ctx.fillText('الطالب', 20 + (columnWidth * 0.5), yPos + 20);
+    
+    // العمود الثاني: الحصة
+    ctx.fillText('الحصة', 20 + (columnWidth * 1.5), yPos + 20);
+    
+    // العمود الثالث: الشهر
+    ctx.fillText('الشهر', 20 + (columnWidth * 2.5), yPos + 20);
+    
+    // العمود الرابع: المبلغ
+    ctx.fillText('المبلغ', 20 + (columnWidth * 3.5), yPos + 20);
+    
+    yPos += 30;
+    
+    // صفوف البيانات مع مساحات واضحة
+    data.payments.forEach((payment, index) => {
+      if (index % 2 === 0) {
+        ctx.fillStyle = '#F8F9FA';
+      } else {
+        ctx.fillStyle = '#FFFFFF';
+      }
+      
+      ctx.fillRect(20, yPos, width - 40, paymentRowHeight);
+      
+      ctx.fillStyle = '#000000';
+      ctx.strokeStyle = '#DEE2E6';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(20, yPos, width - 40, paymentRowHeight);
+      
+      // اسم الطالب (يسار)
+      ctx.textAlign = 'right';
+      ctx.font = '14px Arial';
+      const studentName = payment.studentName.length > 12 ? 
+        payment.studentName.substring(0, 12) + '...' : payment.studentName;
+      ctx.fillText(studentName, 20 + columnWidth - 10, yPos + 25);
+      
+      // الحصة (وسط)
+      ctx.textAlign = 'center';
+      const className = payment.className.length > 8 ? 
+        payment.className.substring(0, 8) + '...' : payment.className;
+      ctx.fillText(className, 20 + (columnWidth * 2), yPos + 25);
+      
+      // الشهر (وسط-يمين)
+      ctx.textAlign = 'center';
+      const month = payment.month.length > 10 ? 
+        payment.month.substring(0, 10) + '...' : payment.month;
+      ctx.fillText(month, 20 + (columnWidth * 3), yPos + 25);
+      
+      // المبلغ (يمين) - في نفس الصف لكن منفصل
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 14px Arial';
+      ctx.fillStyle = '#E74C3C';
+      ctx.fillText(`${payment.amount.toLocaleString()} د.ج`, 20 + (columnWidth * 3.7), yPos + 25);
+      
+      // معلومات إضافية تحت كل دفعة (ID الطالب)
+      ctx.textAlign = 'left';
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#666666';
+      ctx.fillText(`ID: ${payment.studentId || ''}`, 20 + columnWidth - 10, yPos + 45);
+      
+      // ملاحظات صغيرة
+      if (payment.notes) {
+        const shortNotes = payment.notes.length > 15 ? 
+          payment.notes.substring(0, 15) + '...' : payment.notes;
+        ctx.textAlign = 'center';
+        ctx.fillText(shortNotes, 20 + (columnWidth * 2), yPos + 45);
+      }
+      
+      yPos += paymentRowHeight;
+    });
+    
+    yPos += 20;
+    
+    // === الإجمالي ===
+    this.drawDoubleLine(ctx, 20, yPos, width - 40);
+    yPos += 25;
+    
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 20px Arial';
+    ctx.fillStyle = '#000000';
+    ctx.fillText('المجموع الإجمالي:', width / 2, yPos);
+    
+    yPos += 25;
+    
+    ctx.font = 'bold 22px Arial';
+    ctx.fillStyle = '#E74C3C';
+    ctx.fillText(`${data.totalAmount.toLocaleString()} دينار جزائري`, width / 2, yPos);
+    
+    yPos += 30;
+    
+    // === الملاحظات ===
+    if (data.notes && data.notes.trim()) {
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 16px Arial';
+      ctx.fillStyle = '#2C3E50';
+      ctx.fillText('ملاحظات:', width - 25, yPos);
+      yPos += 20;
+      
+      ctx.font = '14px Arial';
+      ctx.fillStyle = '#000000';
+      
+      // تقسيم النص
+      const words = data.notes.split(' ');
+      let line = '';
+      const maxWidth = width - 40;
+      
+      for (const word of words) {
+        const testLine = line + word + ' ';
+        const metrics = ctx.measureText(testLine);
+        
+        if (metrics.width > maxWidth && line !== '') {
+          ctx.fillText(line.trim(), width - 25, yPos);
+          yPos += 20;
+          line = word + ' ';
+        } else {
+          line = testLine;
+        }
+      }
+      
+      if (line) {
+        ctx.fillText(line.trim(), width - 25, yPos);
+      }
+    }
+    
+    // === التذييل ===
+    yPos = height - 25;
+    ctx.textAlign = 'center';
+    ctx.font = '14px Arial';
+    ctx.fillStyle = '#666666';
+    ctx.fillText('دفع جماعي - نظام إدارة التعليم', width / 2, yPos);
+    yPos += 18;
+    ctx.fillText('مطور بواسطة: ريـــــــــــــــــدوكس', width / 2, yPos);
+    
+    // استخدام PrinterService للطباعة
+    return await this.printerService.printBulkReceipt(data);
+    
+  } catch (error) {
+    console.error('خطأ في طباعة الإيصال الموحد:', error);
+    return false;
+  }
+}
+
+
+// إضافة دالة الخط المفقودة
+private drawSingleLine(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, color: string = '#000000'): void {
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y1);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+  // ===== دوال مساعدة للرسم =====
+  
+// دالة مساعدة للرسم
+private drawLine(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+  
+private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number): void {
+  ctx.beginPath();
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 1;
+  
+  // الخط العلوي
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + width, y);
+  
+  // الخط السفلي
+  ctx.moveTo(x, y + 3);
+  ctx.lineTo(x + width, y + 3);
+  
+  ctx.stroke();
+}
+
+  
+  private formatArabicDate(dateStr: string): string {
+    try {
+      const date = new Date(dateStr);
+      const options: Intl.DateTimeFormatOptions = { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      };
+      return date.toLocaleDateString('ar-SA', options);
+    } catch {
+      return dateStr;
+    }
+  }
+  
+  private formatArabicTime(timeStr: string): string {
+    try {
+      const time = new Date(`2000-01-01T${timeStr}`);
+      return time.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return timeStr;
+    }
+  }
+  
+  private translatePaymentMethod(method: string): string {
+    const methods: { [key: string]: string } = {
+      'cash': 'نقداً',
+      'bank': 'تحويل بنكي',
+      'card': 'بطاقة ائتمان',
+      'check': 'شيك',
+      'online': 'دفع إلكتروني',
+      'mobile': 'دفع محمول'
+    };
+    return methods[method.toLowerCase()] || method;
+  }
+  
+  private async printCanvasImage(canvas: HTMLCanvasElement): Promise<boolean> {
+    try {
+      // يمكنك هنا تنفيذ منطق الطباعة الخاص بك
+      // هذا مثال باستخدام نافذة الطباعة
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const imageUrl = canvas.toDataURL('image/png');
+        
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html dir="rtl">
+          <head>
+            <title>طباعة الإيصال الموحد</title>
+            <style>
+              body { margin: 0; padding: 10px; }
+              img { width: 576px; max-width: 100%; }
+              @media print {
+                body { margin: 0; }
+                img { width: 576px; }
+              }
+            </style>
+          </head>
+          <body>
+            <img src="${imageUrl}" alt="إيصال الدفع الموحد">
+            <script>
+              window.onload = function() {
+                window.print();
+                setTimeout(function() {
+                  window.close();
+                }, 1000);
+              };
+            </script>
+          </body>
+          </html>
+        `);
+        
+        printWindow.document.close();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('خطأ في طباعة Canvas:', error);
+      return false;
+    }
   }
 
   getSelectedPaymentsTotal(): number {
@@ -2563,39 +2958,190 @@ export class StudentDetailsComponent implements OnInit {
       return;
     }
 
-    Swal.fire({
-      title: 'طباعة متعددة',
+    // عرض خيارات الطباعة
+    const { value: printOption } = await Swal.fire({
+      title: 'خيارات الطباعة',
       html: `
         <div class="text-start">
-          <p><strong>عدد الإيصالات:</strong> ${paidPayments.length}</p>
-          <p><strong>المبلغ الإجمالي:</strong> ${this.getSelectedPaymentsTotal().toLocaleString()} د.ج</p>
-          <div style="max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6; padding: 10px; border-radius: 5px; margin-top: 10px;">
-            ${paidPayments.map(p => `
-              <div class="mb-1">
-                • ${p.studentName || this.student?.name || 'طالب'} - ${p.month} - ${p.amount.toLocaleString()} د.ج
-                ${p.className ? `(${p.className})` : ''}
-              </div>
-            `).join('')}
+          <div class="alert alert-info">
+            <h6><i class="fas fa-info-circle me-2"></i>تفاصيل الطباعة</h6>
+            <p class="mb-1"><strong>عدد الدفعات:</strong> ${paidPayments.length}</p>
+            <p class="mb-1"><strong>المبلغ الإجمالي:</strong> ${paidPayments.reduce((sum, p) => sum + p.amount, 0).toLocaleString()} د.ج</p>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label"><strong>اختر طريقة الطباعة:</strong></label>
+            <select class="form-select" id="receiptOption">
+              <option value="single">إيصال واحد لجميع الدفعات</option>
+              <option value="multiple">إيصالات منفصلة لكل دفعة</option>
+            </select>
           </div>
         </div>
       `,
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'طباعة جميع الإيصالات',
-      cancelButtonText: 'طباعة إيصال واحد',
-      showDenyButton: true,
-      denyButtonText: 'إلغاء',
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#28a745',
-      denyButtonColor: '#d33'
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        // طباعة جميع الإيصالات
-        await this.printMultipleReceipts(paidPayments);
-      } else if (result.dismiss === Swal.DismissReason.cancel) {
-        // طباعة إيصال واحد
-        this.printPaymentReceipt(paidPayments[0]);
+      confirmButtonText: 'طباعة',
+      cancelButtonText: 'إلغاء',
+      preConfirm: () => {
+        const receiptOption = (document.getElementById('receiptOption') as HTMLSelectElement).value;
+        return { receiptOption };
       }
     });
+
+    if (!printOption) return;
+
+    const { receiptOption } = printOption;
+
+    if (receiptOption === 'single') {
+      // طباعة إيصال واحد
+      await this.printSingleReceiptForMultiplePayments(
+        paidPayments, 
+        paidPayments[0]?.paymentMethod || 'cash',
+        'طباعة إيصال موحد للدفعات المدفوعة'
+      );
+    } else if (receiptOption === 'multiple') {
+      // طباعة إيصالات منفصلة
+      await this.printMultipleReceipts(paidPayments);
+    }
+  }
+
+  // دالة مساعدة لتحديث البيانات
+  private async refreshData(): Promise<void> {
+    if (this.student) {
+      this.loadPaymentHistory(this.getStudentId());
+      this.loadStudentPaymentSystems(this.getStudentId());
+      
+      // تحديث تلقائي بعد 2 ثانية للتأكد من تحديث البيانات
+      await this.delay(2000);
+      this.loadPaymentHistory(this.getStudentId());
+    }
+  }
+
+  // دالة مساعدة لعرض تفاصيل الدفع الجماعي
+  private viewBulkPayDetails(paidPayments: Payment[], results: any[]): void {
+    const detailsHtml = `
+      <div class="text-start">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>اسم الطالب</th>
+                <th>الشهر</th>
+                <th>المبلغ</th>
+                <th>رقم الفاتورة</th>
+                <th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${results.map((r, index) => `
+                <tr class="${r.success ? 'table-success' : 'table-danger'}">
+                  <td>${index + 1}</td>
+                  <td>${r.student || 'غير محدد'}</td>
+                  <td>${r.payment}</td>
+                  <td>${paidPayments[index]?.amount?.toLocaleString('ar-SA') || '0'} د.ج</td>
+                  <td>${r.receiptNumber || 'بدون'}</td>
+                  <td>
+                    <span class="badge ${r.success ? 'bg-success' : 'bg-danger'}">
+                      ${r.success ? 'ناجح' : 'فاشل'}
+                    </span>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    Swal.fire({
+      title: 'تفاصيل الدفع الجماعي',
+      html: detailsHtml,
+      width: '800px',
+      showConfirmButton: true,
+      confirmButtonText: 'حسناً',
+      showCancelButton: true,
+      cancelButtonText: 'طباعة التقرير'
+    }).then(result => {
+      if (result.dismiss === Swal.DismissReason.cancel) {
+        this.printBulkPayReport(paidPayments, results);
+      }
+    });
+  }
+
+  // دالة مساعدة لطباعة تقرير الدفع الجماعي
+  private printBulkPayReport(paidPayments: Payment[], results: any[]): void {
+    // تنفيذ طباعة التقرير
+    console.log('طباعة تقرير الدفع الجماعي:', { paidPayments, results });
+    // يمكن تنفيذ طباعة تقرير PDF أو طباعة مباشرة
+  }
+
+  // دالة مساعدة للحصول على عدد الطلاب المميزين
+  getUniqueStudentsCount(): number {
+    const studentIds = new Set<string>();
+    this.selectedPaymentsForBulkPay.forEach(payment => {
+      if (payment.student?._id) {
+        studentIds.add(payment.student._id);
+      } else if (payment.student) {
+        studentIds.add(payment.student);
+      }
+    });
+    return studentIds.size;
+  }
+
+  // دالة مساعدة للحصول على عدد الدفعات المدفوعة
+  getPaidCount(): number {
+    return this.selectedPaymentsForBulkPay.filter(p => p.status === 'paid').length;
+  }
+
+  // دالة مساعدة للحصول على عدد الدفعات المعلقة
+  getPendingCount(): number {
+    return this.selectedPaymentsForBulkPay.filter(p => p.status !== 'paid').length;
+  }
+
+  // دالة مساعدة للتحقق إذا تم تحديد جميع المدفوعات
+  isAllSelected(): boolean {
+    return this.selectedPaymentsForBulkPay.length > 0 && 
+           this.selectedPaymentsForBulkPay.every(p => this.isPaymentSelected(p));
+  }
+
+  // دالة مساعدة لتحديد/إلغاء تحديد جميع المدفوعات
+  toggleAllPayments(): void {
+    if (this.isAllSelected()) {
+      this.selectedPaymentsForBulkPay = [];
+    } else {
+      // إعادة تعيين وتحديد الكل
+      this.selectedPaymentsForBulkPay = [...this.paymentHistory.filter(p => p.status !== 'paid')];
+    }
+  }
+
+  // دالة مساعدة لمعالجة الدفع بإيصال واحد
+  async processSingleReceiptPayment(): Promise<void> {
+    this.closeBulkPayConfirmation();
+    await this.processBulkPayWithSingleReceipt();
+  }
+
+  // دالة مساعدة لمعالجة الدفع بإيصالات متعددة
+  async processMultipleReceiptsPayment(): Promise<void> {
+    this.closeBulkPayConfirmation();
+    await this.processBulkPayWithMultipleReceipts();
+  }
+
+  // دالة مساعدة لمعالجة الدفع مع إيصال واحد
+  async processBulkPayWithSingleReceipt(): Promise<void> {
+    if (this.selectedPaymentsForBulkPay.length === 0) return;
+
+    // نستخدم نفس دالة processBulkPaySelected ولكن مع تحديد الإيصال الواحد
+    this.selectedReceiptOption = 'single';
+    await this.processBulkPaySelected();
+  }
+
+  // دالة مساعدة لمعالجة الدفع مع إيصالات متعددة
+  async processBulkPayWithMultipleReceipts(): Promise<void> {
+    if (this.selectedPaymentsForBulkPay.length === 0) return;
+
+    // نستخدم نفس دالة processBulkPaySelected ولكن مع تحديد إيصالات متعددة
+    this.selectedReceiptOption = 'multiple';
+    await this.processBulkPaySelected();
   }
 }

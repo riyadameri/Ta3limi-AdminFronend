@@ -370,11 +370,12 @@ export class StudentDetailsComponent implements OnInit {
   }
 
   loadStudentClasses(studentId: string): void {
-    this.http.get<any[]>(`${this.apiUrl}/students/${studentId}/classes`, {
+    // Alternative approach: Get student with populated classes
+    this.http.get<any>(`${this.apiUrl}/students/${studentId}`, {
       headers: this.getHeaders()
     }).subscribe({
-      next: (classes) => {
-        this.studentClasses = classes;
+      next: (student) => {
+        this.studentClasses = student.classes || [];
       },
       error: (error) => {
         console.error('Error loading student classes:', error);
@@ -3133,6 +3134,7 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
 
     // نستخدم نفس دالة processBulkPaySelected ولكن مع تحديد الإيصال الواحد
     this.selectedReceiptOption = 'single';
+    
     await this.processBulkPaySelected();
   }
 

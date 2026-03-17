@@ -77,7 +77,7 @@
     <!-- الإحصائيات اليومية -->
     <div class="stats-grid">
       <!-- دخل اليوم -->
-      <div class="stat-card income">
+      <div class="stat-card income" style="color : #16a34a;">
         <div class="stat-icon">
           <i class="fas fa-money-bill-wave"></i>
         </div>
@@ -96,10 +96,10 @@
           <i class="fas fa-credit-card"></i>
         </div>
         <div class="stat-content">
-          <h3>مصروفات اليوم</h3>
-          <div class="stat-amount">{{ dailyStats.expenses | currency:'DZD ' }}</div>
-          <div class="stat-change negative">
-            <i class="fas fa-arrow-down"></i> مصاريف
+          <h3 style="color: red;">مصروفات اليوم</h3>
+          <div class="stat-amount" style="color: red;">{{ dailyStats.expenses | currency:'DZD ' }}</div>
+        <div class="stat-change negative" style="color: red;">
+            <i class="fas fa-arrow-down" style="color: red;"></i> مصاريف
           </div>
         </div>
       </div>
@@ -112,16 +112,16 @@
           <i class="fas fa-chalkboard-teacher"></i>
         </div>
         <div class="stat-content">
-          <h3>الحصص اليوم</h3>
-          <div class="stat-amount">{{ dailyStats.totalClasses }}</div>
-          <div class="stat-change">
+          <h3 style="color :blue">الحصص اليوم</h3>
+          <div class="stat-amount" style="color :blue" >{{ dailyStats.totalClasses }}</div>
+          <div class="stat-change" style="color :blue">
             <i class="fas fa-clock"></i> حصص
           </div>
         </div>
       </div>
   
       <!-- الطلاب الحاضرين -->
-      <div class="stat-card present">
+      <div class="stat-card present" style="color : #1f2937;">
         <div class="stat-icon">
           <i class="fas fa-user-check"></i>
         </div>
@@ -135,7 +135,7 @@
       </div>
   
       <!-- الطلاب الغائبين -->
-      <div class="stat-card absent">
+      <div class="stat-card absent" style="color : #ff7f44;">
         <div class="stat-icon">
           <i class="fas fa-user-times"></i>
         </div>

@@ -14,6 +14,7 @@ import { AddStudentToClassesModalComponent } from './add-student-to-classes-moda
 import { AccountingComponent } from './components/accounting/accounting.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { LessonDetailComponent } from './lesson-detail/lesson-detail.component';
+import { StudentAttendanceComponent } from './student-attendance/student-attendance.component';
 export const routes: Routes = [
   // المسار الافتراضي - إعادة توجيه إلى login
   { path: '', redirectTo: '/login', pathMatch: 'full' },
@@ -46,8 +47,19 @@ export const routes: Routes = [
       { 
         path: 'lesson-detail/:lessonId', 
         component: LessonDetailComponent 
+      },      { 
+        path: 'lesson/:lessonId', 
+        component: LessonDetailComponent 
       },
-      
+      { 
+        path: 'attendance', 
+        component: StudentAttendanceComponent 
+      },
+      { 
+        path: 'scan', 
+        component: StudentAttendanceComponent 
+      },
+          
       // مسار افتراضي داخل home
       { path: '', redirectTo: 'lesson-management', pathMatch: 'full' }
     ]

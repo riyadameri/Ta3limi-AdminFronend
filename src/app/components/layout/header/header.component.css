@@ -1,286 +1,341 @@
-/* header.component.css - المحدث */
-
-:root {
-  --glass-bg: rgba(255, 255, 255, 0.12);
-  --glass-border: rgba(255, 255, 255, 0.2);
-  --deep-blue: #003366;
-  --accent-red: #ff4d4d;
-}
-
+/* Modern Glass Header CSS */
 .glass-header {
-  height: 70px;
-  background: var(--glass-bg);
-  backdrop-filter: blur(15px);
-  border-bottom: 1px solid var(--glass-border);
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0 25px;
-  color: #ffffff;
-  z-index: 100;
+  justify-content: space-between;
+  padding: 0.75rem 2rem;
+  background: rgba(19, 63, 86, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
   position: sticky;
   top: 0;
-  width: 100%;
+  z-index: 1000;
+  direction: rtl; /* For Arabic support */
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* Stats Section */
+/* Stats Container */
 .stats-container {
   display: flex;
-  gap: 20px;
-  align-items: center;
+  gap: 1.5rem;
+  background: rgba(255, 255, 255, 0.5);
+  padding: 0.5rem 1.2rem;
+  border-radius: 40px;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .stat-item {
-  background: rgba(255, 255, 255, 0.15);
-  padding: 8px 16px;
-  border-radius: 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  transition: all 0.3s ease;
-  min-width: 140px;
-}
-
-.stat-item:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  gap: 0.5rem;
+  color: #2c3e50;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
 .stat-item i {
   font-size: 1.2rem;
-  color: #ffffff;
+  color: #3498db;
+  background: rgba(52, 152, 219, 0.1);
+  padding: 0.3rem;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-item:hover {
+  color: #3498db;
+  transform: translateY(-1px);
+}
+
+/* Search Container */
+.search-container {
+  position: relative;
+  width: 280px !important;
+  height: 42px !important;
+  margin: 0 15px !important;
+}
+
+.search-container input {
+  width: 100%;
+  height: 100%;
+  padding: 0 40px 0 15px !important; /* RTL adjustment */
+  border-radius: 30px !important;
+  border: 1px solid rgba(255, 255, 255, 0.8) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  font-size: 0.95rem;
+  color: #2c3e50;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+
+.search-container input:focus {
+  border-color: #3498db !important;
+  background: white !important;
+  box-shadow: 0 4px 15px rgba(52, 152, 219, 0.15);
+  outline: none;
+}
+
+.search-container input::placeholder {
+  color: #95a5a6;
+  font-weight: 300;
+}
+
+.search-container i {
+  position: absolute;
+  top: 50%;
+  right: 15px !important; /* RTL adjustment - icon on right */
+  left: auto !important;
+  transform: translateY(-50%);
+  color: #7f8c8d;
+  font-size: 1rem;
+  transition: color 0.2s ease;
+  pointer-events: none;
+}
+
+.search-container input:focus + i {
+  color: #3498db;
+}
+
+/* Logo */
+.logo {
+  width: 45px;
+  height: 45px;
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 10px;
+  box-shadow: 0 6px 15px rgba(52, 152, 219, 0.3);
+  transition: transform 0.3s ease;
+}
+
+.logo i {
+  color: white;
+  font-size: 1.8rem;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.1));
+}
+
+.logo:hover {
+  transform: rotate(5deg) scale(1.05);
 }
 
 /* User Actions */
 .user-actions {
   display: flex;
   align-items: center;
-  gap: 25px;
+  gap: 1.5rem;
 }
 
 /* Notification Badge */
 .notification-badge {
   position: relative;
-  font-size: 1.4rem;
-  color: #ffffff;
   cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
-  transition: all 0.3s ease;
+  transition: transform 0.2s ease;
+}
+
+.notification-badge i {
+  font-size: 1.5rem;
+  color: #34495e;
+  transition: color 0.2s ease;
+}
+
+.notification-badge:hover i {
+  color: #3498db;
 }
 
 .notification-badge:hover {
-  background: rgba(255, 255, 255, 0.1);
   transform: scale(1.1);
 }
 
-.dot {
+.notification-badge .dot {
   position: absolute;
-  top: 0;
-  right: 0;
-  background: var(--accent-red);
+  top: -5px;
+  right: -5px;
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
   color: white;
+  border-radius: 30px;
+  padding: 0.15rem 0.45rem;
   font-size: 0.7rem;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-weight: bold;
-  min-width: 20px;
-  text-align: center;
+  font-weight: 600;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 8px rgba(231, 76, 60, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.5);
 }
 
 /* Profile Pill */
 .profile-pill {
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: #ffffff;
-  color: var(--deep-blue);
-  padding: 5px 5px 5px 15px;
-  border-radius: 30px;
-  font-weight: 700;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-  transition: all 0.3s ease;
+  gap: 0.8rem;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.4rem 1rem 0.4rem 0.4rem;
+  border-radius: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
   cursor: pointer;
-  min-width: 180px;
+  transition: all 0.3s ease;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.03);
 }
 
 .profile-pill:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  background: white;
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.profile-pill span {
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 0.95rem;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .profile-pill img {
-  width: 40px;
-  height: 40px;
+  width: 35px;
+  height: 35px;
   border-radius: 50%;
-  border: 2px solid var(--deep-blue);
   object-fit: cover;
+  border: 2px solid #3498db;
+  transition: border-color 0.2s ease;
 }
 
-/* Responsive Header */
-@media (max-width: 768px) {
+.profile-pill:hover img {
+  border-color: #2980b9;
+}
+
+/* Responsive Design */
+@media (max-width: 992px) {
   .glass-header {
-    padding: 0 15px;
-    height: 60px;
-    justify-content: flex-end;
+    padding: 0.75rem 1rem;
   }
   
   .stats-container {
-    display: none;
+    gap: 1rem;
+    padding: 0.4rem 1rem;
   }
   
-  .profile-pill {
-    min-width: auto;
-    padding: 4px 4px 4px 12px;
+  .stat-item span {
+    font-size: 0.85rem;
   }
   
-  .profile-pill span {
-    display: none;
+  .search-container {
+    width: 220px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .glass-header {
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1rem;
   }
   
-  .profile-pill img {
-    width: 35px;
-    height: 35px;
+  .stats-container {
+    order: 2;
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .search-container {
+    order: 1;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+  
+  .logo {
+    order: 3;
   }
   
   .user-actions {
-    gap: 15px;
-  }
-  
-  .notification-badge {
-    font-size: 1.2rem;
+    order: 4;
   }
 }
 
 @media (max-width: 480px) {
-  .glass-header {
-    padding: 0 10px;
-  }
-  
-  .profile-pill {
-    padding: 2px;
-  }
-  
-  .profile-pill img {
-    width: 32px;
-    height: 32px;
-  }
-}
-
-
-.profile-pill span {
-  font-size: 1rem;
-  color: rgb(31, 31, 139);
-  font-weight: bold;
-  font-family: 'Amiri', serif;
-
-}
-
-/* لجوال (أقل من 768px) */
-@media (max-width: 768px) {
-  .glass-header {
-    padding: 0 15px;
-    height: 60px;
-    justify-content: flex-end;
-  }
-  
   .stats-container {
-    display: none;
-  }
-  
-  .profile-pill {
-    min-width: auto;
-    padding: 4px 4px 4px 12px;
+    flex-wrap: wrap;
+    gap: 0.8rem;
   }
   
   .profile-pill span {
-    display: none;
+    max-width: 80px;
   }
   
-  .profile-pill img {
-    width: 35px;
-    height: 35px;
+  .notification-badge i {
+    font-size: 1.3rem;
   }
   
-  .user-actions {
-    gap: 15px;
+  .logo {
+    width: 40px;
+    height: 40px;
   }
   
-  .notification-badge {
-    font-size: 1.2rem;
-  }
-}
-search-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: #ffffff;
-  color: var(--deep-blue);
-  padding: 5px 5px 5px 15px;
-  border-radius: 30px;
-  font-weight: 700;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-  transition: all 0.3s ease;
-  cursor: pointer;
-  min-width: 180px;
-
-}
-.search-container input {
-  border: none;
-  outline: none;
-  font-size: 1rem;
-  color: var(--deep-blue);
-  width: 120px;
-  font-weight: bold;
-
-  font-family: 'Amiri', serif;
-  align-items: center;
-
-}
-.search-container i {
-  font-size: 1.2rem;
-  color: var(--deep-blue);
-
-}
-.search-container:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
-}
-/* ===== زر قائمة الجوال ===== */
-.mobile-menu-toggle {
-  background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    width: 45px;
-    height: 45px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-light);
+  .logo i {
     font-size: 1.5rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
   }
-  
-  .mobile-menu-toggle:hover {
-    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Animation for notification dot */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
   }
-  .mobile-menu-toggle:active {
-    transform: scale(0.95);
+  50% {
+    transform: scale(1.1);
   }
-  
-  @media (max-width: 768px) {
-    .mobile-menu-toggle {
-      display: flex;
-    }
+  100% {
+    transform: scale(1);
   }
-/* ===== المحتوى الرئيسي ===== */
-.main-content {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-  }
+}
+
+.notification-badge .dot:not(:empty) {
+  animation: pulse 2s infinite;
+}
+
+/* Glass effect enhancement */
+.glass-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.05)
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* RTL specific adjustments */
+[dir="rtl"] .search-container i {
+  right: 15px;
+  left: auto;
+}
+
+[dir="rtl"] .profile-pill {
+  padding: 0.4rem 0.4rem 0.4rem 1rem;
+}
+
+[dir="rtl"] .notification-badge .dot {
+  left: -5px;
+  right: auto;
+}

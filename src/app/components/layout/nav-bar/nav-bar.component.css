@@ -1,413 +1,572 @@
-/* nav-bar.component.css - المحدث */
+/* nav-bar.component.scss */
 
-/* ===== متغيرات التصميم ===== */
-:root {
-  --sidebar-bg: rgba(255, 255, 255, 0.08);
-  --sidebar-border: rgba(255, 255, 255, 0.15);
-  --glass-blur: 20px;
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --accent-color: #ffffff;
-  --hover-bg: rgba(255, 255, 255, 0.2);
-  --active-bg: rgba(255, 255, 255, 0.25);
-  --active-color: #0a66c2;
-  --shadow-color: rgba(0, 0, 0, 0.2);
-  --logout-color: rgba(255, 153, 153, 0.9);
+:host {
+  display: block;
+  font-family: 'Cairo', sans-serif;
 }
-*{
-  color :#ffffff
-}
-/* ===== النافبار الأساسية ===== */
+
+/* Sidebar Container */
 .sidebar {
-  width: 100%;
-  height: 100%;
-  background: var(--sidebar-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  border-left: 1px solid var(--sidebar-border);
-  display: flex;
-  flex-direction: column;
-  padding: 20px 0;
-  color: var(--text-primary);
-  position: relative;
-  overflow: hidden;
+  position: fixed;
+  top: 70px;
+  right: 0;
+  bottom: 0;
+  width: 280px;
+  background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, 0.98) 0%,
+    rgba(30, 41, 59, 0.98) 100%
+  );
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  color: white;
+  overflow-x: hidden;
+  overflow-y: auto;
+  z-index: 999;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    -8px 0 32px rgba(0, 0, 0, 0.3),
+    inset 1px 0 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(67, 97, 238, 0.5);
+    border-radius: 3px;
+    
+    &:hover {
+      background: rgba(67, 97, 238, 0.7);
+    }
+  }
+
+  &.collapsed {
+    width: 80px;
+    
+    .user-name,
+    .user-role,
+    .nav-label,
+    .logout-btn span,
+    .arrow,
+    .sub-menu {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      transform: translateX(20px) !important;
+      width: 0 !important;
+      height: 0 !important;
+      overflow: hidden !important;
+    }
+    
+    .nav-link {
+      justify-content: center;
+      padding: 16px 0 !important;
+    }
+    
+    .nav-icon {
+      margin: 0 !important;
+    }
+    
+    .user-info-compact {
+      padding: 20px 0 !important;
+      justify-content: center;
+    }
+    
+    .user-avatar {
+      width: 40px !important;
+      height: 40px !important;
+    }
+    
+    .logout-btn {
+      justify-content: center;
+      padding: 16px 0 !important;
+      
+      i {
+        margin: 0 !important;
+      }
+    }
+  }
 }
 
-/* ===== زر الإغلاق للجوال ===== */
+/* Mobile Close Button */
 .mobile-close-btn {
   position: absolute;
-  top: 20px;
-  left: 20px;
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+  top: 15px;
+  left: 15px;
+  width: 36px;
+  height: 36px;
+  background: rgba(239, 68, 68, 0.2);
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-primary);
-  font-size: 1.2rem;
   cursor: pointer;
-  transition: all 0.3s;
-  border: 1px solid var(--sidebar-border);
+  transition: all 0.3s ease;
   z-index: 1001;
+  display: none;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.3);
+    transform: rotate(90deg) scale(1.1);
+  }
+
+  i {
+    color: #ef4444;
+    font-size: 1.2rem;
+    transition: transform 0.3s ease;
+  }
+
+  &:hover i {
+    transform: scale(1.1);
+  }
 }
 
-.mobile-close-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: rotate(90deg);
-}
-
-/* ===== معلومات المستخدم ===== */
+/* User Info Compact */
 .user-info-compact {
   padding: 25px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   gap: 15px;
-  background: rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid var(--sidebar-border);
+  transition: padding 0.3s ease;
   position: relative;
-  transition: all 0.3s;
-}
-
-.sidebar.collapsed .user-info-compact {
-  padding: 20px 15px;
-  justify-content: center;
-}
-
-.user-avatar {
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  object-fit: cover;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s;
-}
-
-.sidebar.collapsed .user-avatar {
-  width: 40px;
-  height: 40px;
-}
-
-.user-details {
-  flex: 1;
   overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: linear-gradient(90deg, rgba(67, 97, 238, 0.1), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  &:hover::before {
+    opacity: 1;
+  }
+
+  .user-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #4361ee;
+    box-shadow: 
+      0 4px 15px rgba(67, 97, 238, 0.4),
+      inset 0 2px 4px rgba(255, 255, 255, 0.2);
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    flex-shrink: 0;
+    z-index: 1;
+
+    &:hover {
+      transform: scale(1.1) rotate(5deg);
+      border-color: #4cc9f0;
+      box-shadow: 
+        0 6px 25px rgba(67, 97, 238, 0.6),
+        inset 0 2px 4px rgba(255, 255, 255, 0.3);
+    }
+  }
+
+  .user-details {
+    flex: 1;
+    overflow: hidden;
+    z-index: 1;
+
+    .user-name {
+      font-weight: 600;
+      font-size: 1rem;
+      color: white;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: transform 0.3s ease;
+    }
+
+    .user-role {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.7);
+      background: rgba(255, 255, 255, 0.1);
+      padding: 3px 10px;
+      border-radius: 12px;
+      display: inline-block;
+      transition: all 0.3s ease;
+    }
+  }
+
+  .toggle-icon {
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+    z-index: 1;
+
+    &:hover {
+      color: white;
+      transform: rotate(-90deg) scale(1.2);
+    }
+  }
 }
 
-.user-name {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-role {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  display: block;
-  margin-top: 3px;
-}
-
-.toggle-icon {
-  color: var(--text-secondary);
-  font-size: 1.2rem;
-  cursor: pointer;
-  transition: all 0.3s;
-  padding: 5px;
-  border-radius: 8px;
-}
-
-.toggle-icon:hover {
-  color: var(--text-primary);
-  background: var(--hover-bg);
-  transform: rotate(180deg);
-}
-
-.sidebar.collapsed .user-details,
-.sidebar.collapsed .user-role {
-  display: none;
-}
-
-/* ===== القائمة الرئيسية ===== */
+/* Navigation Menu */
 .nav-menu {
-  flex: 1;
-  overflow-y: auto;
   padding: 20px 0;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-.nav-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.nav-item {
-  position: relative;
-  margin: 5px 15px;
-}
-
-.nav-link {
-  display: flex;
-  align-items: center;
-  padding: 12px 15px;
-  color: var(--text-secondary);
-  text-decoration: none;
-  border-radius: 12px;
-  transition: all 0.3s;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  gap: 15px;
-}
-
-.nav-link:hover:not(.active):not(.logout-btn) {
-  background: var(--hover-bg);
-  color: var(--text-primary);
-  border-color: var(--sidebar-border);
-  transform: translateX(-5px);
-  padding-right: 20px;
-}
-
-.nav-link:hover i {
-  transform: scale(1.1);
-}
-
-/* ===== الحالة النشطة ===== */
-.nav-link.active {
-  background: var(--active-bg);
-  color: var(--accent-color);
-  border-color: var(--sidebar-border);
-  font-weight: 600;
-  padding-right: 20px;
-}
-
-.nav-link.active i {
-  color: var(--accent-color);
-  transform: scale(1.1);
-}
-
-/* ===== الأيقونة ===== */
-.nav-icon {
-  position: relative;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s;
-}
-
-.nav-icon i {
-  font-size: 1.2rem;
-  transition: all 0.3s;
-}
-
-/* ===== شارة الإشعارات ===== */
-.notification-badge {
-  position: absolute;
-  top: -5px;
-  left: -5px;
-  background: #ff6b6b;
-  color: white;
-  font-size: 0.7rem;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-weight: bold;
-  min-width: 18px;
-  text-align: center;
-  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
-}
-
-/* ===== نص العنصر ===== */
-.nav-label {
   flex: 1;
-  font-size: 0.9rem;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: all 0.3s;
+
+  .nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+
+    .nav-item {
+      position: relative;
+
+      &:hover {
+        > .nav-link {
+          background: rgba(67, 97, 238, 0.2);
+          padding-right: 25px;
+
+          .arrow {
+            transform: rotate(90deg);
+          }
+        }
+
+        > .sub-menu {
+          opacity: 1;
+          visibility: visible;
+          transform: translateX(0);
+        }
+      }
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      padding: 16px 24px;
+      color: rgba(255, 255, 255, 0.8);
+      text-decoration: none;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+      position: relative;
+      border-right: 3px solid transparent;
+      margin: 4px 0;
+
+      &:hover {
+        color: white;
+        background: rgba(67, 97, 238, 0.15);
+
+        .nav-icon i {
+          transform: scale(1.1);
+        }
+
+        .nav-label {
+          transform: translateX(-5px);
+        }
+      }
+
+      &.active {
+        background: linear-gradient(90deg, rgba(67, 97, 238, 0.25), transparent);
+        color: white;
+        border-right-color: #4361ee;
+
+        .nav-icon i {
+          color: #4cc9f0;
+          text-shadow: 0 0 15px rgba(76, 201, 240, 0.5);
+        }
+
+        .nav-label {
+          font-weight: 600;
+        }
+      }
+
+      .nav-icon {
+        position: relative;
+        margin-left: 15px;
+        flex-shrink: 0;
+
+        i {
+          font-size: 1.3rem;
+          color: rgba(255, 255, 255, 0.9);
+          transition: all 0.3s ease;
+        }
+
+        .notification-badge {
+          position: absolute;
+          top: -8px;
+          left: -8px;
+          background: linear-gradient(135deg, #ef4444, #dc2626);
+          color: white;
+          font-size: 0.7rem;
+          min-width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          border: 2px solid #1e293b;
+          box-shadow: 0 3px 10px rgba(239, 68, 68, 0.4);
+          animation: pulse 2s infinite;
+        }
+      }
+
+      .nav-label {
+        flex: 1;
+        font-size: 0.95rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .arrow {
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.5);
+        transition: transform 0.3s ease;
+        margin-right: auto;
+      }
+    }
+  }
 }
 
-.sidebar.collapsed .nav-label {
-  opacity: 0;
-  width: 0;
-}
-
-/* ===== السهم للقوائم الفرعية ===== */
-.arrow {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  transition: transform 0.3s;
-}
-
-.nav-link:hover .arrow {
-  transform: translateX(-3px);
-}
-
-/* ===== القوائم الفرعية ===== */
+/* Sub Menu */
 .sub-menu {
-  list-style: none;
-  padding: 0;
-  margin: 5px 0 5px 30px;
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 10px;
+  position: absolute;
+  right: calc(100% + 5px);
+  top: 0;
+  background: rgba(30, 41, 59, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  box-shadow: 
+    0 10px 40px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  min-width: 220px;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
-  max-height: 0;
-  transition: max-height 0.3s ease-out;
+
+  &::before {
+    content: '';
+    position: absolute;
+    right: -5px;
+    top: 24px;
+    border-left: 5px solid rgba(30, 41, 59, 0.98);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    filter: drop-shadow(2px 0 2px rgba(0, 0, 0, 0.2));
+  }
+
+  li {
+    &:first-child a {
+      border-radius: 16px 16px 0 0;
+    }
+
+    &:last-child a {
+      border-radius: 0 0 16px 16px;
+    }
+
+    a {
+      display: block;
+      padding: 14px 20px;
+      color: rgba(255, 255, 255, 0.8);
+      text-decoration: none;
+      transition: all 0.3s ease;
+      border-left: 3px solid transparent;
+      font-size: 0.9rem;
+
+      &:hover {
+        background: rgba(67, 97, 238, 0.2);
+        color: white;
+        padding-right: 25px;
+        border-left-color: #4cc9f0;
+      }
+    }
+  }
 }
 
-.nav-item:hover .sub-menu {
-  max-height: 300px;
-  transition: max-height 0.3s ease-in;
-}
-
-.sub-menu li {
-  margin: 0;
-}
-
-.sub-menu a {
-  display: block;
-  padding: 10px 15px;
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-size: 0.9rem;
-  transition: all 0.3s;
-  cursor: pointer;
-}
-
-.sub-menu a:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
-  padding-right: 20px;
-}
-
-/* ===== قسم تسجيل الخروج ===== */
+/* Logout Section */
 .logout-section {
   padding: 20px;
-  border-top: 1px solid var(--sidebar-border);
-  background: rgba(0, 0, 0, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(10px);
+
+  .logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), transparent);
+    color: rgba(239, 68, 68, 0.9);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid rgba(239, 68, 68, 0.2);
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), transparent);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    &:hover {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.3), transparent);
+      border-color: rgba(239, 68, 68, 0.4);
+      transform: translateX(-5px);
+      color: white;
+
+      &::before {
+        opacity: 1;
+      }
+
+      i {
+        transform: translateX(-5px);
+      }
+    }
+
+    i {
+      font-size: 1.2rem;
+      transition: transform 0.3s ease;
+      z-index: 1;
+    }
+
+    span {
+      flex: 1;
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: all 0.3s ease;
+      z-index: 1;
+    }
+  }
 }
 
-.logout-btn {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  padding: 12px 20px;
-  color: var(--logout-color);
-  text-decoration: none;
-  border-radius: 12px;
-  transition: all 0.3s;
-  cursor: pointer;
-  background: rgba(255, 107, 107, 0.1);
-  border: 1px solid rgba(255, 107, 107, 0.2);
-}
-
-.logout-btn:hover {
-  background: rgba(255, 107, 107, 0.2);
-  color: #ffffff;
-  transform: translateX(-5px);
-}
-
-.logout-btn i {
-  font-size: 1.2rem;
-}
-
-.logout-btn span {
-  flex: 1;
-  font-size: 0.95rem;
-  font-weight: 500;
-  transition: all 0.3s;
-}
-
-.sidebar.collapsed .logout-btn span {
-  opacity: 0;
-  width: 0;
-}
-
-/* ===== الشعار المصغر ===== */
+/* Mini Logo */
 .mini-logo {
   position: absolute;
-  bottom: 20px;
+  bottom: 90px;
   right: 50%;
   transform: translateX(50%);
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-primary);
-  font-size: 1.5rem;
-  cursor: pointer;
-  transition: all 0.3s;
+  color: rgba(67, 97, 238, 0.6);
+  font-size: 1.8rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  cursor: default;
+
+  &:hover {
+    color: #4361ee;
+    transform: translateX(50%) scale(1.1);
+  }
 }
 
-.mini-logo:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateX(50%) scale(1.1);
-}
-
-/* ===== تلميحات عند التمرير ===== */
-.nav-link:hover .nav-label.collapsed {
-  position: absolute;
-  right: 70px;
-  background: rgba(0, 0, 0, 0.9);
-  color: white;
-  padding: 8px 15px;
-  border-radius: 8px;
-  white-space: nowrap;
-  opacity: 1;
-  width: auto;
-  z-index: 1000;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-  font-size: 0.9rem;
-}
-
-/* ===== التمرير المخصص ===== */
-.nav-menu::-webkit-scrollbar {
-  width: 4px;
-}
-
-.nav-menu::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
-}
-
-.nav-menu::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
-.nav-menu::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* ===== تصميم الجوال ===== */
+/* Mobile Responsive */
 @media (max-width: 768px) {
   .sidebar {
-    box-shadow: -5px 0 25px rgba(0, 0, 0, 0.3);
+    top: 0;
+    width: 280px;
+    transform: translateX(100%);
+    z-index: 1100;
+    
+    &.mobile-open {
+      transform: translateX(0);
+    }
   }
   
   .mobile-close-btn {
     display: flex;
   }
   
-  .toggle-icon {
-    display: none;
+  .nav-menu {
+    padding: 15px 0;
   }
   
-  .sidebar.collapsed {
+  .logout-section {
+    position: relative;
+    margin-top: 20px;
+  }
+}
+
+/* Small Screens */
+@media (max-width: 480px) {
+  .sidebar {
     width: 100%;
   }
   
-  .nav-link {
-    padding: 12px 15px;
+  .user-info-compact {
+    padding: 20px 15px;
+    
+    .user-avatar {
+      width: 45px;
+      height: 45px;
+    }
   }
+  
+  .nav-list .nav-link {
+    padding: 14px 20px;
+  }
+}
+
+/* Dark Mode Adjustments */
+@media (prefers-color-scheme: light) {
+  .sidebar {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(248, 250, 252, 0.98) 100%
+    );
+    color: #1e293b;
+    border-left: 1px solid rgba(0, 0, 0, 0.1);
+    
+    .nav-link {
+      color: #475569;
+      
+      &:hover, &.active {
+        color: #1e293b;
+        background: rgba(67, 97, 238, 0.08);
+      }
+    }
+    
+    .sub-menu {
+      background: rgba(255, 255, 255, 0.98);
+      color: #1e293b;
+      
+      a {
+        color: #475569;
+        
+        &:hover {
+          color: #1e293b;
+        }
+      }
+    }
+  }
+}
+
+/* Animation for Badge */
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }

@@ -1,0 +1,123 @@
+<!-- student-attendance.component.html -->
+<div class="attendance-interface">
+    <div class="header">
+      <h1><i class="fas fa-id-card"></i> نظام تسجيل الحضور</h1>
+      <p class="subtitle">ضع بطاقة RFID الخاصة بك للمسح</p>
+    </div>
+  
+    <!-- RFID Scanner Interface -->
+    <div class="scanner-section">
+      <div class="scanner-box" [class.scanning]="isScanning" (click)="startRFIDScan()">
+        <div class="scanner-icon">
+          <i class="fas fa-id-card"></i>
+        </div>
+        <h3>المسح الضوئي للبطاقة</h3>
+        <p>انقر هنا أو ضع البطاقة بالقرب من القارئ</p>
+        <div *ngIf="isScanning" class="scanning-animation">
+          <div class="pulse"></div>
+          <p>جاري المسح...</p>
+        </div>
+      </div>
+  
+      <!-- Student Info Display -->
+      <div *ngIf="currentStudent" class="student-info">
+        <div class="student-card">
+          <div class="student-avatar">
+            <i class="fas fa-user-graduate"></i>
+          </div>
+          <div class="student-details">
+            <h3>{{currentStudent.fullName || currentStudent.registrationNumber}}</h3>
+            <p><i class="fas fa-id-badge"></i> {{currentStudent.registrationNumber}}</p>
+            <p><i class="fas fa-book"></i> تخصص: {{currentStudent.specialtyChoice === 'automation' ? 'الآلية' : 'البترول'}}</p>
+            <p><i class="fas fa-calendar"></i> سنة الباك: {{currentStudent.bacYear}}</p>
+          </div>
+        </div>
+  
+        <!-- Live Classes for Today -->
+        <div *ngIf="todayClasses.length > 0" class="today-classes">
+          <h4><i class="fas fa-calendar-day"></i> حصص اليوم:</h4>
+          <div class="classes-list">
+            <div *ngFor="let liveClass of todayClasses" class="class-item">
+              <div class="class-time">
+                <i class="far fa-clock"></i> {{liveClass.startTime}}
+              </div>
+              <div class="class-subject">
+                {{liveClass.subject}}
+              </div>
+              <div class="class-status">
+                <span [class]="liveClass.status === 'ongoing' ? 'status-active' : 'status-scheduled'">
+                  {{liveClass.status === 'ongoing' ? 'جارية' : 'مجدولة'}}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+  
+      <!-- Attendance Result -->
+      <div *ngIf="attendanceResult" class="attendance-result" [class.success]="attendanceResult.success" [class.error]="!attendanceResult.success">
+        <div class="result-icon">
+          <i [class]="attendanceResult.success ? 'fas fa-check-circle' : 'fas fa-times-circle'"></i>
+        </div>
+        <h3>{{attendanceResult.message}}</h3>
+        <p *ngIf="attendanceResult.data">{{attendanceResult.data}}</p>
+        <p *ngIf="attendanceResult.smsSent" class="sms-info">
+          <i class="fas fa-sms"></i> تم إرسال رسالة لولي الأمر
+        </p>
+      </div>
+  
+      <!-- Statistics -->
+      <div class="statistics">
+        <div class="stat-item">
+          <div class="stat-icon">
+            <i class="fas fa-users"></i>
+          </div>
+          <div class="stat-info">
+            <h4>{{totalStudents}}</h4>
+            <p>إجمالي الطلاب</p>
+          </div>
+        </div>
+        
+        <div class="stat-item">
+          <div class="stat-icon">
+            <i class="fas fa-user-check"></i>
+          </div>
+          <div class="stat-info">
+            <h4>{{attendanceToday}}</h4>
+            <p>حضور اليوم</p>
+          </div>
+        </div>
+        
+        <div class="stat-item">
+          <div class="stat-icon">
+            <i class="fas fa-chart-line"></i>
+          </div>
+          <div class="stat-info">
+            <h4>{{attendanceRate}}%</h4>
+            <p>نسبة الحضور</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Recent Attendance -->
+    <div class="recent-attendance" *ngIf="recentAttendance.length > 0">
+      <h3><i class="fas fa-history"></i> آخر الحضور</h3>
+      <div class="attendance-list">
+        <div *ngFor="let record of recentAttendance" class="attendance-record">
+          <div class="record-time">
+            {{record.timestamp | date:'HH:mm'}}
+          </div>
+          <div class="record-student">
+            {{record.studentName}}
+          </div>
+          <div class="record-class">
+            {{record.className}}
+          </div>
+          <div class="record-status">
+            <span class="status-present">حاضر</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>

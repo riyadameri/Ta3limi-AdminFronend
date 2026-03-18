@@ -11,7 +11,7 @@ import { LiveClassComponent } from './live-class/live-class.component';
 import { TeachersManagementComponent } from './teachers-management/teachers-management.component';
 import { StudentDetailsComponent } from './student-details/student-details.component';
 import { AddStudentToClassesModalComponent } from './add-student-to-classes-modal/add-student-to-classes-modal.component';
-import { AccountingComponent } from './components/accounting/accounting.component';
+import {ComprehensiveAccountingComponent} from './components/accounting/accounting.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { LessonDetailComponent } from './lesson-detail/lesson-detail.component';
 import { StudentAttendanceComponent } from './student-attendance/student-attendance.component';
@@ -24,7 +24,7 @@ export const routes: Routes = [
   
   {
     path : 'accounting',
-    component: AccountingComponent,
+    component: ComprehensiveAccountingComponent,
     
   },
 

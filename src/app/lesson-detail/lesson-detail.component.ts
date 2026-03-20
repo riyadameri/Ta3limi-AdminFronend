@@ -2108,22 +2108,51 @@ export class LessonDetailComponent implements OnInit {
   }
 
   // ========== تحميل البيانات ==========
-  loadLessonDetails(): void {
-    this.loading = true;
-    this.http.get<any>(`${environment.apiUrl}/classes/${this.lessonId}`).subscribe({
-      next: (res) => {
-        const data = res.data || res;
-        this.lesson = data;
-        this.statistics.totalStudents = data.students?.length || 0;
-        this.loadPayments();
-      },
-      error: (err) => {
-        console.error('خطأ في تحميل تفاصيل الحصة:', err);
-        this.showError('فشل في تحميل تفاصيل الحصة');
-        this.loading = false;
+// ========== تحميل تفاصيل الحصة ==========
+loadLessonDetails(): void {
+  this.loading = true;
+  console.log('📚 Loading class details for ID:', this.lessonId);
+  
+  this.http.get<any>(`${environment.apiUrl}/classes/${this.lessonId}`).subscribe({
+    next: (res) => {
+      console.log('📚 Class details response:', res);
+      
+      // التعامل مع تنسيقات الاستجابة المختلفة
+      let lessonData;
+      if (res && res.data) {
+        lessonData = res.data;
+      } else if (res && res.class) {
+        lessonData = res.class;
+      } else if (res && res._id) {
+        lessonData = res;
+      } else {
+        lessonData = res;
       }
-    });
-  }
+      
+      if (lessonData) {
+        this.lesson = lessonData;
+        this.statistics.totalStudents = lessonData.students?.length || 0;
+        console.log('✅ Class loaded successfully, students:', this.statistics.totalStudents);
+        
+        // تحميل المدفوعات بعد تحميل الحصة
+        this.loadPayments();
+        
+        // تحميل الطلاب المتاحين
+        this.loadAvailableStudents();
+      } else {
+        console.error('❌ No class data in response');
+        this.showError('فشل في تحميل تفاصيل الحصة');
+      }
+      
+      this.loading = false;
+    },
+    error: (err) => {
+      console.error('❌ Error loading class details:', err);
+      this.showError('فشل في تحميل تفاصيل الحصة');
+      this.loading = false;
+    }
+  });
+}
 
   loadPayments(): void {
     this.http.get<any>(`${environment.apiUrl}/payments/class/${this.lessonId}`).subscribe({
@@ -2174,19 +2203,58 @@ export class LessonDetailComponent implements OnInit {
       }
     });
   }
-
-  loadAvailableStudents(): void {
-    this.http.get<any>(`${environment.apiUrl}/students`).subscribe({
-      next: (students) => {
-        const enrolledIds = new Set(this.lesson?.students.map(s => s._id));
-        this.availableStudents = students.filter((s: Student) => !enrolledIds.has(s._id));
-      },
-      error: (err) => {
-        console.error('خطأ في تحميل قائمة الطلاب:', err);
-      }
-    });
+// ========== تحميل الطلاب المتاحين للتسجيل ==========
+loadAvailableStudents(): void {
+  if (!this.lesson) {
+    console.log('⚠️ Lesson not loaded yet, skipping available students load');
+    return;
   }
-
+  
+  this.loading = true;
+  
+  // جلب جميع الطلاب
+  this.http.get<any>(`${environment.apiUrl}/students`).subscribe({
+    next: (studentsResponse) => {
+      console.log('📋 All students response:', studentsResponse);
+      
+      // التحقق من صحة البيانات
+      let studentsList: Student[] = [];
+      if (Array.isArray(studentsResponse)) {
+        studentsList = studentsResponse;
+      } else if (studentsResponse && studentsResponse.data && Array.isArray(studentsResponse.data)) {
+        studentsList = studentsResponse.data;
+      } else if (studentsResponse && studentsResponse.students && Array.isArray(studentsResponse.students)) {
+        studentsList = studentsResponse.students;
+      } else {
+        studentsList = [];
+      }
+      
+      // الحصول على معرفات الطلاب المسجلين في الحصة
+      const enrolledIds = new Set<string>();
+      if (this.lesson && this.lesson.students && Array.isArray(this.lesson.students)) {
+        this.lesson.students.forEach(s => {
+          if (s && s._id) {
+            enrolledIds.add(s._id);
+          }
+        });
+      }
+      
+      // تصفية الطلاب غير المسجلين
+      this.availableStudents = studentsList.filter(s => s && s._id && !enrolledIds.has(s._id));
+      
+      console.log('✅ Available students:', this.availableStudents.length);
+      console.log('📝 Enrolled students:', enrolledIds.size);
+      
+      this.loading = false;
+    },
+    error: (err) => {
+      console.error('❌ Error loading students list:', err);
+      this.showError('فشل في تحميل قائمة الطلاب');
+      this.availableStudents = [];
+      this.loading = false;
+    }
+  });
+}
   // ========== عمليات المدفوعات ==========
   applyMonthFilter(): void {
     if (this.selectedMonth === 'all') {
@@ -2249,16 +2317,24 @@ export class LessonDetailComponent implements OnInit {
       next: (res: any) => {
         this.loadPayments();
         this.closeAddPaymentPopup();
-        this.showSuccess('تم تسجيل الدفع بنجاح');
+        
+        // عرض رسالة نجاح مع تفاصيل إرسال واتساب
+        if (res.whatsapp?.success) {
+          this.showSuccess(`تم تسجيل الدفع بنجاح وإرسال رسالة تأكيد إلى ولي الأمر`);
+        } else {
+          this.showSuccess(`تم تسجيل الدفع بنجاح (تعذر إرسال رسالة واتساب: ${res.whatsapp?.error || 'رقم الهاتف غير متوفر'})`);
+        }
         this.loading = false;
       },
       error: (err) => {
         console.error('خطأ في تسجيل الدفع:', err);
-        this.showError('فشل في تسجيل الدفع');
+        this.showError(err.error?.error || 'فشل في تسجيل الدفع');
         this.loading = false;
       }
     });
   }
+  
+  
 
   editPayment(payment: Payment): void {
     this.selectedPayment = payment;
@@ -2385,21 +2461,64 @@ export class LessonDetailComponent implements OnInit {
     if (!studentId) return;
     
     this.loading = true;
+    console.log('📝 Enrolling student:', studentId);
     
+    // إرسال الطلب بدون body أو ب body فارغ
     this.http.post(`${environment.apiUrl}/classes/${this.lessonId}/enroll/${studentId}`, {}).subscribe({
-      next: () => {
-        this.loadLessonDetails();
-        this.closeAddStudentPopup();
-        this.showSuccess('تم إضافة الطالب بنجاح');
+      next: (response: any) => {
+        console.log('✅ Server response:', response);
+        
+        // التحقق من نجاح العملية بغض النظر عن هيكل الاستجابة
+        if (response && (response.success === true || response.message || response.class)) {
+          // تحديث البيانات
+          this.loadLessonDetails();
+          this.closeAddStudentPopup();
+          
+          // عرض رسالة نجاح
+          if (response.whatsapp?.success) {
+            this.showSuccess(`تم إضافة الطالب بنجاح وإرسال رسالة واتساب إلى ولي الأمر`);
+          } else {
+            this.showSuccess(`تم إضافة الطالب بنجاح`);
+          }
+        } else {
+          // حتى إذا كانت الاستجابة لا تحتوي على success: true ولكن العملية نجحت
+          this.loadLessonDetails();
+          this.closeAddStudentPopup();
+          this.showSuccess(`تم إضافة الطالب بنجاح`);
+        }
+        
         this.loading = false;
       },
       error: (err) => {
-        console.error('خطأ في إضافة الطالب:', err);
-        this.showError('فشل في إضافة الطالب');
+        console.error('❌ Error details:', err);
+        
+        // التحقق من أن الخطأ ليس بسبب نجاح العملية
+        if (err.status === 200) {
+          // هذا يعني أن العملية نجحت ولكن حدث خطأ في معالجة الاستجابة
+          console.log('⚠️ Request succeeded but response handling failed');
+          this.loadLessonDetails();
+          this.closeAddStudentPopup();
+          this.showSuccess(`تم إضافة الطالب بنجاح`);
+          this.loading = false;
+          return;
+        }
+        
+        // عرض رسالة الخطأ المناسبة
+        let errorMessage = 'فشل في إضافة الطالب';
+        if (err.error && err.error.error) {
+          errorMessage = err.error.error;
+        } else if (err.error && err.error.message) {
+          errorMessage = err.error.message;
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+        
+        this.showError(errorMessage);
         this.loading = false;
       }
     });
   }
+  
 
   removeStudent(studentId: string): void {
     if (!confirm('هل أنت متأكد من إزالة هذا الطالب من الحصة؟')) return;
@@ -2482,7 +2601,6 @@ export class LessonDetailComponent implements OnInit {
       this.addStudentForm.reset();
     }
   }
-
   openAddPaymentPopup(student?: Student): void {
     this.showAddPaymentPopup = true;
     if (student) {

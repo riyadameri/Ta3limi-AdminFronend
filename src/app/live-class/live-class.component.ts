@@ -1272,7 +1272,7 @@ import { environment } from '../../environments/environment';
   `]
 })
 export class LiveClassComponent implements OnInit {
-  private apiUrl = environment.apiUrl || 'http://localhost:3000/api';
+  private apiUrl = environment.apiUrl || '/api';
   
   // البيانات
   liveClasses: any[] = [];

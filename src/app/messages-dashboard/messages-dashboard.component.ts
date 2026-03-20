@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 
 interface Student {
   _id: string;
@@ -12,6 +13,24 @@ interface Student {
   academicYear: string;
   status: string;
   active: boolean;
+  classes?: any[];
+}
+
+interface ClassInfo {
+  _id: string;
+  name: string;
+  subject: string;
+  academicYear: string;
+  teacher?: {
+    _id: string;
+    name: string;
+    phone?: string;
+    email?: string;
+  };
+  schedule?: any[];
+  studentsCount?: number;
+  studentsWithPhone?: number;
+  studentsWithEmail?: number;
 }
 
 interface MessageTemplate {
@@ -29,8 +48,16 @@ interface TemplateField {
   required: boolean;
 }
 
+interface SearchFilters {
+  searchTerm: string;
+  academicYear: string;
+  status: string;
+  active: string;
+  classId: string;
+}
+
 @Component({
-  selector: 'app-messages-dashboard',
+  selector: 'app-messages-dashboard-enhanced',
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
@@ -41,502 +68,528 @@ interface TemplateField {
         <p>جاري تحميل البيانات...</p>
       </div>
 
-      <!-- Header with WhatsApp Status -->
-      <div class="header">
-        <div class="header-content">
-          <h1>
-            <span class="icon">📱</span>
-            نظام الرسائل عبر واتساب
-          </h1>
-          <p class="subtitle">إرسال رسائل وإشعارات لأولياء الأمور عبر واتساب</p>
+      <!-- Header -->
+      <div class="dashboard-header">
+        <div class="header-left">
+          <h1>نظام الرسائل</h1>
+          <p class="subtitle">إدارة وإرسال الرسائل لأولياء الأمور</p>
         </div>
-        <div class="status-badge" [class.connected]="whatsappConnected">
-          <span class="status-dot"></span>
-          <span class="status-text">{{ whatsappConnected ? 'متصل' : 'غير متصل' }}</span>
-          <span class="phone-number" *ngIf="whatsappNumber">({{ whatsappNumber }})</span>
+        <div class="header-right">
+          <div class="whatsapp-status" [class.connected]="whatsappConnected">
+            <span class="status-indicator"></span>
+            <span class="status-text">{{ whatsappConnected ? 'واتساب متصل' : 'واتساب غير متصل' }}</span>
+            <span class="phone-number" *ngIf="whatsappNumber">({{ whatsappNumber }})</span>
+          </div>
+          <button class="refresh-btn" (click)="refreshData()">
+            <span class="refresh-icon"></span>
+            تحديث
+          </button>
         </div>
-        <button class="refresh-btn" (click)="refreshData()" title="تحديث البيانات">
-          🔄 تحديث
-        </button>
       </div>
 
-      <!-- Stats Cards -->
+      <!-- Statistics Cards -->
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-icon" style="background: #e3f2fd; color: #1976d2;">📨</div>
+          <div class="stat-icon income"></div>
           <div class="stat-content">
-            <div class="stat-value">{{ stats.totalMessages || 0 }}</div>
-            <div class="stat-label">إجمالي الرسائل</div>
+            <div class="stat-value">{{ totalStudents }}</div>
+            <div class="stat-label">إجمالي الطلاب</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon" style="background: #e8f5e9; color: #388e3c;">✅</div>
+          <div class="stat-icon messages"></div>
           <div class="stat-content">
-            <div class="stat-value">{{ stats.successfulMessages || 0 }}</div>
-            <div class="stat-label">تم الإرسال</div>
+            <div class="stat-value">{{ totalMessages }}</div>
+            <div class="stat-label">الرسائل المرسلة</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon" style="background: #fff3e0; color: #f57c00;">👥</div>
+          <div class="stat-icon success"></div>
           <div class="stat-content">
-            <div class="stat-value">{{ students.length }}</div>
-            <div class="stat-label">أولياء الأمور</div>
+            <div class="stat-value">{{ successRate }}%</div>
+            <div class="stat-label">نسبة النجاح</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon" style="background: #fce4ec; color: #c2185b;">💰</div>
+          <div class="stat-icon warning"></div>
           <div class="stat-content">
-            <div class="stat-value">{{ lateStudentsCount }}</div>
+            <div class="stat-value">{{ latePaymentsCount }}</div>
             <div class="stat-label">دفعات متأخرة</div>
           </div>
         </div>
       </div>
 
       <!-- Tabs Navigation -->
-      <div class="tabs">
+      <div class="tabs-container">
         <button 
           *ngFor="let tab of tabs" 
-          class="tab-btn" 
+          class="tab-button" 
           [class.active]="activeTab === tab.id"
           (click)="activeTab = tab.id">
           <span class="tab-icon">{{ tab.icon }}</span>
-          <span class="tab-label">{{ tab.name }}</span>
+          <span class="tab-label">{{ tab.label }}</span>
         </button>
       </div>
 
-      <!-- Tab Content: إرسال رسالة غياب -->
-      <div class="tab-content" *ngIf="activeTab === 'absence'">
-        <div class="content-header">
-          <h2><span class="icon">🔴</span> إرسال رسالة غياب عبر واتساب</h2>
-          <p>إرسال إشعار غياب لولي أمر الطالب</p>
+      <!-- Tab: Send Message -->
+      <div class="tab-panel" *ngIf="activeTab === 'send'">
+        <div class="panel-header">
+          <h2>إرسال رسالة</h2>
+          <p>إرسال رسائل فردية أو جماعية لأولياء الأمور</p>
         </div>
 
-        <div class="form-grid">
-          <div class="form-group">
-            <label>اختر الطالب</label>
-            <select class="form-control" [(ngModel)]="selectedAbsenceStudentId">
-              <option value="">-- اختر طالباً --</option>
-              <option *ngFor="let student of students" [value]="student._id">
-                {{ student.name }} ({{ student.academicYear }}) - {{ student.parentPhone }}
-              </option>
-            </select>
+        <!-- Professional Student Search -->
+        <div class="search-section">
+          <h3>البحث عن الطلاب</h3>
+          <div class="search-filters">
+            <div class="filter-group">
+              <input 
+                type="text" 
+                class="form-control" 
+                placeholder="بحث بالاسم، رقم الطالب، أو رقم الهاتف..."
+                [(ngModel)]="searchFilters.searchTerm"
+                (ngModelChange)="onSearchChange()">
+            </div>
+            <div class="filter-group">
+              <select class="form-control" [(ngModel)]="searchFilters.academicYear" (change)="performSearch()">
+                <option value="all">جميع المستويات</option>
+                <option value="1AS">1 ثانوي</option>
+                <option value="2AS">2 ثانوي</option>
+                <option value="3AS">3 ثانوي</option>
+                <option value="1MS">1 متوسط</option>
+                <option value="2MS">2 متوسط</option>
+                <option value="3MS">3 متوسط</option>
+                <option value="4MS">4 متوسط</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <select class="form-control" [(ngModel)]="searchFilters.status" (change)="performSearch()">
+                <option value="all">جميع الحالات</option>
+                <option value="active">نشط</option>
+                <option value="pending">قيد الانتظار</option>
+                <option value="inactive">غير نشط</option>
+              </select>
+            </div>
+            <button class="btn-secondary" (click)="performSearch()">بحث</button>
+            <button class="btn-text" (click)="clearSearch()">مسح</button>
           </div>
+        </div>
 
-          <div class="form-group">
-            <label>نص الرسالة (اختياري)</label>
-            <textarea 
-              class="form-control" 
-              rows="4"
-              placeholder="اترك هذا الحقل فارغاً لاستخدام الرسالة الافتراضية..."
-              [(ngModel)]="absenceMessage.customMessage"></textarea>
-          </div>
-
-          <div class="preview-box" *ngIf="getSelectedStudent(selectedAbsenceStudentId) as student">
-            <h4>معاينة الرسالة:</h4>
-            <div class="message-preview">
-              🔴 *تنبيه غياب*
-              
-              عزيزي ولي أمر الطالب/ة *{{ student.name }}*
-              نود إعلامكم بأن الطالب/ة لم يحضر اليوم *{{ getCurrentDate() }}*
-              يرجى التواصل مع إدارة المدرسة لمعرفة أسباب الغياب.
-
-              مع تحيات إدارة المدرسة
+        <!-- Student Selection -->
+        <div class="selection-section">
+          <div class="selection-header">
+            <h3>اختر المستلمين</h3>
+            <div class="selection-actions">
+              <button class="btn-text" (click)="selectAll()">تحديد الكل</button>
+              <button class="btn-text" (click)="deselectAll()">إلغاء الكل</button>
+              <span class="selected-count">تم اختيار {{ selectedStudentIds.length }} طالب</span>
             </div>
           </div>
 
-          <div class="form-actions">
-            <button 
-              class="btn-primary" 
-              [disabled]="!selectedAbsenceStudentId || sending"
-              (click)="sendAbsenceMessage()">
-              <span class="spinner" *ngIf="sending"></span>
-              {{ sending ? 'جاري الإرسال عبر واتساب...' : 'إرسال رسالة الغياب' }}
-            </button>
+          <div class="students-grid">
+            <div *ngFor="let student of filteredStudents" class="student-card" 
+                 [class.selected]="isSelected(student._id)">
+              <div class="student-checkbox">
+                <input 
+                  type="checkbox" 
+                  [id]="'student-' + student._id"
+                  [checked]="isSelected(student._id)"
+                  (change)="toggleStudent(student._id)">
+                <label [for]="'student-' + student._id"></label>
+              </div>
+              <div class="student-info">
+                <div class="student-name">{{ student.name }}</div>
+                <div class="student-details">
+                  <span class="student-id">رقم: {{ student.studentId || 'غير محدد' }}</span>
+                  <span class="student-phone">هاتف: {{ student.parentPhone }}</span>
+                  <span class="student-year">المستوى: {{ student.academicYear }}</span>
+                </div>
+              </div>
+            </div>
           </div>
+
+          <div class="no-results" *ngIf="filteredStudents.length === 0">
+            <p>لا توجد نتائج للبحث</p>
+          </div>
+        </div>
+
+        <!-- Message Composition -->
+        <div class="message-section">
+          <h3>نص الرسالة</h3>
+          <div class="message-composer">
+            <textarea 
+              class="message-textarea"
+              rows="6"
+              placeholder="اكتب رسالتك هنا..."
+              [(ngModel)]="messageContent"
+              (input)="updateCharacterCount()"></textarea>
+            <div class="message-footer">
+              <span class="char-counter">{{ messageContent.length }}/500</span>
+              <div class="template-buttons">
+                <button class="btn-outline" (click)="insertTemplate('absence')">قالب غياب</button>
+                <button class="btn-outline" (click)="insertTemplate('payment')">قالب دفع</button>
+                <button class="btn-outline" (click)="insertTemplate('announcement')">قالب إعلان</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Delivery Options -->
+        <div class="delivery-section">
+          <h3>خيارات الإرسال</h3>
+          <div class="delivery-options">
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="sendWhatsApp">
+              <span>إرسال عبر واتساب</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="sendEmail">
+              <span>إرسال عبر البريد الإلكتروني</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Message Preview -->
+        <div class="preview-section" *ngIf="messageContent">
+          <h3>معاينة الرسالة</h3>
+          <div class="message-preview">
+            <div class="preview-header">
+              <span>إلى: {{ selectedStudentIds.length }} ولي أمر</span>
+            </div>
+            <div class="preview-content">{{ messageContent }}</div>
+            <div class="preview-footer">
+              <span>مع تحيات إدارة المدرسة</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+          <button class="btn-primary" (click)="sendMessage()" [disabled]="!canSend()">
+            <span class="btn-icon"></span>
+            {{ sending ? 'جاري الإرسال...' : 'إرسال الرسالة' }}
+          </button>
+          <button class="btn-secondary" (click)="clearForm()">مسح</button>
         </div>
       </div>
 
-      <!-- Tab Content: تأخر الدفع -->
-      <div class="tab-content" *ngIf="activeTab === 'late-payment'">
-        <div class="content-header">
-          <h2><span class="icon">💰</span> تنبيهات تأخر الدفع عبر واتساب</h2>
-          <p>إرسال تنبيهات للطلاب المتأخرين في الدفع</p>
+      <!-- Tab: Send to Class -->
+      <div class="tab-panel" *ngIf="activeTab === 'class-message'">
+        <div class="panel-header">
+          <h2>إرسال رسالة لحصة معينة</h2>
+          <p>إرسال رسالة لجميع طلاب حصة محددة أو لطلاب مختارين</p>
         </div>
 
-        <div class="filters-bar">
-          <select class="form-control" [(ngModel)]="latePaymentFilters.class">
-            <option value="">جميع الحصص</option>
-            <option *ngFor="let class of uniqueClasses" [value]="class">{{ class }}</option>
-          </select>
+        <!-- Class Selection -->
+        <div class="search-section">
+          <h3>اختر الحصة</h3>
+          <div class="search-filters">
+            <div class="filter-group">
+              <select class="form-control" [(ngModel)]="selectedClassId" (change)="onClassSelect()">
+                <option value="">-- اختر حصة --</option>
+                <option *ngFor="let classItem of availableClassesList" [value]="classItem._id">
+                  {{ classItem.name }} - {{ classItem.subject }} ({{ classItem.academicYear }})
+                </option>
+              </select>
+            </div>
+            <div class="filter-group" *ngIf="selectedClassId">
+              <div class="radio-group">
+                <label class="radio-label">
+                  <input type="radio" name="recipientType" [value]="true" [(ngModel)]="includeAllStudentsInClass" (change)="onRecipientTypeChange()">
+                  <span>جميع الطلاب ({{ selectedClassStudents.length }})</span>
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="recipientType" [value]="false" [(ngModel)]="includeAllStudentsInClass" (change)="onRecipientTypeChange()">
+                  <span>اختيار طلاب محددين</span>
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="students-list" *ngIf="lateStudents.length > 0">
+        <!-- Class Info -->
+        <div class="class-info" *ngIf="selectedClassId && classDetails">
+          <div class="info-card">
+            <h4>معلومات الحصة</h4>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">اسم الحصة:</span>
+                <span class="info-value">{{ classDetails.name }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">المادة:</span>
+                <span class="info-value">{{ classDetails.subject }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">الأستاذ:</span>
+                <span class="info-value">{{ classDetails.teacher?.name || 'غير محدد' }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">عدد الطلاب:</span>
+                <span class="info-value">{{ classDetails.studentsCount || 0 }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">متاح واتساب:</span>
+                <span class="info-value">{{ classDetails.studentsWithPhone || 0 }} طالب</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Student Selection (if specific students selected) -->
+        <div class="selection-section" *ngIf="selectedClassId && !includeAllStudentsInClass && selectedClassStudents.length > 0">
+          <div class="selection-header">
+            <h3>اختر الطلاب المستلمين</h3>
+            <div class="selection-actions">
+              <button class="btn-text" (click)="selectAllClassStudents()">تحديد الكل</button>
+              <button class="btn-text" (click)="deselectAllClassStudents()">إلغاء الكل</button>
+              <span class="selected-count">تم اختيار {{ selectedClassStudentIds.length }} طالب</span>
+            </div>
+          </div>
+
+          <div class="students-grid">
+            <div *ngFor="let student of selectedClassStudents" class="student-card" 
+                 [class.selected]="isClassStudentSelected(student._id)">
+              <div class="student-checkbox">
+                <input 
+                  type="checkbox" 
+                  [id]="'class-student-' + student._id"
+                  [checked]="isClassStudentSelected(student._id)"
+                  (change)="toggleClassStudent(student._id)">
+                <label [for]="'class-student-' + student._id"></label>
+              </div>
+              <div class="student-info">
+                <div class="student-name">{{ student.name }}</div>
+                <div class="student-details">
+                  <span class="student-id">رقم: {{ student.studentId || 'غير محدد' }}</span>
+                  <span class="student-phone">هاتف: {{ student.parentPhone || 'غير متوفر' }}</span>
+                  <span class="student-email">بريد: {{ student.parentEmail || 'غير متوفر' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Student List Summary (if all students) -->
+        <div class="students-summary" *ngIf="selectedClassId && includeAllStudentsInClass && selectedClassStudents.length > 0">
+          <div class="summary-card">
+            <h4>ملخص المستلمين</h4>
+            <div class="summary-stats">
+              <div class="stat-badge">
+                <span class="stat-number">{{ selectedClassStudents.length }}</span>
+                <span class="stat-label">إجمالي الطلاب</span>
+              </div>
+              <div class="stat-badge">
+                <span class="stat-number">{{ getStudentsWithPhone() }}</span>
+                <span class="stat-label">متاح عبر واتساب</span>
+              </div>
+              <div class="stat-badge">
+                <span class="stat-number">{{ getStudentsWithEmail() }}</span>
+                <span class="stat-label">متاح عبر البريد</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Message Composition -->
+        <div class="message-section">
+          <h3>نص الرسالة</h3>
+          <div class="message-composer">
+            <textarea 
+              class="message-textarea"
+              rows="6"
+              placeholder="اكتب رسالتك هنا..."
+              [(ngModel)]="classMessageContent"
+              (input)="updateClassMessageCount()"></textarea>
+            <div class="message-footer">
+              <span class="char-counter">{{ classMessageContent.length }}/500</span>
+              <div class="template-buttons">
+                <button class="btn-outline" (click)="insertClassTemplate('absence')">قالب غياب</button>
+                <button class="btn-outline" (click)="insertClassTemplate('payment')">قالب دفع</button>
+                <button class="btn-outline" (click)="insertClassTemplate('announcement')">قالب إعلان</button>
+                <button class="btn-outline" (click)="insertClassTemplate('class')">قالب حصة</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Message Preview -->
+        <div class="preview-section" *ngIf="classMessageContent">
+          <h3>معاينة الرسالة</h3>
+          <div class="message-preview">
+            <div class="preview-header">
+              <span>إلى: {{ getRecipientsCount() }} ولي أمر</span>
+              <span *ngIf="selectedClassId && classDetails">حصة: {{ classDetails.name }}</span>
+            </div>
+            <div class="preview-content">{{ classMessageContent }}</div>
+            <div class="preview-footer">
+              <span>مع تحيات إدارة المدرسة</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+          <button class="btn-primary" (click)="sendToClass()" [disabled]="!canSendToClass()">
+            <span class="btn-icon"></span>
+            {{ sending ? 'جاري الإرسال...' : 'إرسال الرسالة للحصة' }}
+          </button>
+          <button class="btn-secondary" (click)="clearClassForm()">مسح</button>
+        </div>
+      </div>
+
+      <!-- Tab: Payment Reminders -->
+      <div class="tab-panel" *ngIf="activeTab === 'reminders'">
+        <div class="panel-header">
+          <h2>تذكيرات الدفع</h2>
+          <p>إرسال تذكيرات للطلاب المتأخرين في الدفع</p>
+        </div>
+
+        <div class="late-students-list">
           <div class="list-header">
             <span>الطالب</span>
-            <span>الحصة</span>
-            <span>المبلغ</span>
-            <span>تاريخ الاستحقاق</span>
+            <span>رقم الطالب</span>
+            <span>المستوى</span>
+            <span>المبلغ المتأخر</span>
+            <span>الأشهر المتأخرة</span>
             <span>الإجراء</span>
           </div>
 
-          <div *ngFor="let student of filteredLateStudents" class="list-item">
-            <div class="student-info">
-              <span class="student-name">{{ student.name }}</span>
-              <span class="student-phone">{{ student.parentPhone }}</span>
-            </div>
-            <span class="student-class">{{ student.academicYear }}</span>
-            <span class="amount">{{ student.totalAmountDue || 5000 }} د.ج</span>
-            <span class="due-date">{{ student.paymentDue || getTodayDate() }}</span>
-            <button 
-              class="btn-sm btn-warning"
-              [disabled]="sending"
-              (click)="sendLatePaymentMessage(student)">
-              إرسال تنبيه عبر واتساب
-            </button>
-          </div>
-        </div>
-
-        <div class="no-data" *ngIf="lateStudents.length === 0">
-          <span class="icon">💰</span>
-          <p>لا توجد دفعات متأخرة</p>
-        </div>
-      </div>
-
-      <!-- Tab Content: بدء الحصة -->
-      <div class="tab-content" *ngIf="activeTab === 'class-started'">
-        <div class="content-header">
-          <h2><span class="icon">📚</span> إشعار بدء الحصة عبر واتساب</h2>
-          <p>إرسال إشعار لأولياء الأمور عند بدء الحصة</p>
-        </div>
-
-        <div class="form-grid">
-          <div class="form-group">
-            <label>اختر الحصة</label>
-            <select class="form-control" [(ngModel)]="classStartedData.classId">
-              <option value="">اختر حصة...</option>
-              <option *ngFor="let class of uniqueClasses" [value]="class">{{ class }}</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>نوع الإرسال</label>
-            <div class="radio-group">
-              <label class="radio-label">
-                <input type="radio" name="sendToAll" [value]="true" [(ngModel)]="classStartedData.sendToAll">
-                جميع الطلاب
-              </label>
-              <label class="radio-label">
-                <input type="radio" name="sendToAll" [value]="false" [(ngModel)]="classStartedData.sendToAll">
-                اختيار طلاب محددين
-              </label>
+          <div *ngFor="let student of lateStudents" class="list-item">
+            <div class="student-name">{{ student.name }}</div>
+            <div class="student-id">{{ student.studentId }}</div>
+            <div class="student-year">{{ student.academicYear }}</div>
+            <div class="amount">{{ student.totalAmountDue?.toLocaleString() || 0 }} د.ج</div>
+            <div class="months">{{ student.monthsLateCount || 0 }} شهر</div>
+            <div class="actions">
+              <button class="btn-warning" (click)="sendPaymentReminder(student)" [disabled]="sending">
+                إرسال تذكير
+              </button>
             </div>
           </div>
 
-          <div class="form-group" *ngIf="!classStartedData.sendToAll">
-            <label>اختر الطلاب</label>
-            <div class="students-selector">
-              <div *ngFor="let student of getClassStudents(classStartedData.classId)" class="checkbox-label">
-                <input 
-                  type="checkbox" 
-                  [value]="student._id"
-                  (change)="toggleStudentSelection(student._id)">
-                {{ student.name }} - {{ student.parentPhone }}
-              </div>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>نص الرسالة (اختياري)</label>
-            <textarea 
-              class="form-control" 
-              rows="4"
-              [(ngModel)]="classStartedData.customMessage"></textarea>
-          </div>
-
-          <div class="preview-box" *ngIf="classStartedData.classId">
-            <h4>معاينة الرسالة:</h4>
-            <div class="message-preview">
-              📚 *بدء الحصة*
-              
-              عزيزي ولي الأمر،
-              نود إعلامكم بأن حصة *{{ classStartedData.classId }}* قد بدأت الآن.
-              📅 التاريخ: {{ getCurrentDate() }}
-              ⏰ الوقت: {{ getCurrentTime() }}
-
-              مع تحيات إدارة المدرسة
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button 
-              class="btn-primary" 
-              [disabled]="!classStartedData.classId || sending"
-              (click)="sendClassStartedMessage()">
-              {{ sending ? 'جاري الإرسال...' : 'إرسال إشعار بدء الحصة' }}
-            </button>
+          <div class="no-results" *ngIf="lateStudents.length === 0">
+            <p>لا توجد دفعات متأخرة</p>
           </div>
         </div>
       </div>
 
-      <!-- Tab Content: تأخر طالب -->
-      <div class="tab-content" *ngIf="activeTab === 'student-late'">
-        <div class="content-header">
-          <h2><span class="icon">⏰</span> إشعار تأخر طالب عبر واتساب</h2>
-          <p>إرسال إشعار عند تأخر الطالب عن الحصة</p>
-        </div>
-
-        <div class="form-grid">
-          <div class="form-group">
-            <label>اختر الطالب</label>
-            <select class="form-control" [(ngModel)]="selectedLateStudentId">
-              <option value="">-- اختر طالباً --</option>
-              <option *ngFor="let student of students" [value]="student._id">
-                {{ student.name }} ({{ student.academicYear }}) - {{ student.parentPhone }}
-              </option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>مدة التأخير (بالدقائق)</label>
-            <input 
-              type="number" 
-              class="form-control" 
-              [(ngModel)]="lateData.lateMinutes"
-              placeholder="مثال: 15"
-              min="1"
-              max="120">
-          </div>
-
-          <div class="form-group">
-            <label>نص الرسالة (اختياري)</label>
-            <textarea 
-              class="form-control" 
-              rows="4"
-              [(ngModel)]="lateData.customMessage"></textarea>
-          </div>
-
-          <div class="preview-box" *ngIf="getSelectedStudent(selectedLateStudentId) as student">
-            <h4>معاينة الرسالة:</h4>
-            <div class="message-preview">
-              ⏰ *تنبيه تأخر*
-              
-              عزيزي ولي أمر الطالب/ة *{{ student.name }}*
-              نود إعلامكم بأن الطالب/ة تأخر عن الحصة اليوم.
-              📅 التاريخ: {{ getCurrentDate() }}
-              ⏰ وقت الوصول: {{ getCurrentTime() }}
-              ⌛ مدة التأخير: {{ lateData.lateMinutes || 15 }} دقيقة
-              يرجى التنبيه على الطالب بالالتزام بالمواعيد.
-
-              مع تحيات إدارة المدرسة
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button 
-              class="btn-primary" 
-              [disabled]="!selectedLateStudentId || sending"
-              (click)="sendLateMessage()">
-              {{ sending ? 'جاري الإرسال...' : 'إرسال إشعار التأخير' }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab Content: رسالة جماعية -->
-      <div class="tab-content" *ngIf="activeTab === 'bulk'">
-        <div class="content-header">
-          <h2><span class="icon">👥</span> رسالة جماعية عبر واتساب</h2>
-          <p>إرسال رسالة لمجموعة من أولياء الأمور</p>
-        </div>
-
-        <div class="form-grid">
-          <div class="form-group">
-            <label>اختر المستلمين</label>
-            <div class="recipient-options">
-              <div class="option-group">
-                <label class="radio-label">
-                  <input type="radio" name="bulkRecipientType" value="all" [(ngModel)]="bulkData.recipientType">
-                  جميع أولياء الأمور
-                </label>
-                <label class="radio-label">
-                  <input type="radio" name="bulkRecipientType" value="class" [(ngModel)]="bulkData.recipientType">
-                  حصة محددة
-                </label>
-                <label class="radio-label">
-                  <input type="radio" name="bulkRecipientType" value="late" [(ngModel)]="bulkData.recipientType">
-                  المتأخرين في الدفع فقط
-                </label>
-              </div>
-
-              <div class="option-controls" *ngIf="bulkData.recipientType === 'class'">
-                <select class="form-control" [(ngModel)]="bulkData.classId">
-                  <option value="">اختر الحصة</option>
-                  <option *ngFor="let class of uniqueClasses" [value]="class">{{ class }}</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div class="recipients-count" *ngIf="getRecipientsCount() > 0">
-            عدد المستلمين: {{ getRecipientsCount() }} ولي أمر
-          </div>
-
-          <div class="form-group">
-            <label>نص الرسالة</label>
-            <textarea 
-              class="form-control" 
-              rows="6"
-              placeholder="اكتب نص الرسالة هنا..."
-              [(ngModel)]="bulkData.message"></textarea>
-            <div class="char-counter">{{ bulkData.message?.length || 0 }}/500</div>
-          </div>
-
-          <div class="form-actions">
-            <button 
-              class="btn-primary" 
-              [disabled]="!bulkData.message || sending || getRecipientsCount() === 0"
-              (click)="sendBulkMessage()">
-              <span class="spinner" *ngIf="sending"></span>
-              {{ sending ? 'جاري الإرسال...' : 'إرسال الرسالة الجماعية' }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab Content: قوالب جاهزة -->
-      <div class="tab-content" *ngIf="activeTab === 'templates'">
-        <div class="content-header">
-          <h2><span class="icon">📋</span> قوالب جاهزة</h2>
-          <p>استخدم قالباً جاهزاً لإرسال رسالة عبر واتساب</p>
-        </div>
-
-        <div class="templates-grid">
-          <div *ngFor="let template of templates" class="template-card">
-            <div class="template-icon">{{ template.icon }}</div>
-            <h3>{{ template.name }}</h3>
-            <p>{{ template.description }}</p>
-            <button class="btn-outline" (click)="openTemplateModal(template)">استخدام القالب</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab Content: سجل الرسائل -->
-      <div class="tab-content" *ngIf="activeTab === 'history'">
-        <div class="content-header">
-          <h2><span class="icon">📜</span> سجل الرسائل المرسلة</h2>
-          <p>عرض سجل الرسائل المرسلة عبر واتساب</p>
+      <!-- Tab: Message History -->
+      <div class="tab-panel" *ngIf="activeTab === 'history'">
+        <div class="panel-header">
+          <h2>سجل الرسائل</h2>
+          <p>عرض تاريخ الرسائل المرسلة</p>
         </div>
 
         <div class="history-filters">
-          <select class="form-control" [(ngModel)]="historyFilters.type">
-            <option value="">جميع الأنواع</option>
-            <option value="absence">غياب</option>
-            <option value="late_payment_reminder">تأخر دفع</option>
+          <select class="form-control" [(ngModel)]="historyFilters.type" (change)="loadMessageHistory()">
+            <option value="all">جميع الأنواع</option>
+            <option value="individual">فردية</option>
             <option value="bulk">جماعية</option>
+            <option value="class">حصة</option>
+            <option value="payment">دفع</option>
+            <option value="absence">غياب</option>
           </select>
-
-          <input 
-            type="date" 
-            class="form-control" 
-            [(ngModel)]="historyFilters.startDate"
-            placeholder="من تاريخ">
-
-          <input 
-            type="date" 
-            class="form-control" 
-            [(ngModel)]="historyFilters.endDate"
-            placeholder="إلى تاريخ">
-
+          <input type="date" class="form-control" [(ngModel)]="historyFilters.startDate" (change)="loadMessageHistory()">
+          <input type="date" class="form-control" [(ngModel)]="historyFilters.endDate" (change)="loadMessageHistory()">
           <button class="btn-primary" (click)="loadMessageHistory()">بحث</button>
-        </div>
-
-        <div class="stats-summary" *ngIf="historyStats.total > 0">
-          <div class="stat-item">
-            <span class="stat-label">إجمالي الرسائل:</span>
-            <span class="stat-value">{{ historyStats.total }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">نسبة النجاح:</span>
-            <span class="stat-value success">{{ historyStats.successRate }}%</span>
-          </div>
         </div>
 
         <div class="messages-list">
           <div *ngFor="let message of messageHistory" class="message-item">
             <div class="message-header">
-              <span class="message-type" [ngClass]="getMessageTypeClass(message.messageType || message.type)">
-                {{ getMessageTypeName(message.messageType || message.type) }}
+              <span class="message-type" [class]="getMessageTypeClass(message.type)">
+                {{ getMessageTypeName(message.type) }}
               </span>
-              <span class="message-date">{{ (message.sentAt || message.createdAt | date:'yyyy/MM/dd HH:mm') }}</span>
+              <span class="message-date">{{ message.sentAt | date:'yyyy/MM/dd HH:mm' }}</span>
             </div>
-            <div class="message-content">{{ message.content || message.text }}</div>
+            <div class="message-content">{{ message.content }}</div>
             <div class="message-footer">
               <span class="recipients-count">
-                {{ getSuccessfulCount(message) }}/{{ getTotalCount(message) }} تم الإرسال
+                المستلمين: {{ message.recipientsCount || 1 }}
               </span>
-              <button class="btn-link" (click)="viewMessageDetails(message)">عرض التفاصيل</button>
+              <span class="status-badge" [class.success]="message.success" [class.failed]="!message.success">
+                {{ message.success ? 'تم الإرسال' : 'فشل الإرسال' }}
+              </span>
             </div>
           </div>
         </div>
 
-        <div class="no-data" *ngIf="messageHistory.length === 0">
-          <span class="icon">📭</span>
-          <p>لا توجد رسائل</p>
+        <div class="no-results" *ngIf="messageHistory.length === 0">
+          <p>لا توجد رسائل في السجل</p>
         </div>
       </div>
-    </div>
 
-    <!-- Modal for Template -->
-    <div class="modal" *ngIf="showTemplateModal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2>{{ selectedTemplate?.name }}</h2>
-          <button class="close-btn" (click)="showTemplateModal = false">×</button>
+      <!-- Tab: Session Payments -->
+      <div class="tab-panel" *ngIf="activeTab === 'sessions'">
+        <div class="panel-header">
+          <h2>دفع حصة محددة</h2>
+          <p>دفع قيمة جلسة محددة بدلاً من الدفع الشهري</p>
         </div>
 
-        <div class="modal-body">
-          <div *ngFor="let field of selectedTemplate?.fields" class="form-group">
-            <label>{{ field.label }}</label>
-            <input 
-              *ngIf="field.type === 'text' || field.type === 'date' || field.type === 'time'"
-              [type]="field.type"
-              class="form-control"
-              [(ngModel)]="templateData[field.name]">
-
-            <textarea 
-              *ngIf="field.type === 'textarea'"
-              class="form-control"
-              rows="4"
-              [(ngModel)]="templateData[field.name]"></textarea>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>اختر الطالب</label>
+            <select class="form-control" [(ngModel)]="sessionPayment.studentId">
+              <option value="">-- اختر طالباً --</option>
+              <option *ngFor="let student of students" [value]="student._id">
+                {{ student.name }} - {{ student.academicYear }}
+              </option>
+            </select>
           </div>
 
           <div class="form-group">
-            <label>اختر المستلمين</label>
-            <select class="form-control" [(ngModel)]="templateRecipients">
-              <option value="all">جميع أولياء الأمور</option>
-              <option *ngFor="let class of uniqueClasses" [value]="class">طلاب حصة {{ class }}</option>
+            <label>اختر الحصة</label>
+            <select class="form-control" [(ngModel)]="sessionPayment.classId" (change)="loadSessionOptions()">
+              <option value="">-- اختر حصة --</option>
+              <option *ngFor="let classItem of availableClasses" [value]="classItem._id">
+                {{ classItem.name }} - {{ classItem.subject }}
+              </option>
             </select>
           </div>
-        </div>
 
-        <div class="modal-footer">
-          <button class="btn-outline" (click)="showTemplateModal = false">إلغاء</button>
-          <button class="btn-primary" (click)="sendTemplateMessage()" [disabled]="sending">
-            <span class="spinner" *ngIf="sending"></span>
-            {{ sending ? 'جاري الإرسال...' : 'إرسال عبر واتساب' }}
-          </button>
+          <div class="form-group" *ngIf="sessionOptions.length > 0">
+            <label>اختر الجلسة</label>
+            <select class="form-control" [(ngModel)]="sessionPayment.sessionNumber">
+              <option value="">-- اختر الجلسة --</option>
+              <option *ngFor="let option of sessionOptions" [value]="option.sessionNumber">
+                الجلسة {{ option.sessionNumber }} - {{ option.sessionDate | date:'yyyy/MM/dd' }} - {{ option.price }} د.ج
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>المبلغ (اختياري)</label>
+            <input type="number" class="form-control" [(ngModel)]="sessionPayment.amount" placeholder="اتركه فارغاً للحساب التلقائي">
+          </div>
+
+          <div class="form-group">
+            <label>طريقة الدفع</label>
+            <select class="form-control" [(ngModel)]="sessionPayment.paymentMethod">
+              <option value="cash">نقدي</option>
+              <option value="bank">تحويل بنكي</option>
+              <option value="online">دفع إلكتروني</option>
+            </select>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn-primary" (click)="paySession()" [disabled]="!canPaySession()">
+              {{ paying ? 'جاري الدفع...' : 'دفع الجلسة' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   `,
   styles: [`
     .messages-dashboard {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
-      padding: 20px;
+      padding: 24px;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       direction: rtl;
-      position: relative;
+      background: #f5f7fa;
+      min-height: 100vh;
     }
 
     .loading-overlay {
@@ -545,178 +598,676 @@ interface TemplateField {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(255, 255, 255, 0.8);
+      background: rgba(0, 0, 0, 0.5);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      z-index: 9999;
+      z-index: 1000;
     }
 
     .loading-overlay .spinner {
-      width: 50px;
-      height: 50px;
-      border: 5px solid #f3f3f3;
-      border-top: 5px solid #25D366;
+      width: 48px;
+      height: 48px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #2c7da0;
       border-radius: 50%;
       animation: spin 1s linear infinite;
-      margin-bottom: 20px;
     }
 
-    .header {
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .dashboard-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 30px;
-      padding: 20px;
-      background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
-      border-radius: 15px;
-      color: white;
+      margin-bottom: 32px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #e2e8f0;
     }
 
-    .header h1 {
+    .header-left h1 {
       margin: 0;
       font-size: 28px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .header .icon {
-      font-size: 32px;
+      color: #1a2c3e;
+      font-weight: 600;
     }
 
     .subtitle {
-      margin: 5px 0 0;
-      opacity: 0.9;
+      margin: 4px 0 0;
+      color: #64748b;
+      font-size: 14px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .whatsapp-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: #f1f5f9;
+      border-radius: 24px;
+      font-size: 13px;
+    }
+
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+    }
+
+    .whatsapp-status.connected .status-indicator {
+      background: #22c55e;
     }
 
     .refresh-btn {
       padding: 8px 16px;
-      background: rgba(255, 255, 255, 0.2);
-      border: 1px solid white;
-      border-radius: 30px;
-      color: white;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
       cursor: pointer;
-      font-size: 14px;
-      transition: all 0.3s;
+      font-size: 13px;
+      transition: all 0.2s;
     }
 
     .refresh-btn:hover {
-      background: rgba(255, 255, 255, 0.3);
-    }
-
-    .status-badge {
-      padding: 8px 16px;
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 30px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 14px;
-    }
-
-    .status-badge.connected .status-dot {
-      background: #4caf50;
-    }
-
-    .status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: #f44336;
-    }
-
-    .phone-number {
-      font-size: 12px;
-      opacity: 0.9;
+      background: #f8fafc;
+      border-color: #cbd5e1;
     }
 
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 20px;
-      margin-bottom: 30px;
+      margin-bottom: 32px;
     }
 
     .stat-card {
       background: white;
-      border-radius: 12px;
+      border-radius: 16px;
       padding: 20px;
       display: flex;
       align-items: center;
-      gap: 15px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      gap: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
     .stat-icon {
-      width: 50px;
-      height: 50px;
+      width: 56px;
+      height: 56px;
       border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
     }
 
+    .stat-icon.income { background: #e0f2fe; }
+    .stat-icon.messages { background: #fae8ff; }
+    .stat-icon.success { background: #dcfce7; }
+    .stat-icon.warning { background: #fff3e3; }
+
     .stat-value {
-      font-size: 24px;
-      font-weight: bold;
+      font-size: 28px;
+      font-weight: 700;
+      color: #1e293b;
     }
 
     .stat-label {
-      color: #666;
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .tabs-container {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 0;
+      flex-wrap: wrap;
+    }
+
+    .tab-button {
+      padding: 12px 24px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #64748b;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab-button:hover {
+      color: #2c7da0;
+    }
+
+    .tab-button.active {
+      color: #2c7da0;
+      border-bottom-color: #2c7da0;
+    }
+
+    .tab-panel {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .panel-header {
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .panel-header h2 {
+      margin: 0;
+      font-size: 20px;
+      color: #1e293b;
+    }
+
+    .panel-header p {
+      margin: 4px 0 0;
+      color: #64748b;
       font-size: 14px;
     }
 
-    .tabs {
+    .search-section {
+      margin-bottom: 24px;
+    }
+
+    .search-section h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .search-filters {
       display: flex;
-      gap: 10px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .filter-group {
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: #2c7da0;
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 20px;
+      padding: 8px 0;
+    }
+
+    .radio-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .btn-primary, .btn-secondary, .btn-text, .btn-outline, .btn-warning {
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #2c7da0;
+      color: white;
+      border: none;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #1f5e7a;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      color: #334155;
+    }
+
+    .btn-secondary:hover {
+      background: #e2e8f0;
+    }
+
+    .btn-text {
+      background: transparent;
+      border: none;
+      color: #2c7da0;
+    }
+
+    .btn-text:hover {
+      text-decoration: underline;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid #e2e8f0;
+      color: #334155;
+    }
+
+    .btn-outline:hover {
+      background: #f8fafc;
+    }
+
+    .btn-warning {
+      background: #f97316;
+      border: none;
+      color: white;
+    }
+
+    .btn-warning:hover {
+      background: #ea580c;
+    }
+
+    .selection-section {
+      margin-bottom: 24px;
+    }
+
+    .selection-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .selection-header h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .selection-actions {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .selected-count {
+      font-size: 13px;
+      color: #64748b;
+      background: #f1f5f9;
+      padding: 4px 12px;
+      border-radius: 16px;
+    }
+
+    .students-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .student-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .student-card:hover {
+      background: #f8fafc;
+    }
+
+    .student-card.selected {
+      background: #eef2ff;
+      border-color: #2c7da0;
+    }
+
+    .student-checkbox input {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .student-info {
+      flex: 1;
+    }
+
+    .student-name {
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 6px;
+    }
+
+    .student-details {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .class-info, .students-summary {
+      margin-bottom: 24px;
+    }
+
+    .info-card, .summary-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .info-card h4, .summary-card h4 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      color: #1e293b;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .info-item {
+      display: flex;
+      gap: 8px;
+    }
+
+    .info-label {
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .info-value {
+      color: #64748b;
+    }
+
+    .summary-stats {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .stat-badge {
+      background: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-number {
+      display: block;
+      font-size: 24px;
+      font-weight: 700;
+      color: #2c7da0;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .message-section {
+      margin-bottom: 24px;
+    }
+
+    .message-section h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .message-textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+    }
+
+    .message-textarea:focus {
+      outline: none;
+      border-color: #2c7da0;
+    }
+
+    .message-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    .char-counter {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .template-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .delivery-section {
+      margin-bottom: 24px;
+    }
+
+    .delivery-section h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .delivery-options {
+      display: flex;
+      gap: 24px;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .preview-section {
+      margin-bottom: 24px;
+    }
+
+    .preview-section h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .message-preview {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .preview-header {
+      padding: 12px 16px;
+      background: #f1f5f9;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 13px;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .preview-content {
+      padding: 16px;
+      white-space: pre-line;
+      line-height: 1.6;
+    }
+
+    .preview-footer {
+      padding: 12px 16px;
+      background: #f1f5f9;
+      border-top: 1px solid #e2e8f0;
+      font-size: 12px;
+      color: #64748b;
+      text-align: center;
+    }
+
+    .action-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .late-students-list {
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .list-header {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+      background: #f8fafc;
+      padding: 14px 16px;
+      font-weight: 600;
+      font-size: 13px;
+      color: #334155;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .list-item {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+      padding: 14px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      align-items: center;
+      font-size: 14px;
+    }
+
+    .list-item:last-child {
+      border-bottom: none;
+    }
+
+    .amount {
+      font-weight: 600;
+      color: #e53e3e;
+    }
+
+    .months {
+      color: #f97316;
+    }
+
+    .history-filters {
+      display: flex;
+      gap: 12px;
       margin-bottom: 20px;
       flex-wrap: wrap;
     }
 
-    .tab-btn {
-      padding: 12px 24px;
-      border: none;
-      background: white;
-      border-radius: 30px;
-      cursor: pointer;
+    .messages-list {
       display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 14px;
-      transition: all 0.3s;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      flex-direction: column;
+      gap: 12px;
     }
 
-    .tab-btn:hover {
-      background: #f0f0f0;
-    }
-
-    .tab-btn.active {
-      background: #25D366;
-      color: white;
-    }
-
-    .tab-content {
-      background: white;
+    .message-item {
+      border: 1px solid #e2e8f0;
       border-radius: 12px;
-      padding: 25px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 16px;
     }
 
-    .content-header {
-      margin-bottom: 20px;
-      padding-bottom: 15px;
-      border-bottom: 2px solid #f0f0f0;
-    }
-
-    .content-header h2 {
-      margin: 0;
+    .message-header {
       display: flex;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .message-type {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .message-type.individual { background: #dbeafe; color: #1e40af; }
+    .message-type.bulk { background: #fae8ff; color: #7e22ce; }
+    .message-type.class { background: #cffafe; color: #0e7490; }
+    .message-type.payment { background: #fed7aa; color: #9a3412; }
+    .message-type.absence { background: #fee2e2; color: #b91c1c; }
+
+    .message-date {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .message-content {
+      margin-bottom: 12px;
+      padding: 12px;
+      background: #f8fafc;
+      border-radius: 8px;
+      white-space: pre-line;
+      font-size: 14px;
+    }
+
+    .message-footer {
+      display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 10px;
+    }
+
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+    }
+
+    .status-badge.success {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .status-badge.failed {
+      background: #fee2e2;
+      color: #991b1b;
     }
 
     .form-grid {
@@ -727,63 +1278,13 @@ interface TemplateField {
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
 
     .form-group label {
-      font-weight: 600;
-      color: #333;
-    }
-
-    .form-control {
-      padding: 10px 12px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
+      font-weight: 500;
       font-size: 14px;
-      font-family: inherit;
-    }
-
-    .form-control:focus {
-      outline: none;
-      border-color: #25D366;
-    }
-
-    textarea.form-control {
-      resize: vertical;
-    }
-
-    .preview-box {
-      background: #f9f9f9;
-      border: 1px solid #eee;
-      border-radius: 8px;
-      padding: 15px;
-    }
-
-    .preview-box h4 {
-      margin: 0 0 10px;
-      color: #666;
-    }
-
-    .message-preview {
-      white-space: pre-line;
-      font-family: monospace;
-      padding: 10px;
-      background: white;
-      border-radius: 4px;
-      border-right: 3px solid #25D366;
-    }
-
-    .checkbox-label, .radio-label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      padding: 5px;
-    }
-
-    .radio-group {
-      display: flex;
-      gap: 20px;
+      color: #334155;
     }
 
     .form-actions {
@@ -792,503 +1293,296 @@ interface TemplateField {
       margin-top: 20px;
     }
 
-    .btn-primary {
-      padding: 12px 24px;
-      background: #25D366;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 16px;
-      transition: background 0.3s;
-    }
-
-    .btn-primary:hover:not(:disabled) {
-      background: #128C7E;
-    }
-
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .btn-outline {
-      padding: 8px 16px;
-      background: transparent;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    .btn-outline:hover {
-      background: #f5f5f5;
-    }
-
-    .btn-sm {
-      padding: 6px 12px;
-      font-size: 12px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    .btn-warning {
-      background: #f59e0b;
-      color: white;
-    }
-
-    .btn-warning:hover {
-      background: #d97706;
-    }
-
-    .btn-link {
-      background: none;
-      border: none;
-      color: #25D366;
-      cursor: pointer;
-      text-decoration: underline;
-    }
-
-    .spinner {
-      display: inline-block;
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-radius: 50%;
-      border-top-color: white;
-      animation: spin 1s ease-in-out infinite;
-      margin-left: 8px;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .filters-bar {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-
-    .students-list {
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    .list-header {
-      display: grid;
-      grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
-      padding: 12px;
-      background: #f5f5f5;
-      font-weight: 600;
-    }
-
-    .list-item {
-      display: grid;
-      grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
-      padding: 12px;
-      border-bottom: 1px solid #eee;
-      align-items: center;
-    }
-
-    .list-item:last-child {
-      border-bottom: none;
-    }
-
-    .student-info {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .student-name {
-      font-weight: 600;
-    }
-
-    .student-phone {
-      font-size: 12px;
-      color: #666;
-    }
-
-    .amount {
-      font-weight: 600;
-      color: #e53e3e;
-    }
-
-    .due-date {
-      color: #666;
-    }
-
-    .no-data {
+    .no-results {
       text-align: center;
-      padding: 40px;
-      color: #999;
-    }
-
-    .no-data .icon {
-      font-size: 48px;
-      display: block;
-      margin-bottom: 10px;
-    }
-
-    .recipient-options {
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-    }
-
-    .option-group {
-      display: flex;
-      gap: 20px;
-    }
-
-    .recipients-count {
-      padding: 10px;
-      background: #e8f5e9;
-      border-radius: 8px;
-      color: #2e7d32;
-      font-weight: 600;
-      text-align: center;
-    }
-
-    .students-selector {
-      max-height: 200px;
-      overflow-y: auto;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 10px;
-    }
-
-    .char-counter {
-      text-align: left;
-      color: #999;
-      font-size: 12px;
-    }
-
-    .templates-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-      gap: 20px;
-    }
-
-    .template-card {
-      padding: 20px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      text-align: center;
-      transition: all 0.3s;
-    }
-
-    .template-card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-
-    .template-icon {
-      font-size: 48px;
-      margin-bottom: 10px;
-    }
-
-    .template-card h3 {
-      margin: 10px 0 5px;
-    }
-
-    .template-card p {
-      color: #666;
-      font-size: 14px;
-      margin-bottom: 15px;
-    }
-
-    .history-filters {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-
-    .stats-summary {
-      display: flex;
-      gap: 20px;
-      padding: 15px;
-      background: #f5f5f5;
-      border-radius: 8px;
-      margin-bottom: 20px;
-    }
-
-    .stat-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .stat-value.success {
-      color: #2e7d32;
-      font-weight: bold;
-    }
-
-    .messages-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .message-item {
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 15px;
-    }
-
-    .message-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-
-    .message-type {
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-    }
-
-    .message-type.absence { background: #fee2e2; color: #e53e3e; }
-    .message-type.late_payment_reminder { background: #fef3c7; color: #d97706; }
-    .message-type.bulk { background: #e0e7ff; color: #4338ca; }
-    .message-type.individual { background: #e0f2fe; color: #0369a1; }
-    .message-type.class { background: #f3e8ff; color: #7e22ce; }
-
-    .message-date {
-      color: #666;
-      font-size: 12px;
-    }
-
-    .message-content {
-      margin-bottom: 10px;
-      padding: 10px;
-      background: #f9f9f9;
-      border-radius: 4px;
-      white-space: pre-line;
-    }
-
-    .message-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 12px;
-      color: #666;
-    }
-
-    .modal {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-
-    .modal-content {
-      background: white;
-      border-radius: 12px;
-      width: 500px;
-      max-width: 90%;
-    }
-
-    .modal-header {
-      padding: 20px;
-      border-bottom: 1px solid #eee;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .modal-header h2 {
-      margin: 0;
-    }
-
-    .close-btn {
-      background: none;
-      border: none;
-      font-size: 24px;
-      cursor: pointer;
-      color: #999;
-    }
-
-    .modal-body {
-      padding: 20px;
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    .modal-footer {
-      padding: 20px;
-      border-top: 1px solid #eee;
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
+      padding: 48px;
+      color: #64748b;
     }
 
     @media (max-width: 768px) {
+      .messages-dashboard {
+        padding: 16px;
+      }
+
       .stats-grid {
         grid-template-columns: repeat(2, 1fr);
       }
 
-      .tabs {
+      .list-header, .list-item {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .search-filters {
+        flex-direction: column;
+      }
+
+      .students-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .tabs-container {
         flex-wrap: wrap;
       }
 
-      .tab-btn {
-        flex: 1 1 auto;
-      }
-
-      .list-header, .list-item {
-        grid-template-columns: 1fr;
-        gap: 5px;
-      }
-
-      .history-filters {
-        flex-direction: column;
+      .tab-button {
+        flex: 1;
+        text-align: center;
       }
     }
   `]
 })
-export class MessagesDashboardComponent implements OnInit {
-  // Tab management
-  activeTab = 'absence';
+export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
+  // Tab state
+  activeTab = 'send';
   tabs = [
-    { id: 'absence', name: 'رسالة غياب', icon: '🔴' },
-    { id: 'late-payment', name: 'تأخر دفع', icon: '💰' },
-    { id: 'class-started', name: 'بدء الحصة', icon: '📚' },
-    { id: 'student-late', name: 'تأخر طالب', icon: '⏰' },
-    { id: 'bulk', name: 'رسالة جماعية', icon: '👥' },
-    { id: 'templates', name: 'قوالب جاهزة', icon: '📋' },
-    { id: 'history', name: 'سجل الرسائل', icon: '📜' }
+    { id: 'send', label: 'إرسال رسالة', icon: '📨' },
+    { id: 'class-message', label: 'رسالة لحصة', icon: '🏫' },
+    { id: 'reminders', label: 'تذكيرات الدفع', icon: '💰' },
+    { id: 'history', label: 'سجل الرسائل', icon: '📜' },
+    { id: 'sessions', label: 'دفع حصة محددة', icon: '🎯' }
   ];
 
   // Data
-  students: any[] = [];
-  templates: MessageTemplate[] = [];
+  students: Student[] = [];
+  filteredStudents: Student[] = [];
+  allClasses: any[] = [];
+  availableClasses: any[] = [];
+  availableClassesList: ClassInfo[] = [];
+  selectedClassStudents: any[] = [];
+  classDetails: ClassInfo | null = null;
+  sessionOptions: any[] = [];
+  lateStudents: any[] = [];
   messageHistory: any[] = [];
-  selectedStudents: string[] = [];
+  templates: MessageTemplate[] = [];
+
+  // Search filters
+  searchFilters: SearchFilters = {
+    searchTerm: '',
+    academicYear: 'all',
+    status: 'all',
+    active: 'all',
+    classId: 'all'
+  };
+
+  // Selection
+  selectedStudentIds: string[] = [];
+
+  // Class message
+  selectedClassId: string = '';
+  classMessageContent: string = '';
+  includeAllStudentsInClass: boolean = true;
+  selectedClassStudentIds: string[] = [];
+
+  // Message data
+  messageContent = '';
+
+  // Delivery options
+  sendWhatsApp = true;
+  sendEmail = false;
+
+  // Session payment
+  sessionPayment = {
+    studentId: '',
+    classId: '',
+    sessionNumber: '',
+    amount: null as number | null,
+    paymentMethod: 'cash'
+  };
+
+  // Filters
+  historyFilters = {
+    type: 'all',
+    startDate: '',
+    endDate: ''
+  };
+
+  // Stats
+  totalStudents = 0;
+  totalMessages = 0;
+  successRate = 0;
+  latePaymentsCount = 0;
 
   // WhatsApp status
   whatsappConnected = false;
   whatsappNumber = '';
 
-  // Stats
-  stats = {
-    totalMessages: 0,
-    successfulMessages: 0
-  };
-  historyStats = {
-    total: 0,
-    successRate: 0,
-    byType: {}
-  };
-
-  // Form data
-  selectedAbsenceStudentId = '';
-  absenceMessage = {
-    customMessage: ''
-  };
-
-  latePaymentFilters = {
-    class: ''
-  };
-
-  classStartedData = {
-    classId: '',
-    sendToAll: true,
-    customMessage: ''
-  };
-
-  selectedLateStudentId = '';
-  lateData = {
-    lateMinutes: 15,
-    customMessage: ''
-  };
-
-  bulkData = {
-    recipientType: 'all',
-    classId: '',
-    message: ''
-  };
-
-  historyFilters = {
-    type: '',
-    startDate: '',
-    endDate: ''
-  };
-
-  // Modal
-  showTemplateModal = false;
-  selectedTemplate: MessageTemplate | null = null;
-  templateData: any = {};
-  templateRecipients = 'all';
-
   // UI state
-  sending = false;
   loading = false;
+  sending = false;
+  paying = false;
 
-  // Add Date constructor for template
-  newDate = new Date();
+  private searchSubject = new Subject<string>();
 
   constructor(private http: HttpClient) {}
 
-  ngOnInit() {
-    this.refreshData();
-  }
-
-  refreshData() {
+  ngOnInit(): void {
     this.loadInitialData();
     this.checkWhatsAppStatus();
-    this.loadTemplates();
-    this.loadMessageHistory();
-    this.loadLatePayments();
+    this.loadClassesForMessaging();
+
+    this.searchSubject.pipe(
+      debounceTime(500),
+      distinctUntilChanged()
+    ).subscribe(() => {
+      this.performSearch();
+    });
   }
 
-  loadInitialData() {
+  ngOnDestroy(): void {
+    this.searchSubject.complete();
+  }
+
+  loadInitialData(): void {
     this.loading = true;
-    
-    // Get all students from the correct endpoint
-    this.http.get('http://localhost:5090/api/students').subscribe({
+    this.loadStudents();
+    this.loadClasses();
+    this.loadLatePayments();
+    this.loadMessageHistory();
+    this.loadTemplates();
+    this.loadStats();
+  }
+
+  loadStudents(): void {
+    this.http.get('/api/students').subscribe({
       next: (res: any) => {
-        console.log('Students API response:', res);
-        
-        // Handle different response structures
         if (Array.isArray(res)) {
           this.students = res;
         } else if (res && res.data && Array.isArray(res.data)) {
           this.students = res.data;
-        } else if (res && res.students && Array.isArray(res.students)) {
-          this.students = res.students;
-        } else if (res && res.success && res.data) {
-          this.students = res.data;
         } else {
-          console.warn('Unexpected students response format:', res);
           this.students = [];
         }
-        
-        console.log('Loaded students:', this.students.length);
+        this.totalStudents = this.students.length;
+        this.filteredStudents = [...this.students];
         this.loading = false;
       },
       error: (err) => {
         console.error('Error loading students:', err);
         this.loading = false;
-        // Fallback to empty array
-        this.students = [];
       }
     });
   }
 
-  checkWhatsAppStatus() {
-    this.http.get('http://localhost:5090/api/whatsapp/status').subscribe({
+  loadClasses(): void {
+    this.http.get('/api/classes').subscribe({
       next: (res: any) => {
-        console.log('WhatsApp status:', res);
+        if (res && res.data && Array.isArray(res.data)) {
+          this.allClasses = res.data;
+        } else if (Array.isArray(res)) {
+          this.allClasses = res;
+        } else {
+          this.allClasses = [];
+        }
+        this.availableClasses = this.allClasses.filter(c => c.teacher);
+      },
+      error: (err) => {
+        console.error('Error loading classes:', err);
+      }
+    });
+  }
+
+  loadClassesForMessaging(): void {
+    this.http.get('/api/classes').subscribe({
+      next: (res: any) => {
+        if (res && res.data && Array.isArray(res.data)) {
+          this.availableClassesList = res.data;
+        } else if (Array.isArray(res)) {
+          this.availableClassesList = res;
+        } else {
+          this.availableClassesList = [];
+        }
+      },
+      error: (err) => {
+        console.error('Error loading classes for messaging:', err);
+        this.availableClassesList = [];
+      }
+    });
+  }
+
+  loadLatePayments(): void {
+    this.http.get('/api/notifications/late-payments').subscribe({
+      next: (res: any) => {
+        if (res && res.students && Array.isArray(res.students)) {
+          this.lateStudents = res.students;
+          this.latePaymentsCount = this.lateStudents.length;
+        } else if (Array.isArray(res)) {
+          this.lateStudents = res;
+          this.latePaymentsCount = res.length;
+        } else {
+          this.lateStudents = [];
+        }
+      },
+      error: (err) => {
+        console.error('Error loading late payments:', err);
+        this.lateStudents = [];
+      }
+    });
+  }
+
+  loadMessageHistory(): void {
+    let params = new HttpParams();
+    if (this.historyFilters.type && this.historyFilters.type !== 'all') {
+      params = params.set('type', this.historyFilters.type);
+    }
+    if (this.historyFilters.startDate) {
+      params = params.set('startDate', this.historyFilters.startDate);
+    }
+    if (this.historyFilters.endDate) {
+      params = params.set('endDate', this.historyFilters.endDate);
+    }
+
+    this.http.get(`/api/messages/history`, { params }).subscribe({
+      next: (res: any) => {
+        if (res && res.messages && Array.isArray(res.messages)) {
+          this.messageHistory = res.messages;
+          this.totalMessages = res.messages.length;
+          this.successRate = res.stats?.successRate || 0;
+        } else if (Array.isArray(res)) {
+          this.messageHistory = res;
+          this.totalMessages = res.length;
+        } else {
+          this.messageHistory = [];
+        }
+      },
+      error: (err) => {
+        console.error('Error loading message history:', err);
+        this.messageHistory = [];
+      }
+    });
+  }
+
+  loadTemplates(): void {
+    this.http.get('/api/messages/templates').subscribe({
+      next: (res: any) => {
+        if (res && res.templates && Array.isArray(res.templates)) {
+          this.templates = res.templates;
+        }
+      },
+      error: (err) => {
+        console.error('Error loading templates:', err);
+      }
+    });
+  }
+
+  loadStats(): void {
+    this.http.get('/api/notifications/count').subscribe({
+      next: (res: any) => {
+        if (res && res.count !== undefined) {
+          this.latePaymentsCount = res.count;
+        }
+      },
+      error: (err) => console.error('Error loading stats:', err)
+    });
+  }
+
+  checkWhatsAppStatus(): void {
+    this.http.get('/api/whatsapp/status').subscribe({
+      next: (res: any) => {
         this.whatsappConnected = res.connected || false;
         this.whatsappNumber = res.number || '';
       },
@@ -1299,477 +1593,396 @@ export class MessagesDashboardComponent implements OnInit {
     });
   }
 
-  loadMessageHistory() {
-    let params = new URLSearchParams();
-    if (this.historyFilters.type) params.set('type', this.historyFilters.type);
-    if (this.historyFilters.startDate) params.set('startDate', this.historyFilters.startDate);
-    if (this.historyFilters.endDate) params.set('endDate', this.historyFilters.endDate);
-
-    this.http.get(`http://localhost:5090/api/messages/history?${params.toString()}`).subscribe({
-      next: (res: any) => {
-        console.log('Message history response:', res);
-        
-        if (res && res.messages) {
-          this.messageHistory = res.messages;
-        } else if (Array.isArray(res)) {
-          this.messageHistory = res;
-        } else {
-          this.messageHistory = [];
-        }
-        
-        if (res && res.stats) {
-          this.historyStats = res.stats;
-        }
-      },
-      error: (err) => {
-        console.error('Error loading message history:', err);
-        this.messageHistory = [];
-      }
-    });
+  refreshData(): void {
+    this.loadInitialData();
+    this.checkWhatsAppStatus();
+    this.loadClassesForMessaging();
   }
 
-  loadTemplates() {
-    this.http.get('http://localhost:5090/api/messages/templates').subscribe({
-      next: (res: any) => {
-        console.log('Templates response:', res);
-        
-        if (res && res.templates) {
-          this.templates = res.templates;
-        } else if (Array.isArray(res)) {
-          this.templates = res;
-        } else {
-          this.templates = [];
-        }
-      },
-      error: (err) => {
-        console.error('Error loading templates:', err);
-        // Fallback to default templates if API fails
-        this.templates = [
-          {
-            id: 'schedule-change',
-            name: 'تغيير موعد الحصة',
-            description: 'إشعار بتغيير موعد حصة',
-            icon: '📅',
-            fields: [
-              { name: 'className', label: 'اسم الحصة', type: 'text', required: true },
-              { name: 'newDate', label: 'التاريخ الجديد', type: 'date', required: true },
-              { name: 'newTime', label: 'الوقت الجديد', type: 'time', required: true },
-              { name: 'reason', label: 'السبب', type: 'textarea', required: false }
-            ]
-          },
-          {
-            id: 'holiday-greeting',
-            name: 'تهنئة بمناسبة',
-            description: 'رسالة تهنئة بمناسبة دينية أو وطنية',
-            icon: '🎉',
-            fields: [
-              { name: 'occasion', label: 'المناسبة', type: 'text', required: true },
-              { name: 'customMessage', label: 'رسالة مخصصة', type: 'textarea', required: false }
-            ]
-          },
-          {
-            id: 'exam-reminder',
-            name: 'تذكير بالامتحانات',
-            description: 'تذكير بموعد الامتحانات',
-            icon: '📝',
-            fields: [
-              { name: 'examName', label: 'اسم الامتحان', type: 'text', required: true },
-              { name: 'examDate', label: 'تاريخ الامتحان', type: 'date', required: true }
-            ]
-          },
-          {
-            id: 'general-announcement',
-            name: 'إعلان عام',
-            description: 'إعلان هام لأولياء الأمور',
-            icon: '📢',
-            fields: [
-              { name: 'message', label: 'نص الإعلان', type: 'textarea', required: true }
-            ]
-          }
-        ];
-      }
-    });
+  // Search methods
+  onSearchChange(): void {
+    this.searchSubject.next(this.searchFilters.searchTerm);
   }
 
-  loadLatePayments() {
-    this.http.get('http://localhost:5090/api/notifications/late-payments').subscribe({
-      next: (res: any) => {
-        console.log('Late payments:', res);
-        // Update stats if needed
-        if (res && res.students) {
-          // You can update UI based on this data
-        }
-      },
-      error: (err) => console.error('Error loading late payments:', err)
-    });
-  }
-
-  get uniqueClasses(): string[] {
-    if (!this.students || this.students.length === 0) {
-      return [];
-    }
-    return [...new Set(this.students.map(s => s.academicYear || s.class || ''))].filter(c => c);
-  }
-
-  get lateStudents(): any[] {
-    if (!this.students || this.students.length === 0) {
-      return [];
-    }
-    // For demo purposes, mark some students as late
-    return this.students.filter((s, index) => index % 3 === 0);
-  }
-
-  get lateStudentsCount(): number {
-    return this.lateStudents.length;
-  }
-
-  get filteredLateStudents(): any[] {
-    if (!this.latePaymentFilters.class || !this.lateStudents) {
-      return this.lateStudents;
-    }
-    return this.lateStudents.filter(s => s.academicYear === this.latePaymentFilters.class);
-  }
-
-  getSelectedStudent(id: string): any {
-    if (!id) return undefined;
-    return this.students.find(s => s._id === id);
-  }
-
-  getClassStudents(classId: string): any[] {
-    if (!classId || !this.students) return [];
-    return this.students.filter(s => s.academicYear === classId);
-  }
-
-  getSuccessfulCount(message: any): number {
-    if (message.results) {
-      return message.results.filter((r: any) => r.success).length || 0;
-    }
-    return message.success ? 1 : 0;
-  }
-
-  getTotalCount(message: any): number {
-    if (message.results) {
-      return message.results.length || 0;
-    }
-    return message.recipients?.length || 1;
-  }
-
-  toggleStudentSelection(studentId: string) {
-    const index = this.selectedStudents.indexOf(studentId);
-    if (index === -1) {
-      this.selectedStudents.push(studentId);
-    } else {
-      this.selectedStudents.splice(index, 1);
-    }
-  }
-
-  getRecipientsCount(): number {
-    if (!this.students) return 0;
-    
-    switch (this.bulkData.recipientType) {
-      case 'all':
-        return this.students.filter(s => s.parentPhone).length;
-      case 'class':
-        return this.students.filter(s => 
-          s.academicYear === this.bulkData.classId && s.parentPhone
-        ).length;
-      case 'late':
-        return this.lateStudents.filter(s => s.parentPhone).length;
-      default:
-        return 0;
-    }
-  }
-
-  getCurrentDate(): string {
-    return new Date().toLocaleDateString('ar-EG', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  }
-
-  getCurrentTime(): string {
-    return new Date().toLocaleTimeString('ar-EG', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  }
-
-  getTodayDate(): string {
-    return new Date().toLocaleDateString('ar-EG');
-  }
-
-  getMessageTypeName(type: string): string {
-    const types: any = {
-      'absence': 'رسالة غياب',
-      'late_payment_reminder': 'تأخر دفع',
-      'bulk': 'رسالة جماعية',
-      'individual': 'رسالة فردية',
-      'class': 'رسالة حصة',
-      'template': 'قالب',
-      'student-late': 'تأخر طالب',
-      'class-started': 'بدء حصة'
-    };
-    return types[type] || type;
-  }
-
-  getMessageTypeClass(type: string): string {
-    const classes: any = {
-      'absence': 'absence',
-      'late_payment_reminder': 'late_payment_reminder',
-      'bulk': 'bulk',
-      'individual': 'individual',
-      'class': 'class',
-      'template': 'template',
-      'student-late': 'absence',
-      'class-started': 'class'
-    };
-    return classes[type] || '';
-  }
-
-  sendAbsenceMessage() {
-    if (!this.selectedAbsenceStudentId) {
-      alert('الرجاء اختيار طالب');
+  performSearch(): void {
+    if (!this.searchFilters.searchTerm && this.searchFilters.academicYear === 'all' && 
+        this.searchFilters.status === 'all') {
+      this.filteredStudents = [...this.students];
       return;
     }
 
-    this.sending = true;
-    const data = {
-      studentId: this.selectedAbsenceStudentId,
-      customMessage: this.absenceMessage.customMessage
+    this.filteredStudents = this.students.filter(student => {
+      const matchesSearch = !this.searchFilters.searchTerm || 
+        student.name.toLowerCase().includes(this.searchFilters.searchTerm.toLowerCase()) ||
+        (student.studentId && student.studentId.toLowerCase().includes(this.searchFilters.searchTerm.toLowerCase())) ||
+        (student.parentPhone && student.parentPhone.includes(this.searchFilters.searchTerm));
+
+      const matchesYear = this.searchFilters.academicYear === 'all' || 
+        student.academicYear === this.searchFilters.academicYear;
+
+      const matchesStatus = this.searchFilters.status === 'all' || 
+        student.status === this.searchFilters.status;
+
+      return matchesSearch && matchesYear && matchesStatus;
+    });
+  }
+
+  clearSearch(): void {
+    this.searchFilters = {
+      searchTerm: '',
+      academicYear: 'all',
+      status: 'all',
+      active: 'all',
+      classId: 'all'
+    };
+    this.filteredStudents = [...this.students];
+  }
+
+  // Student selection methods
+  isSelected(studentId: string): boolean {
+    return this.selectedStudentIds.includes(studentId);
+  }
+
+  toggleStudent(studentId: string): void {
+    const index = this.selectedStudentIds.indexOf(studentId);
+    if (index === -1) {
+      this.selectedStudentIds.push(studentId);
+    } else {
+      this.selectedStudentIds.splice(index, 1);
+    }
+  }
+
+  selectAll(): void {
+    this.selectedStudentIds = this.filteredStudents.map(s => s._id);
+  }
+
+  deselectAll(): void {
+    this.selectedStudentIds = [];
+  }
+
+  canSend(): boolean {
+    return this.selectedStudentIds.length > 0 && 
+           this.messageContent.trim().length >= 3 && 
+           !this.sending;
+  }
+
+  updateCharacterCount(): void {}
+
+  insertTemplate(type: string): void {
+    const templates: { [key: string]: string } = {
+      'absence': `تحية طيبة،\n\nنود إعلامكم بأن الطالب/ة قد تغيب عن الحصة اليوم.\n\nيرجى التواصل مع إدارة المدرسة للاطلاع على تفاصيل الغياب.\n\nمع الشكر،\nإدارة المدرسة`,
+
+      'payment': `تحية طيبة،\n\nنود تذكيركم بأن هناك دفعات متأخرة مستحقة على الطالب/ة.\n\nيرجى التوجه للإدارة لسداد المستحقات في أقرب وقت.\n\nمع الشكر،\nإدارة المدرسة`,
+
+      'announcement': `تحية طيبة،\n\nهذا إعلان هام من إدارة المدرسة.\n\nيرجى الاطلاع على التفاصيل والتواصل مع الإدارة للاستفسار.\n\nمع الشكر،\nإدارة المدرسة`
     };
 
-    this.http.post('http://localhost:5090/api/messages/absence', data).subscribe({
+    if (templates[type]) {
+      this.messageContent = templates[type];
+    }
+  }
+
+  clearForm(): void {
+    this.messageContent = '';
+    this.selectedStudentIds = [];
+    this.sendWhatsApp = true;
+    this.sendEmail = false;
+  }
+
+  sendMessage(): void {
+    if (!this.canSend()) return;
+
+    this.sending = true;
+
+    const payload = {
+      studentIds: this.selectedStudentIds,
+      message: this.messageContent,
+      sendWhatsApp: this.sendWhatsApp,
+      sendEmail: this.sendEmail
+    };
+
+    this.http.post('/api/messages/bulk-enhanced', payload).subscribe({
       next: (res: any) => {
         this.sending = false;
         if (res && res.success) {
-          alert('✅ تم إرسال رسالة الغياب عبر واتساب بنجاح');
-          this.selectedAbsenceStudentId = '';
-          this.absenceMessage.customMessage = '';
+          alert(`✅ ${res.message}`);
+          this.clearForm();
           this.loadMessageHistory();
-          
-          this.stats.totalMessages++;
-          if (res.data?.result?.success) this.stats.successfulMessages++;
+          this.loadStats();
         } else {
           alert('❌ فشل إرسال الرسالة: ' + (res?.error || 'خطأ غير معروف'));
         }
       },
       error: (err) => {
         this.sending = false;
-        console.error('Error sending absence message:', err);
-        
-        let errorMsg = '❌ خطأ في إرسال الرسالة';
-        if (err.error?.error) {
-          errorMsg += ': ' + err.error.error;
-        } else if (err.error?.message) {
-          errorMsg += ': ' + err.error.message;
-        } else if (err.message) {
-          errorMsg += ': ' + err.message;
-        }
-        
-        alert(errorMsg);
-      }
-    });
-  }
-
-  sendLatePaymentMessage(student: any) {
-    this.sending = true;
-    const data = {
-      studentId: student._id,
-      amount: 5000,
-      month: new Date().toLocaleDateString('ar-EG', { month: 'long' })
-    };
-
-    this.http.post('http://localhost:5090/api/messages/late-payment', data).subscribe({
-      next: (res: any) => {
-        this.sending = false;
-        if (res && res.success) {
-          alert(`✅ تم إرسال تنبيه الدفع إلى ${student.name} عبر واتساب`);
-          this.loadMessageHistory();
-          this.stats.totalMessages++;
-          if (res.data?.result?.success) this.stats.successfulMessages++;
-        } else {
-          alert('❌ فشل إرسال الرسالة');
-        }
-      },
-      error: (err) => {
-        this.sending = false;
-        console.error('Error sending late payment message:', err);
+        console.error('Error sending message:', err);
         alert('❌ خطأ في إرسال الرسالة: ' + (err.error?.error || err.message));
       }
     });
   }
 
-  sendClassStartedMessage() {
-    if (!this.classStartedData.classId) {
-      alert('الرجاء اختيار الحصة');
+  // Class message methods
+  onClassSelect(): void {
+    if (!this.selectedClassId) {
+      this.selectedClassStudents = [];
+      this.classDetails = null;
       return;
     }
-
-    this.sending = true;
-    const data: any = {
-      classId: this.classStartedData.classId,
-      sendToAll: this.classStartedData.sendToAll,
-      customMessage: this.classStartedData.customMessage
-    };
-
-    if (!this.classStartedData.sendToAll && this.selectedStudents.length > 0) {
-      data.specificStudents = this.selectedStudents;
-    }
-
-    this.http.post('http://localhost:5090/api/messages/class-started', data).subscribe({
-      next: (res: any) => {
-        this.sending = false;
-        if (res && res.success) {
-          alert(res.message || '✅ تم إرسال إشعار بدء الحصة بنجاح');
-          this.classStartedData.classId = '';
-          this.classStartedData.customMessage = '';
-          this.selectedStudents = [];
-          this.loadMessageHistory();
-          
-          if (res.data?.results) {
-            this.stats.totalMessages += res.data.results.length;
-            this.stats.successfulMessages += res.data.results.filter((r: any) => r.success).length;
-          }
-        } else {
-          alert('❌ فشل إرسال الرسالة');
-        }
-      },
-      error: (err) => {
-        this.sending = false;
-        console.error('Error sending class started message:', err);
-        alert('❌ خطأ في إرسال الرسالة: ' + (err.error?.error || err.message));
-      }
-    });
-  }
-
-  sendLateMessage() {
-    if (!this.selectedLateStudentId) {
-      alert('الرجاء اختيار طالب');
-      return;
-    }
-
-    this.sending = true;
-    const data = {
-      studentId: this.selectedLateStudentId,
-      lateMinutes: this.lateData.lateMinutes,
-      customMessage: this.lateData.customMessage
-    };
-
-    this.http.post('http://localhost:5090/api/messages/student-late', data).subscribe({
-      next: (res: any) => {
-        this.sending = false;
-        if (res && res.success) {
-          alert('✅ تم إرسال إشعار التأخير عبر واتساب بنجاح');
-          this.selectedLateStudentId = '';
-          this.lateData.customMessage = '';
-          this.loadMessageHistory();
-          this.stats.totalMessages++;
-          if (res.data?.result?.success) this.stats.successfulMessages++;
-        } else {
-          alert('❌ فشل إرسال الرسالة');
-        }
-      },
-      error: (err) => {
-        this.sending = false;
-        console.error('Error sending late message:', err);
-        alert('❌ خطأ في إرسال الرسالة: ' + (err.error?.error || err.message));
-      }
-    });
-  }
-
-  sendBulkMessage() {
-    if (!this.bulkData.message) {
-      alert('الرجاء إدخال نص الرسالة');
-      return;
-    }
-
-    const recipientsCount = this.getRecipientsCount();
-    if (recipientsCount === 0) {
-      alert('لا يوجد مستلمين صالحين');
-      return;
-    }
-
-    this.sending = true;
-    const data: any = {
-      message: this.bulkData.message
-    };
-
-    if (this.bulkData.recipientType === 'class' && this.bulkData.classId) {
-      data.classId = this.bulkData.classId;
-    } else if (this.bulkData.recipientType === 'late') {
-      data.filters = { paymentStatus: 'late' };
-    }
-
-    this.http.post('http://localhost:5090/api/messages/bulk', data).subscribe({
-      next: (res: any) => {
-        this.sending = false;
-        if (res && res.success) {
-          alert(res.message || '✅ تم إرسال الرسالة الجماعية بنجاح');
-          this.bulkData.message = '';
-          this.loadMessageHistory();
-          
-          if (res.data) {
-            this.stats.totalMessages += res.data.results?.length || 0;
-            this.stats.successfulMessages += res.data.results?.filter((r: any) => r.success).length || 0;
-          }
-        } else {
-          alert('❌ فشل إرسال الرسالة');
-        }
-      },
-      error: (err) => {
-        this.sending = false;
-        console.error('Error sending bulk message:', err);
-        alert('❌ خطأ في إرسال الرسالة: ' + (err.error?.error || err.message));
-      }
-    });
-  }
-
-  openTemplateModal(template: MessageTemplate) {
-    this.selectedTemplate = template;
-    this.templateData = {};
-    this.templateRecipients = 'all';
-    this.showTemplateModal = true;
-  }
-
-  sendTemplateMessage() {
-    this.sending = true;
-    const data: any = {
-      templateType: this.selectedTemplate?.id,
-      customData: this.templateData
-    };
-
-    if (this.templateRecipients !== 'all') {
-      data.classId = this.templateRecipients;
-    }
-
-    this.http.post('http://localhost:5090/api/messages/template', data).subscribe({
-      next: (res: any) => {
-        this.sending = false;
-        this.showTemplateModal = false;
-        if (res && res.success) {
-          alert(res.message || '✅ تم إرسال رسالة القالب بنجاح');
-          this.loadMessageHistory();
-        } else {
-          alert('❌ فشل إرسال الرسالة');
-        }
-      },
-      error: (err) => {
-        this.sending = false;
-        console.error('Error sending template message:', err);
-        alert('❌ خطأ في إرسال الرسالة: ' + (err.error?.error || err.message));
-      }
-    });
-  }
-
-  viewMessageDetails(message: any) {
-    const successful = this.getSuccessfulCount(message);
-    const failed = this.getTotalCount(message) - successful;
     
-    alert(`📊 تفاصيل الرسالة:\n\n` +
-          `📅 التاريخ: ${new Date(message.sentAt || message.createdAt || new Date()).toLocaleString('ar-EG')}\n` +
-          `✅ تم الإرسال بنجاح: ${successful}\n` +
-          `❌ فشل الإرسال: ${failed}\n` +
-          `📝 الرسالة: ${message.content || message.text || ''}`);
+    this.http.get(`/api/classes/${this.selectedClassId}/message-details`).subscribe({
+      next: (res: any) => {
+        if (res && res.success) {
+          this.selectedClassStudents = res.students || [];
+          this.classDetails = res.class;
+        }
+      },
+      error: (err) => {
+        console.error('Error loading class students:', err);
+        this.selectedClassStudents = [];
+      }
+    });
+  }
+
+  onRecipientTypeChange(): void {
+    if (this.includeAllStudentsInClass) {
+      this.selectedClassStudentIds = [];
+    }
+  }
+
+  isClassStudentSelected(studentId: string): boolean {
+    return this.selectedClassStudentIds.includes(studentId);
+  }
+
+  toggleClassStudent(studentId: string): void {
+    const index = this.selectedClassStudentIds.indexOf(studentId);
+    if (index === -1) {
+      this.selectedClassStudentIds.push(studentId);
+    } else {
+      this.selectedClassStudentIds.splice(index, 1);
+    }
+  }
+
+  selectAllClassStudents(): void {
+    this.selectedClassStudentIds = this.selectedClassStudents.map(s => s._id);
+  }
+
+  deselectAllClassStudents(): void {
+    this.selectedClassStudentIds = [];
+  }
+
+  getStudentsWithPhone(): number {
+    return this.selectedClassStudents.filter(s => s.parentPhone).length;
+  }
+
+  getStudentsWithEmail(): number {
+    return this.selectedClassStudents.filter(s => s.parentEmail).length;
+  }
+
+  getRecipientsCount(): number {
+    if (this.includeAllStudentsInClass) {
+      return this.selectedClassStudents.filter(s => s.parentPhone || s.parentEmail).length;
+    } else {
+      return this.selectedClassStudentIds.length;
+    }
+  }
+
+  updateClassMessageCount(): void {}
+
+  insertClassTemplate(type: string): void {
+    const templates: { [key: string]: string } = {
+      'absence': `تحية طيبة،\n\nنود إعلامكم بأن الطالب/ة قد تغيب عن حصة ${this.classDetails?.name || ''} اليوم.\n\nيرجى التواصل مع إدارة المدرسة للاطلاع على تفاصيل الغياب.\n\nمع الشكر،\nإدارة المدرسة`,
+
+      'payment': `تحية طيبة،\n\nنود تذكيركم بأن هناك دفعات متأخرة مستحقة على الطالب/ة في حصة ${this.classDetails?.name || ''}.\n\nيرجى التوجه للإدارة لسداد المستحقات في أقرب وقت.\n\nمع الشكر،\nإدارة المدرسة`,
+
+      'announcement': `تحية طيبة،\n\nهذا إعلان هام بخصوص حصة ${this.classDetails?.name || ''}.\n\nيرجى الاطلاع على التفاصيل والتواصل مع الإدارة للاستفسار.\n\nمع الشكر،\nإدارة المدرسة`,
+
+      'class': `تحية طيبة،\n\nبخصوص حصة ${this.classDetails?.name || ''} (${this.classDetails?.subject || ''})\n\nنود إعلامكم بما يلي:\n\nمع الشكر،\nإدارة المدرسة`
+    };
+
+    if (templates[type]) {
+      this.classMessageContent = templates[type];
+    }
+  }
+
+  clearClassForm(): void {
+    this.selectedClassId = '';
+    this.classMessageContent = '';
+    this.includeAllStudentsInClass = true;
+    this.selectedClassStudentIds = [];
+    this.selectedClassStudents = [];
+    this.classDetails = null;
+  }
+
+  canSendToClass(): boolean {
+    if (!this.selectedClassId) return false;
+    
+    let hasRecipients = false;
+    if (this.includeAllStudentsInClass) {
+      hasRecipients = this.selectedClassStudents.some(s => s.parentPhone || s.parentEmail);
+    } else {
+      hasRecipients = this.selectedClassStudentIds.length > 0;
+    }
+    
+    return hasRecipients && 
+           this.classMessageContent.trim().length >= 3 && 
+           !this.sending;
+  }
+
+  sendToClass(): void {
+    if (!this.canSendToClass()) return;
+    
+    this.sending = true;
+    
+    const payload: any = {
+      classId: this.selectedClassId,
+      message: this.classMessageContent,
+      sendWhatsApp: this.sendWhatsApp,
+      sendEmail: this.sendEmail,
+      includeAllStudents: this.includeAllStudentsInClass
+    };
+    
+    if (!this.includeAllStudentsInClass) {
+      payload.specificStudentIds = this.selectedClassStudentIds;
+    }
+    
+    this.http.post('/api/messages/send-to-class', payload).subscribe({
+      next: (res: any) => {
+        this.sending = false;
+        if (res && res.success) {
+          alert(`✅ ${res.message}`);
+          this.clearClassForm();
+          this.loadMessageHistory();
+          this.loadStats();
+        } else {
+          alert('❌ فشل إرسال الرسالة: ' + (res?.error || 'خطأ غير معروف'));
+        }
+      },
+      error: (err) => {
+        this.sending = false;
+        console.error('Error sending to class:', err);
+        alert('❌ خطأ في إرسال الرسالة: ' + (err.error?.error || err.message));
+      }
+    });
+  }
+
+  // Payment reminder methods
+  sendPaymentReminder(student: any): void {
+    this.sending = true;
+
+    const payload = {
+      studentId: student._id,
+      sendWhatsApp: true,
+      sendEmail: false
+    };
+
+    this.http.post('/api/messages/payment-reminder', payload).subscribe({
+      next: (res: any) => {
+        this.sending = false;
+        if (res && res.success) {
+          alert(`✅ ${res.message}`);
+          this.loadMessageHistory();
+        } else {
+          alert('❌ فشل إرسال التذكير: ' + (res?.error || 'خطأ غير معروف'));
+        }
+      },
+      error: (err) => {
+        this.sending = false;
+        console.error('Error sending reminder:', err);
+        alert('❌ خطأ في إرسال التذكير: ' + (err.error?.error || err.message));
+      }
+    });
+  }
+
+  // Session payment methods
+  loadSessionOptions(): void {
+    if (!this.sessionPayment.studentId || !this.sessionPayment.classId) {
+      this.sessionOptions = [];
+      return;
+    }
+
+    this.http.get(`/api/payment-systems/session-history/${this.sessionPayment.studentId}?classId=${this.sessionPayment.classId}`).subscribe({
+      next: (res: any) => {
+        if (res && res.sessions && Array.isArray(res.sessions)) {
+          this.sessionOptions = res.sessions.filter((s: any) => s.status === 'pending');
+        } else {
+          this.sessionOptions = [];
+        }
+      },
+      error: (err) => {
+        console.error('Error loading session options:', err);
+        this.sessionOptions = [];
+      }
+    });
+  }
+
+  canPaySession(): boolean {
+    return !!this.sessionPayment.studentId &&
+           !!this.sessionPayment.classId &&
+           !!this.sessionPayment.sessionNumber &&
+           !this.paying;
+  }
+
+  paySession(): void {
+    if (!this.canPaySession()) return;
+
+    this.paying = true;
+
+    const payload = {
+      studentId: this.sessionPayment.studentId,
+      classId: this.sessionPayment.classId,
+      sessionNumber: this.sessionPayment.sessionNumber,
+      amount: this.sessionPayment.amount,
+      paymentMethod: this.sessionPayment.paymentMethod
+    };
+
+    this.http.post('/api/payment-systems/specific-session', payload).subscribe({
+      next: (res: any) => {
+        this.paying = false;
+        if (res && res.success) {
+          alert(`✅ ${res.message}`);
+          this.sessionPayment = {
+            studentId: '',
+            classId: '',
+            sessionNumber: '',
+            amount: null,
+            paymentMethod: 'cash'
+          };
+          this.sessionOptions = [];
+          this.loadStats();
+        } else {
+          alert('❌ فشل الدفع: ' + (res?.error || 'خطأ غير معروف'));
+        }
+      },
+      error: (err) => {
+        this.paying = false;
+        console.error('Error paying session:', err);
+        alert('❌ خطأ في الدفع: ' + (err.error?.error || err.message));
+      }
+    });
+  }
+
+  // Helper methods
+  getMessageTypeName(type: string): string {
+    const types: any = {
+      'individual': 'رسالة فردية',
+      'bulk': 'رسالة جماعية',
+      'class': 'رسالة حصة',
+      'payment': 'تذكير دفع',
+      'absence': 'إشعار غياب',
+      'template': 'قالب'
+    };
+    return types[type] || type;
+  }
+
+  getMessageTypeClass(type: string): string {
+    const classes: any = {
+      'individual': 'individual',
+      'bulk': 'bulk',
+      'class': 'class',
+      'payment': 'payment',
+      'absence': 'absence',
+      'template': 'bulk'
+    };
+    return classes[type] || 'individual';
   }
 }

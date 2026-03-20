@@ -64,11 +64,9 @@ export class CardsManagementComponent implements OnInit, OnDestroy {
     this.loadStudents();
   }
 
-/*************  ✨ Windsurf Command ⭐  *************/
 /**
  * Stop card detection simulation on component destruction
  */
-/*******  16415238-85ae-402d-a77f-862db18aa083  *******/
   ngOnDestroy() {
     this.stopCardDetection();
   }

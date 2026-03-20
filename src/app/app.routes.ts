@@ -15,6 +15,7 @@ import {ComprehensiveAccountingComponent} from './components/accounting/accounti
 import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { LessonDetailComponent } from './lesson-detail/lesson-detail.component';
 import { StudentAttendanceComponent } from './student-attendance/student-attendance.component';
+import { MessagesDashboardComponent } from './messages-dashboard/messages-dashboard.component';
 export const routes: Routes = [
   // المسار الافتراضي - إعادة توجيه إلى login
   { path: '', redirectTo: '/login', pathMatch: 'full' },
@@ -44,6 +45,7 @@ export const routes: Routes = [
       { path: 'rooms-management', component: RoomsManagementComponent },
       { path: 'payments-management', component: PaymentsManagementComponent },
       { path: 'cards-management', component: CardsManagementComponent },
+      {path : 'messages', component : MessagesDashboardComponent},
       { 
         path: 'lesson-detail/:lessonId', 
         component: LessonDetailComponent 

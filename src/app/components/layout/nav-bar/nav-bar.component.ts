@@ -303,6 +303,8 @@ export class NavBarComponent implements OnInit {
     { id: 'live-classes', icon: 'bi-camera-video', label: 'الحصص الحية', route: '/home/live-class' },
     { id: 'students', icon: 'bi-people', label: 'إدارة الطلاب', route: '/home/students-management', subItems: true },
     { id: 'teachers', icon: 'bi-person-video3', label: 'إدارة الأساتذة', route: '/home/teachers-management' },
+    {id : 'messages', icon: 'bi-chat-dots', label: 'الرسائل', route: '/home/messages', notification: 8},
+    
     { id: 'classes', icon: 'bi-book', label: 'إدارة الحصص', route: '/home/lesson-management' },
     { id: 'classrooms', icon: 'bi-building', label: 'إدارة القاعات', route: '/home/rooms-management' },
     { id: 'payments', icon: 'bi-cash-coin', label: 'المدفوعات', route: '/home/payments-management', notification: 5 },

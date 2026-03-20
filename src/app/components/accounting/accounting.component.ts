@@ -193,6 +193,31 @@ interface MenuItem {
   badge?: number;
 }
 
+interface ClassCommission {
+  class: Class;
+  teacher: Teacher;
+  month: string;
+  students: {
+    total: number;
+    paid: number;
+    unpaid: number;
+    list: Array<{
+      _id: string;
+      name: string;
+      studentId: string;
+      hasPaid: boolean;
+    }>;
+  };
+  commission: {
+    fullAmount: number;
+    actualAmount: number;
+    pendingAmount: number;
+  };
+  existingCommission: any;
+  canPay: boolean;
+  canAdjust: boolean;
+}
+
 @Component({
   selector: 'app-comprehensive-accounting',
   standalone: true,
@@ -328,24 +353,26 @@ interface MenuItem {
             <!-- Year Selector with Same Style as Transactions -->
             <div class="filters-wrapper">
               <div class="filters-row">
-
+                <select [(ngModel)]="selectedYear" (change)="onYearChange()" class="filter-select year-select-enhanced">
+                  <option *ngFor="let year of availableYears" [value]="year">{{ year }}</option>
+                </select>
                 
-                <div class="quick-stats-enhanced">
-                  <div class="stat-badge income-badge" *ngIf="yearlyStats">
+                <div class="quick-stats-enhanced" *ngIf="yearlyStats">
+                  <div class="stat-badge income-badge">
                     <span class="badge-label">إيرادات:</span>
                     <span class="badge-value positive">{{ formatCurrency(yearlyStats.income) }}</span>
                   </div>
-                  <div class="stat-badge expense-badge" *ngIf="yearlyStats">
+                  <div class="stat-badge expense-badge">
                     <span class="badge-label">مصروفات:</span>
                     <span class="badge-value negative">{{ formatCurrency(yearlyStats.expenses) }}</span>
                   </div>
-                  <div class="stat-badge profit-badge" *ngIf="yearlyStats">
+                  <div class="stat-badge profit-badge">
                     <span class="badge-label">صافي:</span>
                     <span class="badge-value" [class.positive]="yearlyStats.profit >= 0" [class.negative]="yearlyStats.profit < 0">
                       {{ formatCurrency(yearlyStats.profit) }}
                     </span>
                   </div>
-                  <div class="stat-badge transactions-badge" *ngIf="yearlyStats">
+                  <div class="stat-badge transactions-badge">
                     <span class="badge-label">معاملات:</span>
                     <span class="badge-value">{{ yearlyStats.transactions }}</span>
                   </div>
@@ -591,7 +618,7 @@ interface MenuItem {
               <div class="transactions-section">
                 <h4>معاملات الشهر</h4>
                 <div class="search-box">
-                  <input type="text" placeholder="بحث..." [(ngModel)]="monthlySearchTerm" class="search-input">
+                  <input type="text" placeholder="بحث..." [(ngModel)]="monthlySearchTerm" (input)="filterMonthlyTransactions()" class="search-input">
                 </div>
                 <div class="table-responsive">
                   <table class="data-table compact">
@@ -781,12 +808,12 @@ interface MenuItem {
             <div class="section-header">
               <h2>عمولات الأساتذة</h2>
               <div class="header-actions">
-                <button class="btn-primary" (click)="openTeacherCommissionModal('add')">
+                <button class="btn-primary" (click)="openClassCommissionModal()">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
-                  جديد
+                  دفع عمولة حصة
                 </button>
                 <button class="btn-success" (click)="generateMonthlyCommissions()">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -852,6 +879,14 @@ interface MenuItem {
                     <strong>{{ commission.month }}</strong>
                   </div>
                   <div class="commission-detail">
+                    <span>نوع العمولة:</span>
+                    <strong>{{ commission.type === 'class' ? 'حصة شاملة' : 'فردي' }}</strong>
+                  </div>
+                  <div class="commission-detail" *ngIf="commission.studentDetails?.length">
+                    <span>عدد الطلاب:</span>
+                    <strong>{{ commission.studentDetails.length }}</strong>
+                  </div>
+                  <div class="commission-detail">
                     <span>المبلغ:</span>
                     <strong [class.negative]="commission.status === 'pending'" 
                             [class.positive]="commission.status === 'paid'">
@@ -864,6 +899,11 @@ interface MenuItem {
                           class="btn-pay" 
                           (click)="payTeacherCommission(commission._id)">
                     دفع
+                  </button>
+                  <button *ngIf="commission.status === 'pending' && commission.type === 'class'" 
+                          class="btn-edit" 
+                          (click)="adjustClassCommission(commission)">
+                    تعديل
                   </button>
                   <button class="btn-view" (click)="viewCommissionDetails(commission)">
                     عرض
@@ -940,55 +980,176 @@ interface MenuItem {
         </div>
       </div>
 
-      <!-- Teacher Commission Modal -->
-      <div class="modal-overlay" *ngIf="showTeacherCommissionModal" (click)="closeTeacherCommissionModal()">
-        <div class="modal-content" (click)="$event.stopPropagation()">
+      <!-- Class Commission Modal -->
+      <div class="modal-overlay" *ngIf="showClassCommissionModal" (click)="closeClassCommissionModal()">
+        <div class="modal-content medium" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h3>{{ teacherCommissionMode === 'add' ? 'إضافة عمولة' : 'تعديل العمولة' }}</h3>
-            <button class="close-btn" (click)="closeTeacherCommissionModal()">&times;</button>
+            <h3>دفع عمولة الحصة</h3>
+            <button class="close-btn" (click)="closeClassCommissionModal()">&times;</button>
           </div>
           <div class="modal-body">
             <div class="form-group">
-              <label>الأستاذ <span class="required">*</span></label>
-              <select [(ngModel)]="teacherCommissionForm.teacherId" class="form-control">
-                <option value="">اختر الأستاذ</option>
-                <option *ngFor="let teacher of teachersList" [value]="teacher._id">{{ teacher.name }}</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>الحصة <span class="required">*</span></label>
-              <select [(ngModel)]="teacherCommissionForm.classId" (change)="onClassChange()" class="form-control">
-                <option value="">اختر الحصة</option>
-                <option *ngFor="let class of classesList" [value]="class._id">{{ class.name }}</option>
-              </select>
-            </div>
-
-            <div class="form-group">
               <label>الشهر <span class="required">*</span></label>
-              <input type="month" [(ngModel)]="teacherCommissionForm.month" class="form-control">
+              <input type="month" [(ngModel)]="classCommissionForm.month" class="form-control" (change)="loadClassCommissions()">
             </div>
 
-            <div class="form-row">
-              <div class="form-group half">
-                <label>النسبة (%)</label>
-                <input type="number" [(ngModel)]="teacherCommissionForm.percentage" (change)="calculateCommission()" class="form-control" min="0" max="100">
-              </div>
-              <div class="form-group half">
-                <label>المبلغ</label>
-                <input type="number" [(ngModel)]="teacherCommissionForm.amount" class="form-control" readonly>
+            <div *ngIf="isLoadingClassCommissions" class="loading-spinner">
+              <div class="spinner-small"></div>
+              <span>جاري تحميل الحصص...</span>
+            </div>
+
+            <div *ngIf="!isLoadingClassCommissions && classCommissions.length === 0 && classCommissionForm.month" class="empty-state">
+              <p>لا توجد حصص مع طلاب دفعوا لهذا الشهر</p>
+            </div>
+
+            <div *ngIf="classCommissions.length > 0" class="class-commissions-list">
+              <div *ngFor="let item of classCommissions" class="class-commission-item">
+                <div class="class-header">
+                  <div>
+                    <h4>{{ item.class.name }}</h4>
+                    <p class="class-subject">{{ item.class.subject }} | الأستاذ: {{ item.teacher.name }}</p>
+                  </div>
+                  <div class="class-status" [class.can-pay]="item.canPay">
+                    {{ item.canPay ? 'قابل للدفع' : 'مدفوع' }}
+                  </div>
+                </div>
+
+                <div class="class-stats">
+                  <div class="stat-box">
+                    <span class="stat-label">الطلاب</span>
+                    <span class="stat-value">{{ item.students.paid }} / {{ item.students.total }}</span>
+                  </div>
+                  <div class="stat-box">
+                    <span class="stat-label">العمولة</span>
+                    <span class="stat-value">{{ formatCurrency(item.commission.actualAmount) }}</span>
+                  </div>
+                  <div class="stat-box">
+                    <span class="stat-label">المتبقي</span>
+                    <span class="stat-value pending">{{ formatCurrency(item.commission.pendingAmount) }}</span>
+                  </div>
+                </div>
+
+                <div class="class-actions">
+                  <button class="btn-view" (click)="toggleClassDetails(item)">
+                    {{ expandedClass === item.class._id ? 'إخفاء التفاصيل' : 'عرض التفاصيل' }}
+                  </button>
+                  <button *ngIf="item.canPay" class="btn-pay" (click)="payClassCommission(item)">
+                    دفع العمولة
+                  </button>
+                  <button *ngIf="item.canAdjust" class="btn-edit" (click)="adjustClassCommissionAmount(item)">
+                    تعديل المبلغ
+                  </button>
+                </div>
+
+                <!-- Students List (Expanded) -->
+                <div *ngIf="expandedClass === item.class._id" class="students-list">
+                  <table class="students-table">
+                    <thead>
+                      <tr>
+                        <th>الطالب</th>
+                        <th>الحالة</th>
+                        <th>مبلغ الدفع</th>
+                        <th>حصة الأستاذ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let student of item.students.list">
+                        <td>{{ student.name }}</td>
+                        <td>
+                          <span class="status-badge" [class.paid]="student.hasPaid" [class.unpaid]="!student.hasPaid">
+                            {{ student.hasPaid ? 'مدفوع' : 'غير مدفوع' }}
+                          </span>
+                        </td>
+                        <td>{{ student.hasPaid ? formatCurrency(item.class.price / item.students.total) : '0 د.ج' }}</td>
+                        <td>{{ student.hasPaid ? formatCurrency((item.class.price / item.students.total) * 0.7) : '0 د.ج' }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 
-            <div class="form-group">
-              <label>ملاحظات</label>
-              <textarea [(ngModel)]="teacherCommissionForm.notes" class="form-control" rows="2"></textarea>
+            <!-- Payment Details -->
+            <div *ngIf="selectedClassCommission" class="payment-details">
+              <h4>تفاصيل الدفع</h4>
+              <div class="form-row">
+                <div class="form-group half">
+                  <label>طريقة الدفع</label>
+                  <select [(ngModel)]="paymentDetails.paymentMethod" class="form-control">
+                    <option value="cash">نقداً</option>
+                    <option value="bank">تحويل بنكي</option>
+                    <option value="online">دفع إلكتروني</option>
+                  </select>
+                </div>
+                <div class="form-group half">
+                  <label>تاريخ الدفع</label>
+                  <input type="date" [(ngModel)]="paymentDetails.paymentDate" class="form-control">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>ملاحظات</label>
+                <textarea [(ngModel)]="paymentDetails.notes" class="form-control" rows="2"></textarea>
+              </div>
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-cancel" (click)="closeTeacherCommissionModal()">إلغاء</button>
-            <button class="btn-save" (click)="saveTeacherCommission()" [disabled]="isLoading">
-              {{ isLoading ? 'جاري...' : 'حفظ' }}
+            <button class="btn-cancel" (click)="closeClassCommissionModal()">إلغاء</button>
+            <button *ngIf="selectedClassCommission" class="btn-save" (click)="confirmPayClassCommission()" [disabled]="isLoading">
+              {{ isLoading ? 'جاري الدفع...' : 'تأكيد الدفع' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Adjust Commission Modal -->
+      <div class="modal-overlay" *ngIf="showAdjustCommissionModal" (click)="closeAdjustCommissionModal()">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>تعديل عمولة الحصة</h3>
+            <button class="close-btn" (click)="closeAdjustCommissionModal()">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="adjust-info">
+              <p><strong>الأستاذ:</strong> {{ selectedCommission?.teacher?.name }}</p>
+              <p><strong>الحصة:</strong> {{ selectedCommission?.class?.name }}</p>
+              <p><strong>الشهر:</strong> {{ selectedCommission?.month }}</p>
+              <p><strong>المبلغ الحالي:</strong> {{ formatCurrency(selectedCommission?.amount || 0) }}</p>
+            </div>
+
+            <div class="form-group">
+              <label>اختر الطالب للتعديل</label>
+              <select [(ngModel)]="adjustForm.studentId" class="form-control">
+                <option value="">-- اختر الطالب --</option>
+                <option *ngFor="let student of selectedCommission?.studentDetails" [value]="student.student?._id">
+                  {{ student.student?.name }} ({{ student.includedInCommission ? 'مشمول' : 'غير مشمول' }})
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group" *ngIf="adjustForm.studentId">
+              <label>نوع التعديل</label>
+              <select [(ngModel)]="adjustForm.adjustmentType" class="form-control">
+                <option value="increase">زيادة المبلغ</option>
+                <option value="decrease">نقصان المبلغ</option>
+                <option value="set">تحديد مبلغ محدد</option>
+                <option value="exclude">استبعاد الطالب من العمولة</option>
+              </select>
+            </div>
+
+            <div class="form-group" *ngIf="adjustForm.studentId && adjustForm.adjustmentType !== 'exclude'">
+              <label>قيمة التعديل</label>
+              <input type="number" [(ngModel)]="adjustForm.adjustmentAmount" class="form-control" min="0">
+            </div>
+
+            <div class="form-group">
+              <label>سبب التعديل</label>
+              <textarea [(ngModel)]="adjustForm.reason" class="form-control" rows="2" placeholder="مثال: خصم بسبب الغياب..."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" (click)="closeAdjustCommissionModal()">إلغاء</button>
+            <button class="btn-save" (click)="saveCommissionAdjustment()" [disabled]="!isValidAdjustment()">
+              حفظ التعديل
             </button>
           </div>
         </div>
@@ -1262,6 +1423,24 @@ interface MenuItem {
 
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+
+    .loading-spinner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 30px;
+      color: #64748b;
+    }
+
+    .spinner-small {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #e2e8f0;
+      border-top-color: #4f46e5;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
     }
 
     /* ==================== Stats Grid ==================== */
@@ -2021,7 +2200,7 @@ interface MenuItem {
 
     .commissions-list {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
       gap: 16px;
       margin-bottom: 24px;
     }
@@ -2095,7 +2274,7 @@ interface MenuItem {
       gap: 8px;
     }
 
-    .btn-pay, .btn-view {
+    .btn-pay, .btn-view, .btn-edit {
       flex: 1;
       padding: 8px;
       border: none;
@@ -2113,6 +2292,15 @@ interface MenuItem {
 
     .btn-pay:hover {
       background: #059669;
+    }
+
+    .btn-edit {
+      background: #f59e0b;
+      color: white;
+    }
+
+    .btn-edit:hover {
+      background: #d97706;
     }
 
     .btn-view {
@@ -2175,6 +2363,174 @@ interface MenuItem {
       font-weight: 600;
     }
 
+    /* ==================== Class Commission Modal Styles ==================== */
+    .modal-content.medium {
+      width: 800px;
+      max-width: 95%;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #64748b;
+      background: #f8fafc;
+      border-radius: 8px;
+    }
+
+    .class-commissions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-height: 500px;
+      overflow-y: auto;
+      padding: 4px;
+    }
+
+    .class-commission-item {
+      background: #f8fafc;
+      border-radius: 10px;
+      padding: 16px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .class-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .class-header h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+
+    .class-subject {
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .class-status {
+      font-size: 13px;
+      padding: 4px 8px;
+      border-radius: 20px;
+      background: #f1f5f9;
+    }
+
+    .class-status.can-pay {
+      background: #d1fae5;
+      color: #059669;
+    }
+
+    .class-stats {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .stat-box {
+      flex: 1;
+      min-width: 80px;
+      background: white;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+      border: 1px solid #e2e8f0;
+    }
+
+    .stat-box .stat-label {
+      font-size: 12px;
+      color: #64748b;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .stat-box .stat-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .stat-box .stat-value.pending {
+      color: #f59e0b;
+    }
+
+    .class-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .students-list {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .students-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .students-table th {
+      text-align: right;
+      padding: 8px;
+      background: #f1f5f9;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    .students-table td {
+      padding: 8px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+
+    .status-badge.paid {
+      background: #d1fae5;
+      color: #059669;
+    }
+
+    .status-badge.unpaid {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .payment-details {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 2px solid #e2e8f0;
+    }
+
+    .payment-details h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 16px;
+    }
+
+    /* ==================== Adjust Commission Modal ==================== */
+    .adjust-info {
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .adjust-info p {
+      margin-bottom: 8px;
+    }
+
     /* ==================== Modal Styles ==================== */
     .modal-overlay {
       position: fixed;
@@ -2202,6 +2558,10 @@ interface MenuItem {
 
     .modal-content.small {
       width: 400px;
+    }
+
+    .modal-content.medium {
+      width: 800px;
     }
 
     @keyframes modalSlideIn {
@@ -2697,7 +3057,11 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
   mobileMenuOpen: boolean = false;
   showTransactionModal: boolean = false;
   showTeacherCommissionModal: boolean = false;
+  showClassCommissionModal: boolean = false;
+  showAdjustCommissionModal: boolean = false;
   teacherCommissionMode: 'add' | 'pay' | 'view' = 'add';
+  isLoadingClassCommissions: boolean = false;
+  expandedClass: string | null = null;
 
   // Menu Items
   menuItems: MenuItem[] = [
@@ -2760,6 +3124,7 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
   monthOptions: { value: string; name: string }[] = [];
   monthlySearchTerm: string = '';
   filteredMonthlyTransactions: Transaction[] = [];
+  allMonthlyTransactions: Transaction[] = [];
 
   // Filters
   filters: FilterOptions = {
@@ -2798,6 +3163,9 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
   monthsList: { value: string; name: string }[] = [];
   teacherCommissions: TeacherCommission[] = [];
   filteredTeacherCommissions: TeacherCommission[] = [];
+  classCommissions: ClassCommission[] = [];
+  selectedClassCommission: ClassCommission | null = null;
+  selectedCommission: TeacherCommission | null = null;
   
   teacherCommissionForm: any = {
     teacherId: '',
@@ -2809,6 +3177,23 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
     type: 'individual',
     paymentMethod: 'cash',
     notes: ''
+  };
+
+  classCommissionForm: any = {
+    month: new Date().toISOString().slice(0, 7)
+  };
+
+  paymentDetails: any = {
+    paymentMethod: 'cash',
+    paymentDate: new Date().toISOString().slice(0, 10),
+    notes: ''
+  };
+
+  adjustForm: any = {
+    studentId: '',
+    adjustmentType: 'decrease',
+    adjustmentAmount: 0,
+    reason: ''
   };
 
   commissionSummary: CommissionSummary = {
@@ -2944,9 +3329,11 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
 
   loadAllTransactions(): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.http.get<any[]>(`${this.API_URL}/accounting/all-transactions?limit=10000`).subscribe({
-        next: (transactions) => {
-          this.allTransactions = (transactions || []).map(t => ({
+      // Use the optimized endpoint with pagination
+      this.http.get<any>(`${this.API_URL}/accounting/all-transactions?limit=1000`).subscribe({
+        next: (response) => {
+          const transactions = response.data || response || [];
+          this.allTransactions = transactions.map(t => ({
             ...t,
             date: new Date(t.date)
           })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -3176,8 +3563,22 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
         return date.getFullYear() === year && date.getMonth() + 1 === month;
       });
       
-      this.filteredMonthlyTransactions = monthTransactions.sort((a, b) => 
+      this.allMonthlyTransactions = monthTransactions.sort((a, b) => 
         new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      this.filterMonthlyTransactions();
+    }
+  }
+
+  filterMonthlyTransactions(): void {
+    if (!this.monthlySearchTerm) {
+      this.filteredMonthlyTransactions = this.allMonthlyTransactions;
+    } else {
+      const searchLower = this.monthlySearchTerm.toLowerCase();
+      this.filteredMonthlyTransactions = this.allMonthlyTransactions.filter(t => 
+        t.description?.toLowerCase().includes(searchLower) ||
+        t.student?.name?.toLowerCase().includes(searchLower) ||
+        this.getCategoryName(t.category).includes(searchLower)
       );
     }
   }
@@ -3321,6 +3722,138 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
     return new Date().toISOString().slice(0, 7);
   }
 
+  openClassCommissionModal(): void {
+    this.classCommissionForm.month = this.getCurrentMonth();
+    this.showClassCommissionModal = true;
+    this.loadClassCommissions();
+  }
+
+  closeClassCommissionModal(): void {
+    this.showClassCommissionModal = false;
+    this.classCommissions = [];
+    this.selectedClassCommission = null;
+    this.expandedClass = null;
+  }
+
+  loadClassCommissions(): void {
+    if (!this.classCommissionForm.month) return;
+    
+    this.isLoadingClassCommissions = true;
+    
+    this.http.get<any>(`${this.API_URL}/accounting/class-commissions/${this.classCommissionForm.month}`).subscribe({
+      next: (response) => {
+        this.classCommissions = response.data || [];
+        this.isLoadingClassCommissions = false;
+      },
+      error: (err) => {
+        console.error('Error loading class commissions:', err);
+        this.isLoadingClassCommissions = false;
+        this.showNotification('حدث خطأ أثناء تحميل الحصص', 'error');
+      }
+    });
+  }
+
+  toggleClassDetails(item: ClassCommission): void {
+    if (this.expandedClass === item.class._id) {
+      this.expandedClass = null;
+    } else {
+      this.expandedClass = item.class._id;
+    }
+  }
+
+  payClassCommission(item: ClassCommission): void {
+    this.selectedClassCommission = item;
+    this.paymentDetails.paymentDate = new Date().toISOString().slice(0, 10);
+  }
+
+  confirmPayClassCommission(): void {
+    if (!this.selectedClassCommission) return;
+    
+    this.isLoading = true;
+    
+    const payload = {
+      teacherId: this.selectedClassCommission.teacher._id,
+      classId: this.selectedClassCommission.class._id,
+      month: this.selectedClassCommission.month,
+      paymentMethod: this.paymentDetails.paymentMethod || 'cash',
+      paymentDate: this.paymentDetails.paymentDate || new Date().toISOString(),
+      notes: this.paymentDetails.notes || `دفع عمولة حصة ${this.selectedClassCommission.class.name}`
+    };
+    
+    this.http.post(`${this.API_URL}/accounting/pay-class-commission`, payload).subscribe({
+      next: (response: any) => {
+        this.isLoading = false;
+        this.showNotification('تم دفع عمولة الحصة بنجاح', 'success');
+        this.closeClassCommissionModal();
+        this.loadTeacherCommissions();
+        this.loadAllFinancialData();
+      },
+      error: (err) => {
+        this.isLoading = false;
+        console.error('Error paying class commission:', err);
+        this.showNotification(err.error?.error || 'حدث خطأ أثناء دفع العمولة', 'error');
+      }
+    });
+  }
+
+  adjustClassCommission(commission: TeacherCommission): void {
+    this.selectedCommission = commission;
+    this.adjustForm = {
+      studentId: '',
+      adjustmentType: 'decrease',
+      adjustmentAmount: 0,
+      reason: ''
+    };
+    this.showAdjustCommissionModal = true;
+  }
+
+  adjustClassCommissionAmount(item: ClassCommission): void {
+    if (item.existingCommission) {
+      this.adjustClassCommission(item.existingCommission);
+    } else {
+      this.showNotification('لا توجد عمولة قابلة للتعديل لهذه الحصة', 'warning');
+    }
+  }
+
+  closeAdjustCommissionModal(): void {
+    this.showAdjustCommissionModal = false;
+    this.selectedCommission = null;
+  }
+
+  isValidAdjustment(): boolean {
+    if (!this.selectedCommission) return false;
+    if (this.adjustForm.adjustmentType !== 'exclude' && (!this.adjustForm.adjustmentAmount || this.adjustForm.adjustmentAmount <= 0)) return false;
+    return true;
+  }
+
+  saveCommissionAdjustment(): void {
+    if (!this.selectedCommission) return;
+    
+    this.isLoading = true;
+    
+    const payload = {
+      commissionId: this.selectedCommission._id,
+      studentId: this.adjustForm.studentId,
+      adjustmentAmount: this.adjustForm.adjustmentAmount,
+      adjustmentType: this.adjustForm.adjustmentType,
+      reason: this.adjustForm.reason
+    };
+    
+    this.http.post(`${this.API_URL}/accounting/adjust-commission`, payload).subscribe({
+      next: (response: any) => {
+        this.isLoading = false;
+        this.showNotification('تم تعديل العمولة بنجاح', 'success');
+        this.closeAdjustCommissionModal();
+        this.loadTeacherCommissions();
+      },
+      error: (err) => {
+        this.isLoading = false;
+        console.error('Error adjusting commission:', err);
+        this.showNotification(err.error?.error || 'حدث خطأ أثناء تعديل العمولة', 'error');
+      }
+    });
+  }
+
   openTeacherCommissionModal(mode: 'add' | 'pay' | 'view', commission?: TeacherCommission): void {
     this.teacherCommissionMode = mode;
     
@@ -3438,6 +3971,7 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
 
   loadTeacherCommissions(): Promise<void> {
     return new Promise((resolve) => {
+      // Build query string with filters
       const params = new URLSearchParams();
       
       if (this.commissionFilters.teacherId) params.append('teacher', this.commissionFilters.teacherId);
@@ -3448,9 +3982,14 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
       
       this.http.get<any>(url).subscribe({
         next: (response) => {
-          this.teacherCommissions = response.data || response || [];
+          this.teacherCommissions = response.data || [];
           this.filteredTeacherCommissions = [...this.teacherCommissions];
-          this.calculateCommissionSummary();
+          this.commissionSummary = response.summary || {
+            totalPending: 0,
+            totalPaid: 0,
+            byTeacher: [],
+            byClass: []
+          };
           resolve();
         },
         error: (err) => {
@@ -3463,95 +4002,9 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
     });
   }
 
-  calculateCommissionSummary(): void {
-    this.commissionSummary = {
-      totalPending: this.teacherCommissions
-        .filter(c => c.status === 'pending')
-        .reduce((sum, c) => sum + c.amount, 0),
-      totalPaid: this.teacherCommissions
-        .filter(c => c.status === 'paid')
-        .reduce((sum, c) => sum + c.amount, 0),
-      byTeacher: [],
-      byClass: []
-    };
-
-    // Group by teacher
-    const teacherMap = new Map();
-    this.teacherCommissions.forEach(commission => {
-      const teacherId = commission.teacher?._id;
-      const teacherName = commission.teacher?.name;
-      
-      if (teacherId) {
-        if (!teacherMap.has(teacherId)) {
-          teacherMap.set(teacherId, {
-            teacherId,
-            teacherName,
-            pending: 0,
-            paid: 0,
-            total: 0
-          });
-        }
-        
-        const data = teacherMap.get(teacherId);
-        if (commission.status === 'pending') {
-          data.pending += commission.amount;
-        } else if (commission.status === 'paid') {
-          data.paid += commission.amount;
-        }
-        data.total += commission.amount;
-      }
-    });
-    
-    this.commissionSummary.byTeacher = Array.from(teacherMap.values());
-    
-    // Group by class
-    const classMap = new Map();
-    this.teacherCommissions.forEach(commission => {
-      const classId = commission.class?._id;
-      const className = commission.class?.name;
-      
-      if (classId) {
-        if (!classMap.has(classId)) {
-          classMap.set(classId, {
-            classId,
-            className,
-            pending: 0,
-            paid: 0,
-            total: 0
-          });
-        }
-        
-        const data = classMap.get(classId);
-        if (commission.status === 'pending') {
-          data.pending += commission.amount;
-        } else if (commission.status === 'paid') {
-          data.paid += commission.amount;
-        }
-        data.total += commission.amount;
-      }
-    });
-    
-    this.commissionSummary.byClass = Array.from(classMap.values());
-  }
-
   applyCommissionFilters(): void {
-    this.filteredTeacherCommissions = this.teacherCommissions.filter(commission => {
-      let match = true;
-      
-      if (this.commissionFilters.teacherId && commission.teacher?._id !== this.commissionFilters.teacherId) {
-        match = false;
-      }
-      
-      if (this.commissionFilters.month && commission.month !== this.commissionFilters.month) {
-        match = false;
-      }
-      
-      if (this.commissionFilters.status && commission.status !== this.commissionFilters.status) {
-        match = false;
-      }
-      
-      return match;
-    });
+    // Filters are applied on the server side, just reload with filters
+    this.loadTeacherCommissions();
   }
 
   viewCommissionDetails(commission: TeacherCommission): void {
@@ -3567,11 +4020,6 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
       class: commission.class
     };
     this.showTransactionModal = true;
-  }
-
-  showNotification(message: string, type: 'success' | 'error' | 'warning' | 'info'): void {
-    // For now, use alert
-    alert(message);
   }
 
   // ==================== Filtering ====================
@@ -3681,7 +4129,6 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
       this.loadTeacherCommissions();
     }
   }
-  
 
   onYearChange(): void {
     // تحديث جميع البيانات المتعلقة بالسنة المختارة
@@ -3709,7 +4156,6 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
       console.log(`تم تحديث البيانات للسنة: ${this.selectedYear}`);
     });
   }
-  
 
   viewMonthDetails(month: MonthlyStats): void {
     this.selectedMonth = `${month.year}-${month.month}`;
@@ -3793,7 +4239,8 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
       'rent': 'إيجار',
       'utilities': 'مرافق',
       'supplies': 'مستلزمات',
-      'other': 'أخرى'
+      'other': 'أخرى',
+      'refund': 'استرداد'
     };
     return categories[category] || category;
   }
@@ -3801,5 +4248,10 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
   getPercentage(part: number, total: number): string {
     if (total === 0) return '0';
     return ((part / total) * 100).toFixed(1);
+  }
+
+  showNotification(message: string, type: 'success' | 'error' | 'warning' | 'info'): void {
+    // For now, use alert
+    alert(message);
   }
 }

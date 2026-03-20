@@ -28,5 +28,13 @@ export class CountService {
       headers: this.authService.getAuthHeaders()
     });
   }
+  getNotificationCount(): Observable<{ count: number }> {
+    return this.http.get<{ count: number }>(`${this.apiUrl}/notifications/count`);
+  }
+  
+  checkNewNotifications(): Observable<boolean> {
+    return this.http.get<boolean>(`${this.apiUrl}/notifications/check-new`);
+  }
+  
 
 }

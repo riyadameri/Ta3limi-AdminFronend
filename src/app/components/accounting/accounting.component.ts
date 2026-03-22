@@ -4,6 +4,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { environment } from '../../../environments/environment.development';
 
 // ==================== Interfaces ====================
 
@@ -3211,8 +3212,8 @@ export class ComprehensiveAccountingComponent implements OnInit, OnDestroy {
   };
 
   private refreshInterval: any;
-  private readonly API_URL = 'http://localhost:5090/api';
-
+  // private readonly API_URL = 'http://localhost:5090/api';
+  private readonly API_URL = environment.apiUrl;
   constructor(
     private http: HttpClient,
     private router: Router

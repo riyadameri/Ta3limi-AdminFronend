@@ -5,7 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { forkJoin } from 'rxjs';
 import { NotificationsComponent } from '../../notifications/notifications/notifications.component';
 import { RouterModule } from '@angular/router';
-
+import { environment } from '../../../../environments/environment.development';
 @Component({
   selector: 'app-header',
   standalone: true,
@@ -711,7 +711,8 @@ import { RouterModule } from '@angular/router';
   `]
 })
 export class HeaderComponent implements OnInit {
-  private apiUrl = 'http://localhost:5090/api';
+  private apiUrl = environment.apiUrl ;
+
   
   @ViewChild('notificationsComponent') notificationsComponent!: NotificationsComponent;
 

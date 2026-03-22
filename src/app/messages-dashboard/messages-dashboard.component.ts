@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 interface Student {
   _id: string;
@@ -1448,7 +1449,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
   }
 
   loadStudents(): void {
-    this.http.get('/api/students').subscribe({
+    this.http.get(`${environment.apiUrl}/students`).subscribe({
       next: (res: any) => {
         if (Array.isArray(res)) {
           this.students = res;
@@ -1469,7 +1470,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
   }
 
   loadClasses(): void {
-    this.http.get('/api/classes').subscribe({
+    this.http.get(`${environment.apiUrl}/classes`).subscribe({
       next: (res: any) => {
         if (res && res.data && Array.isArray(res.data)) {
           this.allClasses = res.data;
@@ -1487,7 +1488,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
   }
 
   loadClassesForMessaging(): void {
-    this.http.get('/api/classes').subscribe({
+    this.http.get(`${environment.apiUrl}/classes`).subscribe({
       next: (res: any) => {
         if (res && res.data && Array.isArray(res.data)) {
           this.availableClassesList = res.data;
@@ -1505,7 +1506,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
   }
 
   loadLatePayments(): void {
-    this.http.get('/api/notifications/late-payments').subscribe({
+    this.http.get(`${environment.apiUrl}/notifications/late-payments`).subscribe({
       next: (res: any) => {
         if (res && res.students && Array.isArray(res.students)) {
           this.lateStudents = res.students;
@@ -1536,7 +1537,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
       params = params.set('endDate', this.historyFilters.endDate);
     }
 
-    this.http.get(`/api/messages/history`, { params }).subscribe({
+    this.http.get(`${environment.apiUrl}/messages/history`, { params }).subscribe({
       next: (res: any) => {
         if (res && res.messages && Array.isArray(res.messages)) {
           this.messageHistory = res.messages;
@@ -1557,7 +1558,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
   }
 
   loadTemplates(): void {
-    this.http.get('/api/messages/templates').subscribe({
+    this.http.get(`${environment.apiUrl}/messages/templates`).subscribe({
       next: (res: any) => {
         if (res && res.templates && Array.isArray(res.templates)) {
           this.templates = res.templates;
@@ -1570,7 +1571,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
   }
 
   loadStats(): void {
-    this.http.get('/api/notifications/count').subscribe({
+    this.http.get(`${environment.apiUrl}/notifications/count`).subscribe({
       next: (res: any) => {
         if (res && res.count !== undefined) {
           this.latePaymentsCount = res.count;
@@ -1581,7 +1582,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
   }
 
   checkWhatsAppStatus(): void {
-    this.http.get('/api/whatsapp/status').subscribe({
+    this.http.get(`${environment.apiUrl}/whatsapp/status`).subscribe({
       next: (res: any) => {
         this.whatsappConnected = res.connected || false;
         this.whatsappNumber = res.number || '';
@@ -1701,7 +1702,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
       sendEmail: this.sendEmail
     };
 
-    this.http.post('/api/messages/bulk-enhanced', payload).subscribe({
+    this.http.post(`${environment.apiUrl}/messages/bulk-enhanced`, payload).subscribe({
       next: (res: any) => {
         this.sending = false;
         if (res && res.success) {
@@ -1729,7 +1730,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
       return;
     }
     
-    this.http.get(`/api/classes/${this.selectedClassId}/message-details`).subscribe({
+    this.http.get(`${environment.apiUrl}/classes/${this.selectedClassId}/message-details`).subscribe({
       next: (res: any) => {
         if (res && res.success) {
           this.selectedClassStudents = res.students || [];
@@ -1845,7 +1846,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
       payload.specificStudentIds = this.selectedClassStudentIds;
     }
     
-    this.http.post('/api/messages/send-to-class', payload).subscribe({
+    this.http.post(`${environment.apiUrl}/messages/send-to-class`, payload).subscribe({
       next: (res: any) => {
         this.sending = false;
         if (res && res.success) {
@@ -1875,7 +1876,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
       sendEmail: false
     };
 
-    this.http.post('/api/messages/payment-reminder', payload).subscribe({
+    this.http.post(`${environment.apiUrl}/messages/payment-reminder`, payload).subscribe({
       next: (res: any) => {
         this.sending = false;
         if (res && res.success) {
@@ -1900,7 +1901,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.http.get(`/api/payment-systems/session-history/${this.sessionPayment.studentId}?classId=${this.sessionPayment.classId}`).subscribe({
+    this.http.get(`${environment.apiUrl}/payment-systems/session-history/${this.sessionPayment.studentId}?classId=${this.sessionPayment.classId}`).subscribe({
       next: (res: any) => {
         if (res && res.sessions && Array.isArray(res.sessions)) {
           this.sessionOptions = res.sessions.filter((s: any) => s.status === 'pending');
@@ -1935,7 +1936,7 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
       paymentMethod: this.sessionPayment.paymentMethod
     };
 
-    this.http.post('/api/payment-systems/specific-session', payload).subscribe({
+    this.http.post(`${environment.apiUrl}/payment-systems/specific-session`, payload).subscribe({
       next: (res: any) => {
         this.paying = false;
         if (res && res.success) {

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -7,15 +7,7 @@ import Swal from 'sweetalert2';
 import { environment } from '../../environments/environment.development';
 import { PrinterService, ReceiptData, BulkReceiptData } from '../services/printer.service';
 
-interface ClassPaymentGroup {
-  classId: string;
-  className: string;
-  payments: Payment[];
-  totalAmount: number;
-  paidAmount: number;
-  pendingAmount: number;
-}
-
+// ==================== INTERFACES ====================
 interface Student {
   _id?: string;
   id?: string;
@@ -59,6 +51,38 @@ interface Payment {
   isLate?: boolean;
 }
 
+interface ClassPaymentGroup {
+  classId: string;
+  className: string;
+  payments: Payment[];
+  totalAmount: number;
+  paidAmount: number;
+  pendingAmount: number;
+  expanded?: boolean;
+}
+
+interface Class {
+  _id?: string;
+  id?: string;
+  name: string;
+  subject: string;
+  price: number;
+  teacher?: any;
+  schedule?: any[];
+  paymentSystem: 'monthly' | 'rounds';
+  roundSettings?: {
+    sessionCount: number;
+    sessionDuration: number;
+    breakBetweenSessions: number;
+  };
+  students?: any[];
+  academicYear?: string;
+  classroom?: any;
+  description?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 interface MonthlyPayment {
   id?: string;
   _id?: string;
@@ -91,85 +115,1621 @@ interface RoundPayment {
   class?: any;
 }
 
-interface Class {
-  _id?: string;
-  id?: string;
-  name: string;
-  subject: string;
-  price: number;
-  teacher?: any;
-  schedule?: any[];
-  paymentSystem: 'monthly' | 'rounds';
-  roundSettings?: {
-    sessionCount: number;
-    sessionDuration: number;
-    breakBetweenSessions: number;
-  };
-  students?: any[];
-  academicYear?: string;
-  classroom?: any;
-  description?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-interface RoundSelection {
-  roundNumber: string;
-  sessionCount: number;
-  sessionPrice: number;
-  totalAmount: number;
-  startDate: Date;
-  endDate: Date;
-  notes?: string;
-}
-
-interface BulkPaymentData {
-  studentIds: string[];
-  classId: string;
-  amount: number;
-  month: string;
-  paymentMethod: string;
-  notes?: string;
-}
-
-interface PaymentReceiptOption {
-  label: string;
-  value: 'single' | 'multiple';
-  description: string;
-  icon: string;
-}
-
 @Component({
   selector: 'app-student-details',
   standalone: true,
   imports: [CommonModule, FormsModule],
-  templateUrl: './student-details.component.html',
-  styleUrls: ['./student-details.component.css']
+  template: `
+    <!-- Modern Container with Responsive Design -->
+    <div class="modern-container">
+      <!-- Loading Overlay -->
+      <div class="loading-overlay" *ngIf="loading">
+        <div class="spinner"></div>
+        <p class="loading-text">جاري تحميل البيانات...</p>
+      </div>
+
+      <!-- Header Section with Responsive Layout -->
+      <div class="header-section">
+        <div class="header-content">
+          <button class="back-btn" (click)="goBack()">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            <span class="back-text">رجوع</span>
+          </button>
+          <h1 class="page-title" *ngIf="student">
+            <span class="title-icon">👨‍🎓</span>
+            {{ student.name }}
+          </h1>
+          <div class="header-actions">
+            <button class="action-btn print-btn" (click)="printStudentReport()">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 18L18 18M6 14L18 14M6 10L18 10M6 6L18 6"/>
+                <rect x="6" y="2" width="12" height="20" rx="1" ry="1"/>
+              </svg>
+              تقرير
+            </button>
+            <button class="action-btn whatsapp-btn" (click)="sendWhatsAppMessage()" *ngIf="student?.parentPhone">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21z"/>
+                <path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1z"/>
+                <path d="M14 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1z"/>
+              </svg>
+              واتساب
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Responsive Tabs -->
+      <div class="tabs-container">
+        <div class="tabs">
+          <button [class.active]="activeTab === 'info'" (click)="setActiveTab('info')" class="tab-btn">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            <span>معلومات الطالب</span>
+          </button>
+          <button [class.active]="activeTab === 'classes'" (click)="setActiveTab('classes')" class="tab-btn">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+            </svg>
+            <span>الحصص ({{ studentClasses.length }})</span>
+          </button>
+          <button [class.active]="activeTab === 'payments'" (click)="setActiveTab('payments')" class="tab-btn">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="6" width="20" height="12" rx="2"/>
+              <path d="M12 12h.01"/>
+              <path d="M16 12h.01"/>
+              <path d="M8 12h.01"/>
+            </svg>
+            <span>المدفوعات</span>
+          </button>
+          <button [class.active]="activeTab === 'payment-systems'" (click)="setActiveTab('payment-systems')" class="tab-btn">
+            <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+            <span>أنظمة الدفع</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Student Info Tab -->
+      <div *ngIf="activeTab === 'info'" class="tab-content">
+        <div class="info-grid" *ngIf="student">
+          <!-- Student Profile Card -->
+          <div class="card profile-card">
+            <div class="profile-header">
+              <div class="profile-avatar">
+                <span class="avatar-text">{{ student.name.charAt(0) }}</span>
+              </div>
+              <div class="profile-status">
+                <span class="status-badge" [class.active]="student.active" [class.inactive]="!student.active">
+                  {{ student.active ? 'نشط' : 'غير نشط' }}
+                </span>
+                <span class="status-badge registration" [class.paid]="student.hasPaidRegistration">
+                  {{ student.hasPaidRegistration ? 'مسدد التسجيل' : 'غير مسدد' }}
+                </span>
+              </div>
+            </div>
+            <h2 class="profile-name">{{ student.name }}</h2>
+            <p class="profile-id">رقم الطالب: {{ student.studentId }}</p>
+            
+            <div class="info-details">
+              <div class="info-row">
+                <span class="info-label">المستوى الدراسي:</span>
+                <span class="info-value">{{ getAcademicYearName(student.academicYear) }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">ولي الأمر:</span>
+                <span class="info-value">{{ student.parentName }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">رقم الهاتف:</span>
+                <span class="info-value">{{ student.parentPhone }}</span>
+                <button class="call-btn" (click)="makeCall(student.parentPhone)" title="اتصال">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                  </svg>
+                </button>
+                <button class="msg-btn" (click)="sendWhatsAppMessage()" title="واتساب">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21z"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="info-row" *ngIf="student.parentEmail">
+                <span class="info-label">البريد الإلكتروني:</span>
+                <span class="info-value">{{ student.parentEmail }}</span>
+                <button class="email-btn" (click)="sendEmail(student.parentEmail)" title="بريد">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                    <path d="m22 7-10 7L2 7"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="info-row" *ngIf="student.birthDate">
+                <span class="info-label">تاريخ الميلاد:</span>
+                <span class="info-value">{{ student.birthDate | date:'dd/MM/yyyy' }} (العمر: {{ calculateAge(student.birthDate) }} سنة)</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">تاريخ التسجيل:</span>
+                <span class="info-value">{{ student.registrationDate | date:'dd/MM/yyyy' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Financial Summary Card -->
+          <div class="card financial-card">
+            <h3 class="card-title">الملخص المالي</h3>
+            <div class="financial-stats">
+              <div class="stat-item">
+                <div class="stat-value">{{ getTotalPaid() | number:'1.0-0' }} د.ج</div>
+                <div class="stat-label">المدفوع</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value">{{ getTotalPending() | number:'1.0-0' }} د.ج</div>
+                <div class="stat-label">المتبقي</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value">{{ paymentHistory.length }}</div>
+                <div class="stat-label">عدد الدفعات</div>
+              </div>
+            </div>
+            <div class="progress-section">
+              <div class="progress-label">
+                <span>نسبة السداد</span>
+                <span>{{ getPaymentPercentage() }}%</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" [style.width.%]="getPaymentPercentage()"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Classes Tab -->
+      <div *ngIf="activeTab === 'classes'" class="tab-content">
+        <div class="classes-container">
+          <div class="classes-header">
+            <h3 class="section-title">الحصص المسجلة</h3>
+            <button class="add-btn" (click)="openAddToLessonsModal()">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              إضافة حصة
+            </button>
+          </div>
+
+          <div class="classes-grid" *ngIf="studentClasses.length > 0; else noClasses">
+            <div class="class-card" *ngFor="let classItem of studentClasses">
+              <div class="class-header">
+                <h4 class="class-name">{{ classItem.name }}</h4>
+                <span class="payment-badge" [class.monthly]="classItem.paymentSystem === 'monthly'" [class.rounds]="classItem.paymentSystem === 'rounds'">
+                  {{ classItem.paymentSystem === 'monthly' ? 'شهري' : 'جولات' }}
+                </span>
+              </div>
+              <div class="class-details">
+                <p><span class="detail-label">المادة:</span> {{ classItem.subject }}</p>
+                <p><span class="detail-label">السعر الشهري:</span> {{ classItem.price | number:'1.0-0' }} د.ج</p>
+                <p *ngIf="classItem.teacher"><span class="detail-label">الأستاذ:</span> {{ classItem.teacher.name }}</p>
+                <p *ngIf="classItem.schedule?.length">
+                  <span class="detail-label">المواعيد:</span>
+                  <span class="schedule-list">
+                    <span *ngFor="let s of classItem.schedule" class="schedule-badge">
+                      {{ s.day }} {{ s.time }}
+                    </span>
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+          <ng-template #noClasses>
+            <div class="empty-state">
+              <div class="empty-icon">📚</div>
+              <p>لا توجد حصص مسجلة</p>
+              <button class="add-btn-outline" (click)="openAddToLessonsModal()">تسجيل في حصة</button>
+            </div>
+          </ng-template>
+        </div>
+      </div>
+
+      <!-- Payments Tab -->
+      <div *ngIf="activeTab === 'payments'" class="tab-content">
+        <div class="payments-container">
+          <div class="payments-header">
+            <h3 class="section-title">سجل المدفوعات</h3>
+            <div class="header-actions">
+              <button class="add-btn primary" (click)="openAddPaymentModal()">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                دفعة جديدة
+              </button>
+              <button class="add-btn secondary" (click)="openBulkPayConfirmation()" [disabled]="selectedPaymentsForBulkPay.length === 0">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                دفع مختارة ({{ selectedPaymentsForBulkPay.length }})
+              </button>
+            </div>
+          </div>
+
+          <!-- Filter Controls - Responsive -->
+          <div class="filter-section">
+            <div class="filter-group">
+              <select [(ngModel)]="selectedMonthForGroupPay" (change)="selectPaymentsByMonth(selectedMonthForGroupPay)" class="filter-select">
+                <option value="">جميع الأشهر</option>
+                <option *ngFor="let m of getUniqueMonths()" [value]="m">{{ m }}</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <select [(ngModel)]="selectedClassForGroupPay" (change)="selectPaymentsByClass(selectedClassForGroupPay)" class="filter-select">
+                <option value="all">جميع الحصص</option>
+                <option *ngFor="let group of classPaymentGroups" [value]="group.classId">{{ group.className }}</option>
+              </select>
+            </div>
+            <button class="filter-clear" (click)="selectAllPendingPayments()">تحديد الكل</button>
+          </div>
+
+          <!-- Payment Groups -->
+          <div class="payment-groups">
+            <div class="group-card" *ngFor="let group of classPaymentGroups" [class.expanded]="isClassGroupExpanded(group.classId)">
+              <div class="group-header" (click)="toggleClassPaymentGroup(group.classId)">
+                <div class="group-info">
+                  <h4 class="group-name">{{ group.className }}</h4>
+                  <div class="group-stats">
+                    <span class="stat">المجموع: {{ group.totalAmount | number:'1.0-0' }} د.ج</span>
+                    <span class="stat paid">مدفوع: {{ group.paidAmount | number:'1.0-0' }} د.ج</span>
+                    <span class="stat pending">متبقي: {{ group.pendingAmount | number:'1.0-0' }} د.ج</span>
+                  </div>
+                </div>
+                <div class="group-actions">
+                  <div class="checkbox-wrapper" (click)="$event.stopPropagation()">
+                    <input type="checkbox" 
+                           [checked]="isGroupAllSelected(group)" 
+                           (change)="toggleGroupSelection(group)"
+                           class="group-checkbox">
+                  </div>
+                  <svg class="expand-icon" [class.rotated]="isClassGroupExpanded(group.classId)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="group-payments" *ngIf="isClassGroupExpanded(group.classId)">
+                <div class="payment-item" *ngFor="let payment of group.payments" 
+                     [class.paid]="payment.status === 'paid'"
+                     [class.pending]="payment.status === 'pending'"
+                     [class.late]="payment.status === 'late'">
+                  <div class="payment-checkbox">
+                    <input type="checkbox" 
+                           [checked]="isPaymentSelected(payment)" 
+                           (change)="togglePaymentSelection(payment)"
+                           [disabled]="payment.status === 'paid'"
+                           class="payment-checkbox-input">
+                  </div>
+                  <div class="payment-info">
+                    <div class="payment-month">{{ payment.month }}</div>
+                    <div class="payment-details">
+                      <span class="payment-amount">{{ payment.amount | number:'1.0-0' }} د.ج</span>
+                      <span class="payment-status" [class]="getPaymentStatusClass(payment)">
+                        {{ getPaymentStatusText(payment) }}
+                      </span>
+                    </div>
+                    <div class="payment-meta" *ngIf="payment.paymentDate">
+                      <span class="payment-date">{{ payment.paymentDate | date:'dd/MM/yyyy' }}</span>
+                      <span class="payment-method">{{ getPaymentMethodLabel(payment.paymentMethod) }}</span>
+                    </div>
+                  </div>
+                  <div class="payment-actions">
+                    <button class="icon-btn" (click)="printPaymentReceipt(payment)" title="طباعة">
+                      <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 18L18 18M6 14L18 14M6 10L18 10M6 6L18 6"/>
+                        <rect x="6" y="2" width="12" height="20" rx="1" ry="1"/>
+                      </svg>
+                    </button>
+                    <button class="icon-btn" *ngIf="payment.status !== 'paid'" (click)="payPayment(payment)" title="دفع">
+                      <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                      </svg>
+                    </button>
+                    <button class="icon-btn delete" (click)="openDeleteConfirmModal(payment)" title="حذف">
+                      <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="payments-summary" *ngIf="selectedPaymentsForBulkPay.length > 0">
+            <div class="summary-info">
+              <span>المختارة: {{ selectedPaymentsForBulkPay.length }} دفعة</span>
+              <span>المبلغ الإجمالي: {{ getSelectedPaymentsTotal() | number:'1.0-0' }} د.ج</span>
+            </div>
+            <div class="summary-actions">
+              <button class="btn-success" (click)="processBulkPaySelected()">دفع الجماعي</button>
+              <button class="btn-secondary" (click)="selectedPaymentsForBulkPay = []">إلغاء التحديد</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Payment Systems Tab -->
+      <div *ngIf="activeTab === 'payment-systems'" class="tab-content">
+        <div class="payment-systems-container">
+          <!-- Monthly Payments Section -->
+          <div class="system-section">
+            <h3 class="section-title">الدفعات الشهرية</h3>
+            <div class="payments-table-responsive" *ngIf="studentMonthlyPayments.length > 0; else noMonthly">
+              <table class="modern-table">
+                <thead>
+                  <tr>
+                    <th>الشهر</th>
+                    <th>المبلغ</th>
+                    <th>الحالة</th>
+                    <th>تاريخ الدفع</th>
+                    <th>الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let payment of studentMonthlyPayments">
+                    <td>{{ payment.month }}</td>
+                    <td>{{ payment.amount | number:'1.0-0' }} د.ج</td>
+                    <td>
+                      <span class="status-badge-sm" [class.paid]="payment.status === 'paid'" [class.pending]="payment.status === 'pending'">
+                        {{ payment.status === 'paid' ? 'مدفوع' : 'معلق' }}
+                      </span>
+                    </td>
+                    <td>{{ payment.paymentDate ? (payment.paymentDate | date:'dd/MM/yyyy') : '—' }}</td>
+                    <td>
+                      <button class="icon-btn" *ngIf="payment.status !== 'paid'" (click)="payLatePayment(payment)" title="دفع">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <ng-template #noMonthly>
+              <div class="empty-state small">
+                <p>لا توجد دفعات شهرية</p>
+              </div>
+            </ng-template>
+          </div>
+
+          <!-- Rounds Section -->
+          <div class="system-section">
+            <h3 class="section-title">الجولات</h3>
+            <div class="rounds-grid" *ngIf="studentRounds.length > 0; else noRounds">
+              <div class="round-card" *ngFor="let round of studentRounds">
+                <div class="round-header">
+                  <h4 class="round-number">جولة {{ round.roundNumber }}</h4>
+                  <span class="round-status" [class]="round.statusClass">{{ round.statusText }}</span>
+                </div>
+                <div class="round-details">
+                  <p><span class="detail-label">عدد الجلسات:</span> {{ round.sessionCount }}</p>
+                  <p><span class="detail-label">سعر الجلسة:</span> {{ round.sessionPrice | number:'1.0-0' }} د.ج</p>
+                  <p><span class="detail-label">المجموع:</span> {{ round.totalAmount | number:'1.0-0' }} د.ج</p>
+                  <p><span class="detail-label">المدة:</span> {{ round.startDate | date:'dd/MM/yyyy' }} - {{ round.endDate | date:'dd/MM/yyyy' }}</p>
+                </div>
+                <div class="round-actions">
+                  <button class="action-btn-sm" (click)="viewRoundDetails(round)">تفاصيل</button>
+                  <button class="action-btn-sm success" *ngIf="round.status !== 'paid'" (click)="payRound(round)">دفع</button>
+                </div>
+              </div>
+            </div>
+            <ng-template #noRounds>
+              <div class="empty-state small">
+                <p>لا توجد جولات</p>
+              </div>
+            </ng-template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== MODALS ==================== -->
+    
+    <!-- Add Payment Modal -->
+    <div class="modal-overlay" *ngIf="showPaymentModal" (click)="closePaymentModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>إضافة دفعة جديدة</h3>
+          <button class="close-btn" (click)="closePaymentModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>المبلغ</label>
+            <input type="number" [(ngModel)]="newPayment.amount" class="form-control" placeholder="المبلغ بالدينار">
+          </div>
+          <div class="form-group">
+            <label>الشهر</label>
+            <select [(ngModel)]="newPayment.month" class="form-control">
+              <option *ngFor="let m of generateMonthOptions()" [value]="m">{{ m }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>طريقة الدفع</label>
+            <select [(ngModel)]="newPayment.paymentMethod" class="form-control">
+              <option *ngFor="let m of paymentMethods" [value]="m.value">{{ m.label }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>ملاحظات</label>
+            <textarea [(ngModel)]="newPayment.notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closePaymentModal()">إلغاء</button>
+          <button class="btn-primary" (click)="addPayment()">حفظ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Payment Modal -->
+    <div class="modal-overlay" *ngIf="showEditPaymentModal" (click)="closeEditPaymentModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>تعديل الدفعة</h3>
+          <button class="close-btn" (click)="closeEditPaymentModal()">✕</button>
+        </div>
+        <div class="modal-body" *ngIf="editingPayment">
+          <div class="form-group">
+            <label>المبلغ</label>
+            <input type="number" [(ngModel)]="editingPayment.amount" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>طريقة الدفع</label>
+            <select [(ngModel)]="editingPayment.paymentMethod" class="form-control">
+              <option *ngFor="let m of paymentMethods" [value]="m.value">{{ m.label }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>ملاحظات</label>
+            <textarea [(ngModel)]="editingPayment.notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeEditPaymentModal()">إلغاء</button>
+          <button class="btn-primary" (click)="updatePayment()">تحديث</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" *ngIf="showDeleteConfirmModal" (click)="closeDeleteConfirmModal()">
+      <div class="modal-content confirm-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>تأكيد الحذف</h3>
+        </div>
+        <div class="modal-body">
+          <p>هل أنت متأكد من حذف هذه الدفعة؟</p>
+          <p class="text-danger">لا يمكن التراجع عن هذا الإجراء.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeDeleteConfirmModal()">إلغاء</button>
+          <button class="btn-danger" (click)="deletePayment()">حذف</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Pay Confirmation Modal -->
+    <div class="modal-overlay" *ngIf="showBulkPayConfirmation" (click)="closeBulkPayConfirmation()">
+      <div class="modal-content large" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>تأكيد الدفع الجماعي</h3>
+          <button class="close-btn" (click)="closeBulkPayConfirmation()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="confirmation-summary">
+            <div class="summary-item">
+              <span>عدد الدفعات:</span>
+              <strong>{{ selectedPaymentsForBulkPay.length }}</strong>
+            </div>
+            <div class="summary-item">
+              <span>المبلغ الإجمالي:</span>
+              <strong>{{ getSelectedPaymentsTotal() | number:'1.0-0' }} د.ج</strong>
+            </div>
+            <div class="summary-item">
+              <span>عدد الطلاب:</span>
+              <strong>{{ getUniqueStudentsCount() }}</strong>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>طريقة الدفع</label>
+            <select [(ngModel)]="bulkPayment.paymentMethod" class="form-control">
+              <option *ngFor="let m of paymentMethods" [value]="m.value">{{ m.label }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>خيار الطباعة</label>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input type="radio" [(ngModel)]="selectedReceiptOption" value="single">
+                إيصال واحد لجميع الدفعات
+              </label>
+              <label class="radio-label">
+                <input type="radio" [(ngModel)]="selectedReceiptOption" value="multiple">
+                إيصالات منفصلة لكل دفعة
+              </label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>ملاحظات</label>
+            <textarea [(ngModel)]="bulkPayment.notes" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeBulkPayConfirmation()">إلغاء</button>
+          <button class="btn-primary" (click)="processBulkPaySelected()">تأكيد الدفع</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add to Lessons Modal -->
+    <div class="modal-overlay" *ngIf="showAddToLessonsModal" (click)="closeAddToLessonsModal()">
+      <div class="modal-content large" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>تسجيل في حصص</h3>
+          <button class="close-btn" (click)="closeAddToLessonsModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="filters-row">
+            <div class="filter-group">
+              <label>المادة</label>
+              <select [(ngModel)]="filterSubject" (change)="filterAvailableClasses()" class="form-control">
+                <option value="">الكل</option>
+                <option *ngFor="let s of subjects" [value]="s">{{ s }}</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label>المستوى</label>
+              <select [(ngModel)]="filterLevel" (change)="filterAvailableClasses()" class="form-control">
+                <option value="">الكل</option>
+                <option *ngFor="let y of academicYears" [value]="y.value">{{ y.label }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="available-classes" *ngIf="filteredAvailableClasses.length > 0; else noClassesAvailable">
+            <div class="class-checkbox-item" *ngFor="let cls of filteredAvailableClasses">
+              <div class="item-content">
+                <div class="item-info">
+                  <h4>{{ cls.name }}</h4>
+                  <p>{{ cls.subject }} - {{ cls.price | number:'1.0-0' }} د.ج/شهر</p>
+                  <p *ngIf="cls.teacher">الأستاذ: {{ cls.teacher.name }}</p>
+                  <span class="payment-badge-sm" [class.monthly]="cls.paymentSystem === 'monthly'" [class.rounds]="cls.paymentSystem === 'rounds'">
+                    {{ cls.paymentSystem === 'monthly' ? 'نظام شهري' : 'نظام جولات' }}
+                  </span>
+                </div>
+                <div class="item-select">
+                  <input type="checkbox" [checked]="isClassSelected(cls._id)" (change)="toggleClassSelection(cls)">
+                </div>
+              </div>
+            </div>
+          </div>
+          <ng-template #noClassesAvailable>
+            <div class="empty-state">
+              <p>لا توجد حصص متاحة للتسجيل</p>
+            </div>
+          </ng-template>
+
+          <div class="selected-summary" *ngIf="selectedClasses.length > 0">
+            <h4>الحصص المختارة ({{ selectedClasses.length }})</h4>
+            <div class="selected-list">
+              <span class="selected-badge" *ngFor="let cls of selectedClasses">{{ cls.name }}</span>
+            </div>
+            <div class="total-amount">
+              الإجمالي الشهري: {{ calculateMonthlyTotal() | number:'1.0-0' }} د.ج
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeAddToLessonsModal()">إلغاء</button>
+          <button class="btn-primary" (click)="checkAndEnrollStudentToSelectedClasses()" [disabled]="selectedClasses.length === 0">تسجيل</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Round Selection Modal -->
+    <div class="modal-overlay" *ngIf="showRoundSelectionModal" (click)="closeRoundSelectionModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>إعدادات الجولة</h3>
+          <button class="close-btn" (click)="closeRoundSelectionModal()">✕</button>
+        </div>
+        <div class="modal-body" *ngIf="selectedClassForRounds">
+          <p class="class-info">الحصة: <strong>{{ selectedClassForRounds.name }}</strong></p>
+          <div class="form-group">
+            <label>عدد الجلسات</label>
+            <input type="number" [(ngModel)]="roundSelection.sessionCount" (change)="updateRoundTotalAmount()" class="form-control" min="1">
+          </div>
+          <div class="form-group">
+            <label>سعر الجلسة</label>
+            <input type="number" [(ngModel)]="roundSelection.sessionPrice" (change)="updateRoundTotalAmount()" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>تاريخ البداية</label>
+            <input type="date" [(ngModel)]="roundSelection.startDate" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>تاريخ النهاية</label>
+            <input type="date" [(ngModel)]="roundSelection.endDate" class="form-control">
+          </div>
+          <div class="total-info">
+            <span>المبلغ الإجمالي:</span>
+            <strong>{{ roundSelection.totalAmount | number:'1.0-0' }} د.ج</strong>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeRoundSelectionModal()">إلغاء</button>
+          <button class="btn-primary" (click)="confirmRoundSelection()">تأكيد</button>
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    /* Modern CSS Variables */
+    :host {
+      --primary: #4361ee;
+      --primary-dark: #3a56d4;
+      --secondary: #2a9d8f;
+      --danger: #e63946;
+      --warning: #f4a261;
+      --success: #2a9d8f;
+      --gray-100: #f8f9fa;
+      --gray-200: #e9ecef;
+      --gray-300: #dee2e6;
+      --gray-400: #ced4da;
+      --gray-500: #adb5bd;
+      --gray-600: #6c757d;
+      --gray-700: #495057;
+      --gray-800: #343a40;
+      --gray-900: #212529;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --transition: all 0.2s ease;
+    }
+
+    /* Base Styles */
+    .modern-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1rem;
+      background: var(--gray-100);
+      min-height: 100vh;
+    }
+
+    /* Loading Overlay */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loading-text {
+      color: white;
+      margin-top: 1rem;
+    }
+
+    /* Header */
+    .header-section {
+      background: white;
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .back-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: none;
+      border: none;
+      color: var(--gray-600);
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 0.5rem;
+      border-radius: var(--radius-sm);
+      transition: var(--transition);
+    }
+    .back-btn:hover {
+      background: var(--gray-100);
+      color: var(--gray-800);
+    }
+    .page-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--gray-800);
+    }
+    .title-icon {
+      font-size: 1.8rem;
+    }
+    .header-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .action-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: var(--transition);
+    }
+    .print-btn {
+      background: var(--gray-200);
+      color: var(--gray-700);
+    }
+    .print-btn:hover {
+      background: var(--gray-300);
+    }
+    .whatsapp-btn {
+      background: #25D366;
+      color: white;
+    }
+    .whatsapp-btn:hover {
+      background: #20b359;
+    }
+
+    /* Tabs */
+    .tabs-container {
+      background: white;
+      border-radius: var(--radius-lg);
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-sm);
+      overflow-x: auto;
+    }
+    .tabs {
+      display: flex;
+      gap: 0.25rem;
+      padding: 0.5rem;
+    }
+    .tab-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      background: none;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--gray-600);
+      transition: var(--transition);
+      white-space: nowrap;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: white;
+    }
+    .tab-btn:hover:not(.active) {
+      background: var(--gray-100);
+    }
+    .tab-icon {
+      width: 1.2rem;
+      height: 1.2rem;
+    }
+
+    /* Tab Content */
+    .tab-content {
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Info Grid */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+    .card {
+      background: white;
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .profile-card {
+      text-align: center;
+    }
+    .profile-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .profile-avatar {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .avatar-text {
+      font-size: 2.5rem;
+      font-weight: 600;
+      color: white;
+    }
+    .profile-status {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .status-badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+    .status-badge.active {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status-badge.inactive {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .status-badge.registration.paid {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+    .profile-name {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 0.5rem 0;
+    }
+    .profile-id {
+      color: var(--gray-500);
+      margin-bottom: 1.5rem;
+    }
+    .info-details {
+      text-align: right;
+    }
+    .info-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .info-label {
+      color: var(--gray-600);
+      font-size: 0.85rem;
+    }
+    .info-value {
+      font-weight: 500;
+      color: var(--gray-800);
+    }
+    .call-btn, .msg-btn, .email-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.25rem;
+      border-radius: var(--radius-sm);
+      transition: var(--transition);
+    }
+    .call-btn:hover { background: #d4edda; color: #155724; }
+    .msg-btn:hover { background: #d4edda; color: #25D366; }
+    .email-btn:hover { background: #d1ecf1; color: #0c5460; }
+
+    /* Financial Card */
+    .financial-card .card-title {
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+      color: var(--gray-700);
+    }
+    .financial-stats {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+    .stat-item {
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+    }
+    .progress-section {
+      margin-top: 1rem;
+    }
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      margin-bottom: 0.5rem;
+    }
+    .progress-bar {
+      height: 8px;
+      background: var(--gray-200);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--success);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    /* Classes Grid */
+    .classes-header, .payments-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .section-title {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--gray-800);
+      margin: 0;
+    }
+    .add-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.2rem;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: var(--transition);
+    }
+    .add-btn.primary { background: var(--primary); }
+    .add-btn.secondary { background: var(--secondary); }
+    .add-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .add-btn-outline {
+      background: none;
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .classes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1rem;
+    }
+    .class-card {
+      background: white;
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition);
+    }
+    .class-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+    .class-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .class-name {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0;
+    }
+    .payment-badge {
+      padding: 0.25rem 0.5rem;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 500;
+    }
+    .payment-badge.monthly {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+    .payment-badge.rounds {
+      background: #fff3e0;
+      color: #e65100;
+    }
+    .class-details p {
+      margin: 0.5rem 0;
+      font-size: 0.85rem;
+      color: var(--gray-600);
+    }
+    .detail-label {
+      font-weight: 500;
+      color: var(--gray-700);
+    }
+    .schedule-list {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+    }
+    .schedule-badge {
+      background: var(--gray-100);
+      padding: 0.2rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.7rem;
+    }
+
+    /* Payments */
+    .filter-section {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      background: white;
+      border-radius: var(--radius-md);
+    }
+    .filter-group {
+      flex: 1;
+      min-width: 150px;
+    }
+    .filter-select {
+      width: 100%;
+      padding: 0.6rem;
+      border: 1px solid var(--gray-300);
+      border-radius: var(--radius-sm);
+      background: white;
+    }
+    .filter-clear {
+      padding: 0.6rem 1rem;
+      background: var(--gray-200);
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .group-card {
+      background: white;
+      border-radius: var(--radius-md);
+      margin-bottom: 1rem;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .group-header:hover {
+      background: var(--gray-50);
+    }
+    .group-info {
+      flex: 1;
+    }
+    .group-name {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0 0 0.5rem 0;
+    }
+    .group-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      font-size: 0.8rem;
+    }
+    .stat.paid { color: var(--success); }
+    .stat.pending { color: var(--warning); }
+    .group-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .expand-icon {
+      width: 1.2rem;
+      height: 1.2rem;
+      transition: transform 0.3s;
+    }
+    .expand-icon.rotated {
+      transform: rotate(180deg);
+    }
+    .group-payments {
+      border-top: 1px solid var(--gray-200);
+    }
+    .payment-item {
+      display: flex;
+      align-items: center;
+      padding: 1rem;
+      border-bottom: 1px solid var(--gray-100);
+      transition: var(--transition);
+    }
+    .payment-item:hover {
+      background: var(--gray-50);
+    }
+    .payment-item.paid {
+      background: #f8f9fa;
+      opacity: 0.8;
+    }
+    .payment-checkbox {
+      margin-left: 1rem;
+    }
+    .payment-info {
+      flex: 1;
+    }
+    .payment-month {
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+    .payment-details {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.85rem;
+    }
+    .payment-status {
+      padding: 0.2rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.7rem;
+    }
+    .payment-status.bg-success { background: #d4edda; color: #155724; }
+    .payment-status.bg-warning { background: #fff3cd; color: #856404; }
+    .payment-status.bg-danger { background: #f8d7da; color: #721c24; }
+    .payment-meta {
+      font-size: 0.7rem;
+      color: var(--gray-500);
+      margin-top: 0.25rem;
+    }
+    .payment-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .icon-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.4rem;
+      border-radius: var(--radius-sm);
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+    }
+    .icon-btn:hover {
+      background: var(--gray-200);
+    }
+    .icon-btn.delete:hover {
+      background: #f8d7da;
+      color: var(--danger);
+    }
+    .payments-summary {
+      background: var(--primary);
+      color: white;
+      padding: 1rem;
+      border-radius: var(--radius-md);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .summary-info {
+      display: flex;
+      gap: 1rem;
+    }
+    .btn-success {
+      background: var(--success);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .btn-secondary {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+
+    /* Payment Systems Tab */
+    .payment-systems-container {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+    .system-section {
+      background: white;
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .modern-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .modern-table th,
+    .modern-table td {
+      padding: 0.75rem;
+      text-align: right;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .modern-table th {
+      background: var(--gray-100);
+      font-weight: 600;
+    }
+    .rounds-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1rem;
+    }
+    .round-card {
+      background: var(--gray-50);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+    }
+    .round-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .round-number {
+      font-weight: 600;
+      margin: 0;
+    }
+    .round-details p {
+      margin: 0.5rem 0;
+      font-size: 0.85rem;
+    }
+    .round-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .action-btn-sm {
+      padding: 0.4rem 0.8rem;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+    .action-btn-sm.success {
+      background: var(--success);
+      color: white;
+    }
+
+    /* Empty States */
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--gray-500);
+    }
+    .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    .empty-state.small {
+      padding: 1.5rem;
+    }
+
+    /* Modals */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1rem;
+    }
+    .modal-content {
+      background: white;
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-content.large {
+      max-width: 700px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .modal-header h3 {
+      margin: 0;
+    }
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--gray-500);
+    }
+    .modal-body {
+      padding: 1.5rem;
+    }
+    .modal-footer {
+      padding: 1rem 1.5rem;
+      border-top: 1px solid var(--gray-200);
+      display: flex;
+      justify-content: flex-end;
+      gap: 1rem;
+    }
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+    .form-control {
+      width: 100%;
+      padding: 0.6rem;
+      border: 1px solid var(--gray-300);
+      border-radius: var(--radius-sm);
+    }
+    .radio-group {
+      display: flex;
+      gap: 1rem;
+    }
+    .radio-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.6rem 1.2rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+      border: none;
+      padding: 0.6rem 1.2rem;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .confirmation-summary {
+      background: var(--gray-100);
+      padding: 1rem;
+      border-radius: var(--radius-md);
+      margin-bottom: 1rem;
+    }
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+    .filters-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .available-classes {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .class-checkbox-item {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--gray-200);
+    }
+    .item-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .item-info h4 {
+      margin: 0 0 0.25rem 0;
+    }
+    .item-info p {
+      margin: 0.25rem 0;
+      font-size: 0.85rem;
+      color: var(--gray-600);
+    }
+    .payment-badge-sm {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.7rem;
+    }
+    .selected-summary {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: var(--gray-100);
+      border-radius: var(--radius-md);
+    }
+    .selected-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.5rem 0;
+    }
+    .selected-badge {
+      background: var(--primary);
+      color: white;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+    }
+    .total-amount {
+      font-weight: 600;
+      margin-top: 0.5rem;
+    }
+    .class-info {
+      margin-bottom: 1rem;
+    }
+    .total-info {
+      margin-top: 1rem;
+      padding: 0.75rem;
+      background: var(--gray-100);
+      border-radius: var(--radius-md);
+      text-align: center;
+    }
+    .text-danger {
+      color: var(--danger);
+    }
+
+    /* Icons */
+    .icon, .icon-sm, .icon-xs {
+      stroke-width: 2;
+      stroke: currentColor;
+      fill: none;
+    }
+    .icon { width: 1.2rem; height: 1.2rem; }
+    .icon-sm { width: 1rem; height: 1rem; }
+    .icon-xs { width: 0.9rem; height: 0.9rem; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .modern-container {
+        padding: 0.75rem;
+      }
+      .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .tabs {
+        flex-wrap: wrap;
+      }
+      .tab-btn {
+        flex: 1;
+        justify-content: center;
+      }
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+      .classes-grid {
+        grid-template-columns: 1fr;
+      }
+      .group-stats {
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      .payment-item {
+        flex-wrap: wrap;
+      }
+      .payment-actions {
+        margin-top: 0.5rem;
+        width: 100%;
+        justify-content: flex-end;
+      }
+      .filters-row {
+        flex-direction: column;
+      }
+      .modal-content {
+        margin: 1rem;
+      }
+    }
+
+    /* Checkbox Styles */
+    .checkbox-wrapper input,
+    .payment-checkbox-input,
+    .item-select input {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    .group-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+  `]
 })
 export class StudentDetailsComponent implements OnInit {
   private apiUrl = environment.apiUrl;
   
+  // Core Data
   student: Student | null = null;
   loading: boolean = false;
   activeTab: string = 'info';
   studentClasses: any[] = [];
   paymentHistory: Payment[] = [];
   
-  // Payment Modal Variables
+  // Modal Flags
   showPaymentModal: boolean = false;
   showEditPaymentModal: boolean = false;
   showDeleteConfirmModal: boolean = false;
   showBulkPaymentModal: boolean = false;
   showClassPaymentsModal: boolean = false;
+  showBulkPayConfirmation: boolean = false;
+  showAddToLessonsModal: boolean = false;
+  showRoundSelectionModal: boolean = false;
+  
+  // Payment Data
   classPaymentGroups: ClassPaymentGroup[] = [];
   selectedPaymentsForBulkPay: Payment[] = [];
-  showBulkPayConfirmation: boolean = false;
-  
-  // Payment group selection
   selectedMonthForGroupPay: string = '';
   selectedClassForGroupPay: string = 'all';
-
-  // Payment Form
+  
   newPayment: any = {
     student: '',
     amount: 0,
@@ -178,8 +1738,7 @@ export class StudentDetailsComponent implements OnInit {
     notes: ''
   };
   
-  // Bulk Payment Form
-  bulkPayment: BulkPaymentData = {
+  bulkPayment: any = {
     studentIds: [],
     classId: '',
     amount: 0,
@@ -188,33 +1747,41 @@ export class StudentDetailsComponent implements OnInit {
     notes: 'دفعة جماعية'
   };
   
-  // Edit Payment
   editingPayment: Payment | null = null;
-  
-  // Delete Confirmation
   paymentToDelete: Payment | null = null;
-  
-  // Class Payments View
   selectedClassForPayments: any = null;
   classPayments: Payment[] = [];
   
-  // Multiple Students Selection
-  allStudents: Student[] = [];
-  selectedStudents: Student[] = [];
-  filteredStudents: Student[] = [];
-  studentSearchTerm: string = '';
-  classForBulkPayment: Class | null = null;
+  // Class Enrollment
+  availableClasses: Class[] = [];
+  filteredAvailableClasses: Class[] = [];
+  alreadyEnrolledClasses: Class[] = [];
+  selectedClasses: Class[] = [];
+  loadingAvailableClasses: boolean = false;
+  isEnrolling: boolean = false;
+  selectedClassForRounds: Class | null = null;
   
-  // Bulk Payment Processing
-  isProcessingBulkPayment: boolean = false;
-  bulkPaymentProgress: number = 0;
-  bulkPaymentResults: any[] = [];
+  roundSelection: any = {
+    roundNumber: '',
+    sessionCount: 8,
+    sessionPrice: 0,
+    totalAmount: 0,
+    startDate: new Date(),
+    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    notes: ''
+  };
   
-  // Months for dropdown
-  months = [
-    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
-    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
-  ];
+  // Payment Systems
+  studentMonthlyPayments: MonthlyPayment[] = [];
+  studentRounds: RoundPayment[] = [];
+  
+  // Filters
+  filterSubject: string = '';
+  filterLevel: string = '';
+  selectedReceiptOption: 'single' | 'multiple' = 'single';
+  
+  // Static Data
+  months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
   
   paymentMethods = [
     { value: 'cash', label: 'نقداً' },
@@ -226,89 +1793,34 @@ export class StudentDetailsComponent implements OnInit {
   ];
   
   academicYears = [
-    { value: '1AS', label: 'الأولى ثانوي' },
-    { value: '2AS', label: 'الثانية ثانوي' },
-    { value: '3AS', label: 'الثالثة ثانوي' },
-    { value: '1MS', label: 'الأولى متوسط' },
-    { value: '2MS', label: 'الثانية متوسط' },
-    { value: '3MS', label: 'الثالثة متوسط' },
-    { value: '4MS', label: 'الرابعة متوسط' },
-    { value: '1AP', label: 'الأولى ابتدائي' },
-    { value: '2AP', label: 'الثانية ابتدائي' },
-    { value: '3AP', label: 'الثالثة ابتدائي' },
-    { value: '4AP', label: 'الرابعة ابتدائي' },
-    { value: '5AP', label: 'الخامسة ابتدائي' }
+    { value: '1AS', label: 'الأولى ثانوي' }, { value: '2AS', label: 'الثانية ثانوي' }, { value: '3AS', label: 'الثالثة ثانوي' },
+    { value: '1MS', label: 'الأولى متوسط' }, { value: '2MS', label: 'الثانية متوسط' }, { value: '3MS', label: 'الثالثة متوسط' },
+    { value: '4MS', label: 'الرابعة متوسط' }, { value: '1AP', label: 'الأولى ابتدائي' }, { value: '2AP', label: 'الثانية ابتدائي' },
+    { value: '3AP', label: 'الثالثة ابتدائي' }, { value: '4AP', label: 'الرابعة ابتدائي' }, { value: '5AP', label: 'الخامسة ابتدائي' }
   ];
-
-  // Add to Lessons Modal
-  showAddToLessonsModal: boolean = false;
-  availableClasses: Class[] = [];
-  filteredAvailableClasses: Class[] = [];
-  alreadyEnrolledClasses: Class[] = [];
-  selectedClasses: Class[] = [];
-  loadingAvailableClasses: boolean = false;
-  isEnrolling: boolean = false;
-
-  // Round Selection Modal
-  showRoundSelectionModal: boolean = false;
-  selectedClassForRounds: Class | null = null;
-  roundSelection: RoundSelection = {
-    roundNumber: `RND-${Date.now().toString().slice(-6)}`,
-    sessionCount: 8,
-    sessionPrice: 0,
-    totalAmount: 0,
-    startDate: new Date(),
-    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    notes: ''
-  };
-
   
-  // Filter properties
-  filterSubject: string = '';
-  filterLevel: string = '';
-
-  // Subjects list
-  subjects = [
-    'رياضيات', 'فيزياء', 'علوم', 'لغة عربية', 
-    'لغة فرنسية', 'لغة انجليزية', 'تاريخ', 
-    'جغرافيا', 'فلسفة', 'إعلام آلي'
-  ];
-
-  // Payment System
-  studentMonthlyPayments: MonthlyPayment[] = [];
-  studentRounds: RoundPayment[] = [];
-  
-  // Current date
-  currentDate = new Date();
-
-  // Payment receipt options
-  receiptOptions: PaymentReceiptOption[] = [
-    {
-      label: 'إيصال واحد لجميع الدفعات',
-      value: 'single',
-      description: 'طباعة جميع الدفعات في إيصال واحد مع تفاصيل كل دفعة',
-      icon: 'fas fa-receipt'
-    },
-    {
-      label: 'إيصالات منفصلة لكل دفعة',
-      value: 'multiple',
-      description: 'طباعة إيصال منفصل لكل دفعة',
-      icon: 'fas fa-copy'
-    }
-  ];
-
-  selectedReceiptOption: 'single' | 'multiple' = 'single';
+  subjects = ['رياضيات', 'فيزياء', 'علوم', 'لغة عربية', 'لغة فرنسية', 'لغة انجليزية', 'تاريخ', 'جغرافيا', 'فلسفة', 'إعلام آلي'];
+  allStudents: Student[] = [];
+  selectedStudents: Student[] = [];
+  filteredStudents: Student[] = [];
+  studentSearchTerm: string = '';
+  classForBulkPayment: Class | null = null;
+  isProcessingBulkPayment: boolean = false;
+  bulkPaymentProgress: number = 0;
+  bulkPaymentResults: any[] = [];
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private http: HttpClient,
-    private printerService: PrinterService
+    private printerService: PrinterService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
     this.loadStudentDetails();
     this.loadAllStudents();
+    this.roundSelection.roundNumber = `RND-${Date.now().toString().slice(-6)}`;
   }
 
   private getHeaders(): HttpHeaders {
@@ -325,12 +1837,8 @@ export class StudentDetailsComponent implements OnInit {
       this.router.navigate(['/home/students-management']);
       return;
     }
-
     this.loading = true;
-    
-    this.http.get<any>(`${this.apiUrl}/students/${studentId}`, {
-      headers: this.getHeaders()
-    }).subscribe({
+    this.http.get<any>(`${this.apiUrl}/students/${studentId}`, { headers: this.getHeaders() }).subscribe({
       next: (student) => {
         this.student = student;
         this.newPayment.student = this.getStudentId();
@@ -349,9 +1857,7 @@ export class StudentDetailsComponent implements OnInit {
   }
 
   loadAllStudents(): void {
-    this.http.get<any>(`${this.apiUrl}/students`, {
-      headers: this.getHeaders()
-    }).subscribe({
+    this.http.get<any>(`${this.apiUrl}/students`, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
         if (response.success && response.data) {
           this.allStudents = response.data;
@@ -370,10 +1876,7 @@ export class StudentDetailsComponent implements OnInit {
   }
 
   loadStudentClasses(studentId: string): void {
-    // Alternative approach: Get student with populated classes
-    this.http.get<any>(`${this.apiUrl}/students/${studentId}`, {
-      headers: this.getHeaders()
-    }).subscribe({
+    this.http.get<any>(`${this.apiUrl}/students/${studentId}`, { headers: this.getHeaders() }).subscribe({
       next: (student) => {
         this.studentClasses = student.classes || [];
       },
@@ -386,21 +1889,14 @@ export class StudentDetailsComponent implements OnInit {
 
   loadPaymentHistory(studentId: string): void {
     console.log('Loading payment history for student:', studentId);
-    
-    this.http.get<any>(`${this.apiUrl}/payments/student/${studentId}`, {
-      headers: this.getHeaders()
-    }).subscribe({
+    this.http.get<any>(`${this.apiUrl}/payments/student/${studentId}`, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
-        console.log('Payment history response:', response);
-        
         if (response.success && response.payments) {
           this.paymentHistory = response.payments;
           this.classPaymentGroups = this.groupPaymentsByClass(response.payments);
-          console.log(`Loaded ${this.paymentHistory.length} payments`);
         } else {
           this.paymentHistory = [];
           this.classPaymentGroups = [];
-          console.log('No payments found or error in response');
         }
       },
       error: (error) => {
@@ -412,1029 +1908,17 @@ export class StudentDetailsComponent implements OnInit {
     });
   }
 
-  private groupPaymentsByClass(payments: Payment[]): ClassPaymentGroup[] {
-    const groups: { [key: string]: ClassPaymentGroup } = {};
-    
-    payments.forEach(payment => {
-      const classId = payment.class?._id || payment.class || 'general';
-      const className = payment.className || 'عام';
-      
-      if (!groups[classId]) {
-        groups[classId] = {
-          classId: classId,
-          className: className,
-          payments: [],
-          totalAmount: 0,
-          paidAmount: 0,
-          pendingAmount: 0
-        };
-      }
-      
-      groups[classId].payments.push(payment);
-      groups[classId].totalAmount += payment.amount;
-      
-      if (payment.status === 'paid') {
-        groups[classId].paidAmount += payment.amount;
-      } else {
-        groups[classId].pendingAmount += payment.amount;
-      }
-    });
-    
-    return Object.values(groups);
-  }
-
-  toggleClassPaymentGroup(classId: string): void {
-    const group = this.classPaymentGroups.find(g => g.classId === classId);
-    if (group) {
-      group['expanded'] = !group['expanded'];
-    }
-  }
-
-  isClassGroupExpanded(classId: string): boolean {
-    const group = this.classPaymentGroups.find(g => g.classId === classId);
-    return group ? group['expanded'] || false : false;
-  }
-
-  async processBulkPaySelected(): Promise<void> {
-    if (this.selectedPaymentsForBulkPay.length === 0) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'لا توجد مدفوعات مختارة',
-        text: 'يرجى اختيار مدفوعات للدفع أولاً',
-        confirmButtonText: 'حسناً'
-      });
-      return;
-    }
-
-    // التحقق من أن جميع المدفوعات المختارة معلقة
-    const hasPaidPayments = this.selectedPaymentsForBulkPay.some(p => p.status === 'paid');
-    if (hasPaidPayments) {
-      const unpaidPayments = this.selectedPaymentsForBulkPay.filter(p => p.status !== 'paid');
-      const { value: proceed } = await Swal.fire({
-        title: 'تحذير',
-        html: `
-          <div class="text-start">
-            <p class="text-warning"><i class="fas fa-exclamation-triangle me-2"></i>بعض المدفوعات المختارة مدفوعة مسبقاً</p>
-            <p><strong>المدفوعة:</strong> ${this.selectedPaymentsForBulkPay.length - unpaidPayments.length}</p>
-            <p><strong>المعلقة:</strong> ${unpaidPayments.length}</p>
-            <p>هل تريد المتابعة مع المدفوعات المعلقة فقط؟</p>
-          </div>
-        `,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'نعم، متابعة',
-        cancelButtonText: 'إلغاء',
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33'
-      });
-
-      if (!proceed) return;
-      
-      // تحديث القائمة لتشمل المدفوعات المعلقة فقط
-      this.selectedPaymentsForBulkPay = unpaidPayments;
-    }
-
-    const totalAmount = this.getSelectedPaymentsTotal();
-    const uniqueStudents = new Set(this.selectedPaymentsForBulkPay.map(p => 
-      p.student?._id || p.student
-    ));
-
-    // عرض خيارات الدفع والطباعة
-    const { value: userChoice } = await Swal.fire({
-      title: 'خيارات الدفع الجماعي',
-      html: `
-        <div class="text-start">
-          <div class="alert alert-info">
-            <h6><i class="fas fa-info-circle me-2"></i>تفاصيل الدفع الجماعي</h6>
-            <p class="mb-1"><strong>عدد المدفوعات:</strong> ${this.selectedPaymentsForBulkPay.length}</p>
-            <p class="mb-1"><strong>عدد الطلاب:</strong> ${uniqueStudents.size}</p>
-            <p class="mb-1"><strong>المبلغ الإجمالي:</strong> ${totalAmount.toLocaleString('ar-SA')} د.ج</p>
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label"><strong>طريقة الدفع:</strong></label>
-            <select class="form-select" id="paymentMethod">
-              <option value="cash">نقداً</option>
-              <option value="bank">تحويل بنكي</option>
-              <option value="card">بطاقة ائتمان</option>
-              <option value="online">دفع إلكتروني</option>
-              <option value="mobile">دفع محمول</option>
-            </select>
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label"><strong>خيار الطباعة:</strong></label>
-            <select class="form-select" id="printOption">
-              <option value="single">إيصال واحد لجميع الدفعات</option>
-              <option value="multiple">إيصالات منفصلة لكل دفعة</option>
-            </select>
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label"><strong>ملاحظات:</strong></label>
-            <textarea class="form-control" id="paymentNotes" rows="2" placeholder="ملاحظات حول الدفع..."></textarea>
-          </div>
-          
-          <div class="alert alert-warning">
-            <i class="fas fa-exclamation-circle me-2"></i>
-            <small>سيتم دفع ${this.selectedPaymentsForBulkPay.length} دفعة بقيمة إجمالية ${totalAmount.toLocaleString('ar-SA')} د.ج</small>
-          </div>
-        </div>
-      `,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'دفع',
-      cancelButtonText: 'إلغاء',
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      width: '600px',
-      preConfirm: () => {
-        const paymentMethod = (document.getElementById('paymentMethod') as HTMLSelectElement).value;
-        const printOption = (document.getElementById('printOption') as HTMLSelectElement).value;
-        const paymentNotes = (document.getElementById('paymentNotes') as HTMLTextAreaElement).value;
-        
-        if (!paymentMethod) {
-          Swal.showValidationMessage('يرجى اختيار طريقة الدفع');
-          return false;
-        }
-        
-        return { paymentMethod, printOption, paymentNotes };
-      }
-    });
-
-    if (!userChoice) return;
-
-    const { paymentMethod, printOption, paymentNotes } = userChoice;
-
-    // عرض نافذة التقدم
-    Swal.fire({
-      title: 'جاري معالجة الدفعات...',
-      html: `
-        <div class="text-center">
-          <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
-            <span class="visually-hidden">جاري المعالجة...</span>
-          </div>
-          <h5 class="mb-2">دفع جماعي</h5>
-          <p>جاري معالجة ${this.selectedPaymentsForBulkPay.length} دفعة...</p>
-          
-          <div class="progress mt-4" style="height: 25px; border-radius: 12px;">
-            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
-                 style="width: 0%; font-weight: bold; font-size: 14px;" 
-                 id="bulk-pay-progress">0%</div>
-          </div>
-          
-          <div class="row mt-4">
-            <div class="col-6 text-end">
-              <small class="text-muted">النجاح:</small>
-              <h5 class="text-success" id="success-count">0</h5>
-            </div>
-            <div class="col-6 text-start">
-              <small class="text-muted">الفشل:</small>
-              <h5 class="text-danger" id="fail-count">0</h5>
-            </div>
-          </div>
-          
-          <div class="mt-3">
-            <small class="text-muted" id="current-payment">جاري بدء المعالجة...</small>
-          </div>
-        </div>
-      `,
-      showConfirmButton: false,
-      allowOutsideClick: false,
-      allowEscapeKey: false,
-      width: '500px'
-    });
-
-    let successfulPayments = 0;
-    let failedPayments = 0;
-    const results: any[] = [];
-    const paidPayments: Payment[] = [];
-
-    try {
-      for (let i = 0; i < this.selectedPaymentsForBulkPay.length; i++) {
-        const payment = this.selectedPaymentsForBulkPay[i];
-        const paymentId = payment._id || payment.id;
-        
-        const progress = Math.round(((i + 1) / this.selectedPaymentsForBulkPay.length) * 100);
-        this.updateProgress(progress, i + 1, successfulPayments, failedPayments, payment);
-
-        if (!paymentId) {
-          failedPayments++;
-          results.push({
-            payment: payment.month,
-            student: payment.studentName,
-            success: false,
-            message: 'رقم الدفعة غير صالح',
-            error: 'ID_NOT_FOUND'
-          });
-          continue;
-        }
-
-        try {
-          const paymentData = {
-            paymentMethod: paymentMethod,
-            paymentDate: new Date().toISOString(),
-            notes: paymentNotes || `دفع جماعي - ${new Date().toLocaleDateString('ar-SA')}`
-          };
-
-          const response = await this.http.put<any>(
-            `${this.apiUrl}/payments/${paymentId}/pay`,
-            paymentData,
-            { headers: this.getHeaders() }
-          ).toPromise();
-
-          successfulPayments++;
-          
-          const paidPayment: Payment = {
-            ...payment,
-            paymentMethod: paymentMethod,
-            paymentDate: new Date(),
-            invoiceNumber: response.invoiceNumber || `INV-${Date.now().toString().slice(-8)}-${i}`,
-            notes: paymentData.notes
-          };
-          paidPayments.push(paidPayment);
-          
-          results.push({
-            payment: payment.month,
-            student: payment.studentName,
-            success: true,
-            message: 'تم الدفع بنجاح',
-            receiptNumber: response.invoiceNumber
-          });
-
-        } catch (error: any) {
-          failedPayments++;
-          
-          let errorMessage = 'فشل في الدفع';
-          if (error.error?.message) {
-            errorMessage = error.error.message;
-          } else if (error.message) {
-            errorMessage = error.message;
-          }
-          
-          results.push({
-            payment: payment.month,
-            student: payment.studentName,
-            success: false,
-            message: errorMessage,
-            error: error.error?.code || 'UNKNOWN_ERROR'
-          });
-        }
-
-        await this.delay(100);
-      }
-
-      Swal.close();
-
-      // العرض التلقائي للنتائج
-      if (printOption === 'single' && successfulPayments > 0) {
-        // طباعة إيصال واحد لجميع الدفعات
-        await this.printSingleReceiptForMultiplePayments(paidPayments, paymentMethod, paymentNotes);      } else if (printOption === 'multiple' && successfulPayments > 0) {
-        // طباعة إيصالات منفصلة
-        await this.printMultipleReceipts(paidPayments);
-      }
-
-      // عرض النتائج النهائية
-      await this.showBulkPayResults(successfulPayments, failedPayments, results, paidPayments);
-
-      if (successfulPayments > 0 && this.student) {
-        await this.refreshData();
-      }
-
-    } catch (error) {
-      console.error('خطأ في المعالجة الجماعية:', error);
-      Swal.fire({
-        icon: 'error',
-        title: 'خطأ في المعالجة',
-        text: 'حدث خطأ غير متوقع أثناء معالجة الدفعات',
-        confirmButtonText: 'حسناً'
-      });
-    } finally {
-      if (successfulPayments > 0) {
-        this.selectedPaymentsForBulkPay = [];
-      }
-      this.closeBulkPayConfirmation();
-    }
-  }
-
-  // دالة مساعدة لتحديث شريط التقدم
-  private updateProgress(
-    progress: number, 
-    current: number, 
-    success: number, 
-    fail: number, 
-    payment: Payment
-  ): void {
-    const progressBar = document.getElementById('bulk-pay-progress');
-    const successCount = document.getElementById('success-count');
-    const failCount = document.getElementById('fail-count');
-    const currentPayment = document.getElementById('current-payment');
-
-    if (progressBar) {
-      progressBar.style.width = `${progress}%`;
-      progressBar.textContent = `${progress}%`;
-    }
-    
-    if (successCount) {
-      successCount.textContent = success.toString();
-    }
-    
-    if (failCount) {
-      failCount.textContent = fail.toString();
-    }
-    
-    if (currentPayment) {
-      currentPayment.textContent = 
-        `جاري معالجة: ${current}/${this.selectedPaymentsForBulkPay.length} - ${payment.month} - ${payment.amount.toLocaleString('ar-SA')} د.ج`;
-    }
-  }
-
-  // دالة مساعدة للتأخير
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  // دالة لعرض نتائج الدفع الجماعي
-  private async showBulkPayResults(
-    successCount: number,
-    failCount: number,
-    results: any[],
-    paidPayments: Payment[]
-  ): Promise<void> {
-    const failedResults = results.filter(r => !r.success);
-    
-    const resultsHtml = `
-      <div class="text-start">
-        <div class="alert ${successCount > 0 ? 'alert-success' : 'alert-danger'}">
-          <h5><i class="fas ${successCount > 0 ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
-            ${successCount > 0 ? 'تمت الدفعات بنجاح' : 'فشل في الدفعات'}
-          </h5>
-          <div class="row mt-3">
-            <div class="col-4 text-center">
-              <h2 class="text-success">${successCount}</h2>
-              <small>النجاحات</small>
-            </div>
-            <div class="col-4 text-center">
-              <h2 class="text-danger">${failCount}</h2>
-              <small>الفشل</small>
-            </div>
-            <div class="col-4 text-center">
-              <h2 class="text-primary">${successCount + failCount}</h2>
-              <small>الإجمالي</small>
-            </div>
-          </div>
-        </div>
-        
-        ${failedResults.length > 0 ? `
-          <div class="alert alert-warning mt-3">
-            <h6><i class="fas fa-exclamation-circle me-2"></i>تفاصيل الدفعات الفاشلة:</h6>
-            <div class="mt-2" style="max-height: 200px; overflow-y: auto;">
-              ${failedResults.map(r => `
-                <div class="mb-2 p-2 border-start border-warning border-3 bg-light">
-                  <div class="d-flex justify-content-between">
-                    <strong>${r.student || 'طالب'}</strong>
-                    <small class="text-danger">${r.error || 'خطأ'}</small>
-                  </div>
-                  <div class="small text-muted">${r.payment}: ${r.message}</div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
-        
-        <div class="alert alert-info mt-3">
-          <h6><i class="fas fa-info-circle me-2"></i>خيارات الطباعة الإضافية:</h6>
-          <div class="d-flex flex-wrap gap-2 mt-2">
-            ${successCount > 0 ? `
-              <button class="btn btn-success btn-sm" onclick="window.printResultsAction('single')">
-                <i class="fas fa-receipt me-1"></i>طباعة إيصال واحد
-              </button>
-              <button class="btn btn-info btn-sm" onclick="window.printResultsAction('multiple')">
-                <i class="fas fa-copy me-1"></i>طباعة إيصالات منفصلة
-              </button>
-              <button class="btn btn-secondary btn-sm" onclick="window.printResultsAction('close')">
-                <i class="fas fa-times me-1"></i>إغلاق
-              </button>
-            ` : ''}
-          </div>
-        </div>
-      </div>
-    `;
-
-    await Swal.fire({
-      title: 'نتائج الدفع الجماعي',
-      html: resultsHtml,
-      icon: successCount > 0 ? 'success' : 'error',
-      showConfirmButton: false,
-      width: '700px',
-      didOpen: () => {
-        // إضافة الدوال للسياق العالمي
-        (window as any).printResultsAction = async (action: string) => {
-          Swal.close();
-          if (action === 'single' && successCount > 0) {
-            await this.printSingleReceiptForMultiplePayments(paidPayments, 
-              paidPayments[0]?.paymentMethod || 'cash', 
-              'دفع جماعي إضافي');
-          } else if (action === 'multiple' && successCount > 0) {
-            await this.printMultipleReceipts(paidPayments);
-          }
-        };
-      },
-      didClose: () => {
-        // تنظيف الدوال من السياق العالمي
-        delete (window as any).printResultsAction;
-      }
-    });
-  }
-
-  // دالة طباعة إيصالات متعددة منفصلة
-  private async printMultipleReceipts(payments: Payment[]): Promise<void> {
-    if (!payments || payments.length === 0) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'لا توجد إيصالات للطباعة',
-        text: 'لا توجد مدفوعات مدفوعة للطباعة',
-        confirmButtonText: 'حسناً'
-      });
-      return;
-    }
-
-    Swal.fire({
-      title: 'جاري الطباعة...',
-      html: `
-        <div class="text-center">
-          <div class="spinner-border text-primary mb-3" role="status">
-            <span class="visually-hidden">جاري الطباعة...</span>
-          </div>
-          <p>جاري طباعة ${payments.length} إيصال...</p>
-          <div class="progress" style="height: 20px;">
-            <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                 style="width: 0%" id="print-progress">0%</div>
-          </div>
-        </div>
-      `,
-      showConfirmButton: false,
-      allowOutsideClick: false
-    });
-
-    let printedCount = 0;
-    let failedCount = 0;
-
-    for (let i = 0; i < payments.length; i++) {
-      const payment = payments[i];
-      
-      try {
-        const receiptData: ReceiptData = {
-          receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}-${i}`,
-          date: new Date().toLocaleDateString('en-US'),
-          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-          studentName: payment.studentName || this.student?.name || '',
-          studentId: payment.studentId || this.student?.studentId || '',
-          className: payment.className || 'عام',
-          month: payment.month,
-          amount: payment.amount,
-          paymentMethod: payment.paymentMethod || 'cash',
-          academicYear: this.student?.academicYear,
-          parentPhone: this.student?.parentPhone,
-          notes: `دفعة جماعية - ${payment.notes || ''}`
-        };
-
-        await this.printerService.printProfessionalReceipt(receiptData);
-        printedCount++;
-
-        // تحديث شريط التقدم
-        const progress = Math.round(((i + 1) / payments.length) * 100);
-        const progressBar = document.getElementById('print-progress');
-        if (progressBar) {
-          progressBar.style.width = `${progress}%`;
-          progressBar.textContent = `${progress}%`;
-        }
-
-        // تأخير بين كل طباعة
-        await this.delay(500);
-
-      } catch (error) {
-        console.error(`فشل طباعة إيصال ${i + 1}:`, error);
-        failedCount++;
-      }
-    }
-
-    Swal.close();
-
-    // عرض نتائج الطباعة
-    Swal.fire({
-      title: 'نتائج الطباعة',
-      html: `
-        <div class="text-start">
-          <div class="alert ${printedCount > 0 ? 'alert-success' : 'alert-danger'}">
-            <h6><i class="fas ${printedCount > 0 ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
-              ${printedCount > 0 ? 'تمت الطباعة بنجاح' : 'فشل في الطباعة'}
-            </h6>
-            <p class="mb-1"><strong>المطبوع:</strong> ${printedCount}</p>
-            <p class="mb-1"><strong>الفشل:</strong> ${failedCount}</p>
-            <p class="mb-0"><strong>الإجمالي:</strong> ${payments.length}</p>
-          </div>
-        </div>
-      `,
-      icon: printedCount > 0 ? 'success' : 'error',
-      showConfirmButton: true,
-      confirmButtonText: 'حسناً'
-    });
-  }
-
-  /**
-   * طباعة إيصال واحد لدفعات متعددة
-   */
-  private async printSingleReceiptForMultiplePayments(
-    payments: Payment[], 
-    paymentMethod: string,
-    notes?: string
-  ): Promise<void> {
-    if (!payments || payments.length === 0) return;
-  
-    try {
-      Swal.fire({
-        title: 'جاري إنشاء الإيصال الموحد...',
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        }
-      });
-  
-      // تجميع بيانات الدفعات
-      const uniqueStudents = new Set(payments.map(p => p.studentName || this.student?.name || ''));
-      const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
-      
-      // إنشاء بيانات الإيصال الموحد
-      const bulkReceiptData: BulkReceiptData = {
-        receiptNumber: `BLK-${Date.now().toString().slice(-8)}`,
-        date: new Date().toLocaleDateString('ar-SA'),
-        time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
-        totalAmount: totalAmount,
-        paymentCount: payments.length,
-        studentCount: uniqueStudents.size,
-        paymentMethod: paymentMethod,
-        payments: payments.map(p => ({
-          studentName: p.studentName || this.student?.name || 'طالب',
-          studentId: p.studentId || this.student?.studentId || '',
-          className: p.className || 'عام',
-          month: p.month,
-          amount: p.amount,
-          notes: p.notes
-        })),
-        notes: notes || `دفع جماعي لـ ${payments.length} دفعة`
-      };
-  
-      // طباعة الإيصال الموحد
-      const success = await this.printBulkReceipt(bulkReceiptData);
-  
-      if (success) {
-        Swal.fire({
-          icon: 'success',
-          title: 'تم الطباعة',
-          text: 'تم طباعة الإيصال الموحد بنجاح',
-          timer: 1500,
-          showConfirmButton: false
-        });
-      } else {
-        throw new Error('فشل في طباعة الإيصال');
-      }
-  
-    } catch (error) {
-      console.error('خطأ في طباعة الإيصال الموحد:', error);
-      Swal.fire({
-        icon: 'error',
-        title: 'خطأ في الطباعة',
-        text: 'فشل في طباعة الإيصال الموحد',
-        confirmButtonText: 'حسناً'
-      });
-    }
-  }
-
-  /**
-   * طباعة إيصال موحد للدفعات المتعددة
-   */
-/**
- * طباعة إيصال موحد للدفعات المتعددة
- */
-/**
- * طباعة إيصال موحد للدفعات المتعددة
- */
-
-/**
- * ضمان استخدام الأرقام العربية في التاريخ والوقت
- */
-private ensureArabicNumbers(text: string): string {
-  if (!text) return text;
-  
-  const hindiToArabic: { [key: string]: string } = {
-    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
-    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
-  };
-  
-  return text.split('').map(char => hindiToArabic[char] || char).join('');
-}
-
-private async printBulkReceipt(data: BulkReceiptData): Promise<boolean> {
-  try {
-    // تأكد من أن الطابعة متصلة
-    if (!this.printerService.checkConnectionStatus()) {
-      const connected = await this.printerService.connectToThermalPrinter();
-      if (!connected) {
-        throw new Error('فشل الاتصال بالطابعة');
-      }
-    }
-
-    // إنشاء Canvas للإيصال الموحد
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d')!;
-    
-    // إعدادات Canvas (80mm)
-    const width = 576;
-    const lineHeight = 25;
-    const headerHeight = 100;
-    const footerHeight = 40;
-    const paymentRowHeight = 50; // زيادة ارتفاع الصف ليتسع للشهر والمبلغ
-    const tableHeight = (data.payments.length * paymentRowHeight) + 30;
-    
-    const height = headerHeight + 200 + tableHeight + footerHeight;
-    
-    canvas.width = width;
-    canvas.height = height;
-    
-    // خلفية بيضاء
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, width, height);
-    
-    // === رأس الإيصال ===
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#000000';
-    ctx.font = 'bold 24px Arial';
-    ctx.fillText('أكاديمية الرواد للتعليم والمعارف', width / 2, 20);
-    
-    ctx.font = '16px Arial';
-    ctx.fillText('الجزائر ، ولاية تقرت', width / 2, 45);
-    ctx.fillText('الهاتف : 0673586274', width / 2, 65);
-    
-    // خط فاصل
-    this.drawLine(ctx, 20, 85, width - 20, 85);
-    
-    // === معلومات الإيصال ===
-    let yPos = 105;
-    
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 20px Arial';
-    ctx.fillText('ِِA إيصـــال دفـــع جماعي', width / 2, yPos);
-    
-    yPos += 25;
-    this.drawLine(ctx, 20, yPos, width - 20, yPos);
-    yPos += 15;
-    
-    // معلومات أساسية
-    ctx.textAlign = 'right';
-    ctx.font = '16px Arial';
-    
-    const infoItems = [
-      { label: 'رقم الإيصال:', value: data.receiptNumber },
-      { label: 'التاريخ:', value: data.date },
-      { label: 'الوقت:', value: data.time },
-      { label: 'طريقة الدفع:', value: this.translatePaymentMethod(data.paymentMethod) },
-      { label: 'عدد الدفعات:', value: data.paymentCount.toString() },
-      { label: 'عدد الطلاب:', value: data.studentCount.toString() }
-    ];
-    
-    infoItems.forEach(item => {
-      ctx.fillText(`${item.label} ${item.value}`, width - 25, yPos);
-      yPos += 22;
-    });
-    
-    yPos += 10;
-    this.drawLine(ctx, 20, yPos, width - 20, yPos);
-    yPos += 20;
-    
-    // === تفاصيل الدفعات ===
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 18px Arial';
-    ctx.fillText('تفاصيل الدفعات', width / 2, yPos);
-    yPos += 30;
-    
-    // جدول الدفعات - تعديل الأعمدة لمنع التداخل
-    ctx.fillStyle = '#2C3E50';
-    ctx.fillRect(20, yPos, width - 40, 30);
-    
-    // تقسيم الأعمدة بوضوح
-    const columnWidth = (width - 40) / 4;
-    
-    // رؤوس الأعمدة
-    ctx.fillStyle = '#FFFFFF';
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 16px Arial';
-    
-    // العمود الأول: اسم الطالب
-    ctx.fillText('الطالب', 20 + (columnWidth * 0.5), yPos + 20);
-    
-    // العمود الثاني: الحصة
-    ctx.fillText('الحصة', 20 + (columnWidth * 1.5), yPos + 20);
-    
-    // العمود الثالث: الشهر
-    ctx.fillText('الشهر', 20 + (columnWidth * 2.5), yPos + 20);
-    
-    // العمود الرابع: المبلغ
-    ctx.fillText('المبلغ', 20 + (columnWidth * 3.5), yPos + 20);
-    
-    yPos += 30;
-    
-    // صفوف البيانات مع مساحات واضحة
-    data.payments.forEach((payment, index) => {
-      if (index % 2 === 0) {
-        ctx.fillStyle = '#F8F9FA';
-      } else {
-        ctx.fillStyle = '#FFFFFF';
-      }
-      
-      ctx.fillRect(20, yPos, width - 40, paymentRowHeight);
-      
-      ctx.fillStyle = '#000000';
-      ctx.strokeStyle = '#DEE2E6';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(20, yPos, width - 40, paymentRowHeight);
-      
-      // اسم الطالب (يسار)
-      ctx.textAlign = 'right';
-      ctx.font = '14px Arial';
-      const studentName = payment.studentName.length > 12 ? 
-        payment.studentName.substring(0, 12) + '...' : payment.studentName;
-      ctx.fillText(studentName, 20 + columnWidth - 10, yPos + 25);
-      
-      // الحصة (وسط)
-      ctx.textAlign = 'center';
-      const className = payment.className.length > 8 ? 
-        payment.className.substring(0, 8) + '...' : payment.className;
-      ctx.fillText(className, 20 + (columnWidth * 2), yPos + 25);
-      
-      // الشهر (وسط-يمين)
-      ctx.textAlign = 'center';
-      const month = payment.month.length > 10 ? 
-        payment.month.substring(0, 10) + '...' : payment.month;
-      ctx.fillText(month, 20 + (columnWidth * 3), yPos + 25);
-      
-      // المبلغ (يمين) - في نفس الصف لكن منفصل
-      ctx.textAlign = 'left';
-      ctx.font = 'bold 14px Arial';
-      ctx.fillStyle = '#E74C3C';
-      ctx.fillText(`${payment.amount.toLocaleString()} د.ج`, 20 + (columnWidth * 3.7), yPos + 25);
-      
-      // معلومات إضافية تحت كل دفعة (ID الطالب)
-      ctx.textAlign = 'left';
-      ctx.font = '12px Arial';
-      ctx.fillStyle = '#666666';
-      ctx.fillText(`ID: ${payment.studentId || ''}`, 20 + columnWidth - 10, yPos + 45);
-      
-      // ملاحظات صغيرة
-      if (payment.notes) {
-        const shortNotes = payment.notes.length > 15 ? 
-          payment.notes.substring(0, 15) + '...' : payment.notes;
-        ctx.textAlign = 'center';
-        ctx.fillText(shortNotes, 20 + (columnWidth * 2), yPos + 45);
-      }
-      
-      yPos += paymentRowHeight;
-    });
-    
-    yPos += 20;
-    
-    // === الإجمالي ===
-    this.drawDoubleLine(ctx, 20, yPos, width - 40);
-    yPos += 25;
-    
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 20px Arial';
-    ctx.fillStyle = '#000000';
-    ctx.fillText('المجموع الإجمالي:', width / 2, yPos);
-    
-    yPos += 25;
-    
-    ctx.font = 'bold 22px Arial';
-    ctx.fillStyle = '#E74C3C';
-    ctx.fillText(`${data.totalAmount.toLocaleString()} دينار جزائري`, width / 2, yPos);
-    
-    yPos += 30;
-    
-    // === الملاحظات ===
-    if (data.notes && data.notes.trim()) {
-      ctx.textAlign = 'right';
-      ctx.font = 'bold 16px Arial';
-      ctx.fillStyle = '#2C3E50';
-      ctx.fillText('ملاحظات:', width - 25, yPos);
-      yPos += 20;
-      
-      ctx.font = '14px Arial';
-      ctx.fillStyle = '#000000';
-      
-      // تقسيم النص
-      const words = data.notes.split(' ');
-      let line = '';
-      const maxWidth = width - 40;
-      
-      for (const word of words) {
-        const testLine = line + word + ' ';
-        const metrics = ctx.measureText(testLine);
-        
-        if (metrics.width > maxWidth && line !== '') {
-          ctx.fillText(line.trim(), width - 25, yPos);
-          yPos += 20;
-          line = word + ' ';
-        } else {
-          line = testLine;
-        }
-      }
-      
-      if (line) {
-        ctx.fillText(line.trim(), width - 25, yPos);
-      }
-    }
-    
-    // === التذييل ===
-    yPos = height - 25;
-    ctx.textAlign = 'center';
-    ctx.font = '14px Arial';
-    ctx.fillStyle = '#666666';
-    ctx.fillText('دفع جماعي - نظام إدارة التعليم', width / 2, yPos);
-    yPos += 18;
-    ctx.fillText('مطور بواسطة: ريـــــــــــــــــدوكس', width / 2, yPos);
-    
-    // استخدام PrinterService للطباعة
-    return await this.printerService.printBulkReceipt(data);
-    
-  } catch (error) {
-    console.error('خطأ في طباعة الإيصال الموحد:', error);
-    return false;
-  }
-}
-
-
-// إضافة دالة الخط المفقودة
-private drawSingleLine(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, color: string = '#000000'): void {
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y1);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-}
-  // ===== دوال مساعدة للرسم =====
-  
-// دالة مساعدة للرسم
-private drawLine(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number): void {
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-}
-  
-private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number): void {
-  ctx.beginPath();
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 1;
-  
-  // الخط العلوي
-  ctx.moveTo(x, y);
-  ctx.lineTo(x + width, y);
-  
-  // الخط السفلي
-  ctx.moveTo(x, y + 3);
-  ctx.lineTo(x + width, y + 3);
-  
-  ctx.stroke();
-}
-
-  
-  private formatArabicDate(dateStr: string): string {
-    try {
-      const date = new Date(dateStr);
-      const options: Intl.DateTimeFormatOptions = { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      };
-      return date.toLocaleDateString('ar-SA', options);
-    } catch {
-      return dateStr;
-    }
-  }
-  
-  private formatArabicTime(timeStr: string): string {
-    try {
-      const time = new Date(`2000-01-01T${timeStr}`);
-      return time.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return timeStr;
-    }
-  }
-  
-  private translatePaymentMethod(method: string): string {
-    const methods: { [key: string]: string } = {
-      'cash': 'نقداً',
-      'bank': 'تحويل بنكي',
-      'card': 'بطاقة ائتمان',
-      'check': 'شيك',
-      'online': 'دفع إلكتروني',
-      'mobile': 'دفع محمول'
-    };
-    return methods[method.toLowerCase()] || method;
-  }
-  
-  private async printCanvasImage(canvas: HTMLCanvasElement): Promise<boolean> {
-    try {
-      // يمكنك هنا تنفيذ منطق الطباعة الخاص بك
-      // هذا مثال باستخدام نافذة الطباعة
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        const imageUrl = canvas.toDataURL('image/png');
-        
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html dir="rtl">
-          <head>
-            <title>طباعة الإيصال الموحد</title>
-            <style>
-              body { margin: 0; padding: 10px; }
-              img { width: 576px; max-width: 100%; }
-              @media print {
-                body { margin: 0; }
-                img { width: 576px; }
-              }
-            </style>
-          </head>
-          <body>
-            <img src="${imageUrl}" alt="إيصال الدفع الموحد">
-            <script>
-              window.onload = function() {
-                window.print();
-                setTimeout(function() {
-                  window.close();
-                }, 1000);
-              };
-            </script>
-          </body>
-          </html>
-        `);
-        
-        printWindow.document.close();
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('خطأ في طباعة Canvas:', error);
-      return false;
-    }
-  }
-
-  getSelectedPaymentsTotal(): number {
-    return this.selectedPaymentsForBulkPay.reduce((total, p) => total + p.amount, 0);
-  }
-
-  loadClassPayments(classId: string): void {
-    if (!classId) return;
-    
-    this.http.get<any>(`${this.apiUrl}/payments/class/${classId}`, {
-      headers: this.getHeaders()
-    }).subscribe({
-      next: (response) => {
-        if (response.success && response.payments) {
-          this.classPayments = response.payments;
-        } else {
-          this.classPayments = [];
-        }
-      },
-      error: (error) => {
-        console.error('Error loading class payments:', error);
-        this.classPayments = [];
-      }
-    });
-  }
-
   loadStudentPaymentSystems(studentId: string): void {
-    // Load monthly payments
-    this.http.get<any>(`${this.apiUrl}/payments/student/${studentId}`, {
-      headers: this.getHeaders()
-    }).subscribe({
+    this.http.get<any>(`${this.apiUrl}/payments/student/${studentId}`, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
         if (response.success && response.payments) {
           this.studentMonthlyPayments = response.payments.map((p: any) => ({
-            id: p._id,
-            _id: p._id,
-            studentId: p.student?._id || studentId,
-            month: p.month,
-            amount: p.amount,
-            status: p.status,
-            paymentDate: p.paymentDate,
-            paymentMethod: p.paymentMethod,
-            notes: p.notes,
-            className: p.class?.name
+            id: p._id, _id: p._id, studentId: p.student?._id || studentId,
+            month: p.month, amount: p.amount, status: p.status, paymentDate: p.paymentDate,
+            paymentMethod: p.paymentMethod, notes: p.notes, className: p.class?.name
           }));
+        } else {
+          this.studentMonthlyPayments = [];
         }
       },
       error: (error) => {
@@ -1443,10 +1927,7 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
       }
     });
 
-    // Load rounds
-    this.http.get<any>(`${this.apiUrl}/payment-systems/rounds/student/${studentId}`, {
-      headers: this.getHeaders()
-    }).subscribe({
+    this.http.get<any>(`${this.apiUrl}/payment-systems/rounds/student/${studentId}`, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
         if (response.success && response.rounds) {
           this.studentRounds = response.rounds;
@@ -1462,13 +1943,115 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
     });
   }
 
-  // Update round statuses
+  // ==================== HELPER METHODS ====================
+  private groupPaymentsByClass(payments: Payment[]): ClassPaymentGroup[] {
+    const groups: { [key: string]: ClassPaymentGroup } = {};
+    payments.forEach(payment => {
+      const classId = payment.class?._id || payment.class || 'general';
+      const className = payment.className || 'عام';
+      if (!groups[classId]) {
+        groups[classId] = {
+          classId, className, payments: [], totalAmount: 0, paidAmount: 0, pendingAmount: 0, expanded: false
+        };
+      }
+      groups[classId].payments.push(payment);
+      groups[classId].totalAmount += payment.amount;
+      if (payment.status === 'paid') {
+        groups[classId].paidAmount += payment.amount;
+      } else {
+        groups[classId].pendingAmount += payment.amount;
+      }
+    });
+    return Object.values(groups);
+  }
+
+  private getStudentId(): string {
+    if (!this.student) return '';
+    if (this.student.id) return this.student.id;
+    if ((this.student as any)._id) return (this.student as any)._id;
+    return this.student.studentId || '';
+  }
+
+  getPaymentMethodLabel(value: string): string {
+    const method = this.paymentMethods.find(m => m.value === value);
+    return method ? method.label : value;
+  }
+
+  getAcademicYearName(code: string): string {
+    const year = this.academicYears.find(y => y.value === code);
+    return year ? year.label : code;
+  }
+
+  calculateAge(birthDate: string | undefined): number {
+    if (!birthDate) return 0;
+    const birth = new Date(birthDate);
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age--;
+    return age;
+  }
+
+  getTotalPaid(): number {
+    return this.paymentHistory.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
+  }
+
+  getTotalPending(): number {
+    return this.paymentHistory.filter(p => p.status === 'pending' || p.status === 'late').reduce((sum, p) => sum + p.amount, 0);
+  }
+
+  getPaymentPercentage(): number {
+    const total = this.getTotalPaid() + this.getTotalPending();
+    return total > 0 ? Math.round((this.getTotalPaid() / total) * 100) : 0;
+  }
+
+  getUniqueMonths(): string[] {
+    const monthsSet = new Set<string>();
+    this.paymentHistory.forEach(payment => { if (payment.month) monthsSet.add(payment.month); });
+    return Array.from(monthsSet).sort((a, b) => {
+      const monthNames = this.months;
+      const getMonthIndex = (monthStr: string) => monthNames.indexOf(monthStr.split(' ')[0]);
+      return getMonthIndex(a) - getMonthIndex(b);
+    });
+  }
+
+  generateMonthOptions(): string[] {
+    const options: string[] = [];
+    const currentDate = new Date();
+    for (let yearOffset = 0; yearOffset < 3; yearOffset++) {
+      const year = currentDate.getFullYear() + yearOffset;
+      for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
+        options.push(`${this.months[monthIndex]} ${year}`);
+      }
+    }
+    return options;
+  }
+
+  getPaymentStatusClass(payment: Payment): string {
+    if (payment.isLate) return 'bg-danger';
+    switch(payment.status) {
+      case 'paid': return 'bg-success';
+      case 'pending': return 'bg-warning';
+      case 'late': return 'bg-danger';
+      default: return 'bg-secondary';
+    }
+  }
+
+  getPaymentStatusText(payment: Payment): string {
+    if (payment.isLate) return 'متأخر';
+    switch(payment.status) {
+      case 'paid': return 'مدفوع';
+      case 'pending': return 'معلق';
+      case 'late': return 'متأخر';
+      default: return 'غير محدد';
+    }
+  }
+
   updateRoundStatuses(): void {
     const now = new Date();
     this.studentRounds.forEach(round => {
       const endDate = new Date(round.endDate);
       const startDate = new Date(round.startDate);
-      
       if (round.status === 'paid') {
         round.statusText = 'مدفوعة';
         round.statusClass = 'badge bg-success';
@@ -1488,77 +2071,33 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
     });
   }
 
-  // Helper methods
-  private getStudentId(): string {
-    if (!this.student) return '';
-    if (this.student.id) return this.student.id;
-    if ((this.student as any)._id) return (this.student as any)._id;
-    return this.student.studentId || '';
+  // ==================== PAYMENT SELECTION METHODS ====================
+  isPaymentSelected(payment: Payment): boolean {
+    return this.selectedPaymentsForBulkPay.some(p => (p._id || p.id) === (payment._id || payment.id));
   }
 
-  setActiveTab(tab: string): void {
-    this.activeTab = tab;
-    
-    // Refresh data when switching to payments tab
-    if (tab === 'payments' && this.student) {
-      this.loadPaymentHistory(this.getStudentId());
+  togglePaymentSelection(payment: Payment): void {
+    const index = this.selectedPaymentsForBulkPay.findIndex(p => (p._id || p.id) === (payment._id || payment.id));
+    if (index > -1) {
+      this.selectedPaymentsForBulkPay.splice(index, 1);
+    } else {
+      this.selectedPaymentsForBulkPay.push(payment);
     }
   }
 
-  goBack(): void {
-    this.router.navigate(['/home/students-management']);
-  }
-
-  openAddPaymentModal(): void {
-    if (!this.student) return;
-    
-    const currentDate = new Date();
-    const currentMonth = this.months[currentDate.getMonth()];
-    const currentYear = currentDate.getFullYear();
-    
-    this.newPayment = {
-      student: this.getStudentId(),
-      amount: 0,
-      month: `${currentMonth} ${currentYear}`,
-      paymentMethod: 'cash',
-      notes: ''
-    };
-    
-    this.showPaymentModal = true;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  closePaymentModal(): void {
-    this.showPaymentModal = false;
-    this.newPayment = {
-      student: '',
-      amount: 0,
-      month: '',
-      paymentMethod: 'cash',
-      notes: ''
-    };
-  }
-
   isGroupAllSelected(group: ClassPaymentGroup): boolean {
-    if (!group.payments || group.payments.length === 0) return false;
+    if (!group.payments?.length) return false;
     return group.payments.every(p => this.isPaymentSelected(p));
   }
 
   toggleGroupSelection(group: ClassPaymentGroup): void {
     const allSelected = this.isGroupAllSelected(group);
-    
     if (allSelected) {
-      // Deselect all
       group.payments.forEach(p => {
-        const index = this.selectedPaymentsForBulkPay.findIndex(sp => 
-          sp._id === p._id || sp.id === p.id
-        );
-        if (index > -1) {
-          this.selectedPaymentsForBulkPay.splice(index, 1);
-        }
+        const index = this.selectedPaymentsForBulkPay.findIndex(sp => (sp._id || sp.id) === (p._id || p.id));
+        if (index > -1) this.selectedPaymentsForBulkPay.splice(index, 1);
       });
     } else {
-      // Select all (only pending payments)
       group.payments.forEach(p => {
         if (p.status !== 'paid' && !this.isPaymentSelected(p)) {
           this.selectedPaymentsForBulkPay.push(p);
@@ -1567,77 +2106,8 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
     }
   }
 
-  isAnyPaymentInGroupSelected(group: ClassPaymentGroup): boolean {
-    return group.payments.some(payment => this.isPaymentSelected(payment));
-  }
-
-  // Get unique months from payments
-  getUniqueMonths(): string[] {
-    const months = new Set<string>();
-    this.paymentHistory.forEach(payment => {
-      if (payment.month) {
-        months.add(payment.month);
-      }
-    });
-    return Array.from(months).sort((a, b) => {
-      const monthNames = this.months;
-      const getMonthIndex = (monthStr: string) => {
-        const monthPart = monthStr.split(' ')[0];
-        return monthNames.indexOf(monthPart);
-      };
-      return getMonthIndex(a) - getMonthIndex(b);
-    });
-  }
-
-  // Check if all payments in a group are selected
-  isAllPaymentsInGroupSelected(group: ClassPaymentGroup): boolean {
-    return group.payments.every(payment => this.isPaymentSelected(payment));
-  }
-
-  // Toggle all payments in a group
-  toggleAllPaymentsInGroup(group: ClassPaymentGroup): void {
-    const allSelected = this.isAllPaymentsInGroupSelected(group);
-    
-    group.payments.forEach(payment => {
-      if (allSelected) {
-        // Remove from selection
-        const index = this.selectedPaymentsForBulkPay.findIndex(p => 
-          (p._id || p.id) === (payment._id || payment.id)
-        );
-        if (index > -1) {
-          this.selectedPaymentsForBulkPay.splice(index, 1);
-        }
-      } else {
-        // Add to selection if not already added and not paid
-        if (!this.isPaymentSelected(payment) && payment.status !== 'paid') {
-          this.selectedPaymentsForBulkPay.push(payment);
-        }
-      }
-    });
-  }
-
-  togglePaymentSelection(payment: Payment): void {
-    const index = this.selectedPaymentsForBulkPay.findIndex(p => 
-      (p._id || p.id) === (payment._id || payment.id)
-    );
-    
-    if (index > -1) {
-      this.selectedPaymentsForBulkPay.splice(index, 1);
-    } else {
-      this.selectedPaymentsForBulkPay.push(payment);
-    }
-  }
-
-  isPaymentSelected(payment: Payment): boolean {
-    return this.selectedPaymentsForBulkPay.some(p => 
-      (p._id || p.id) === (payment._id || payment.id)
-    );
-  }
-
   selectAllPendingPayments(): void {
-    this.selectedPaymentsForBulkPay = this.paymentHistory.filter(p => 
-      p.status !== 'paid'
-    );
+    this.selectedPaymentsForBulkPay = this.paymentHistory.filter(p => p.status !== 'paid');
   }
 
   selectPaymentsByMonth(month: string): void {
@@ -1645,10 +2115,7 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
       this.selectedPaymentsForBulkPay = [];
       return;
     }
-    
-    this.selectedPaymentsForBulkPay = this.paymentHistory.filter(p => 
-      p.month === month && p.status !== 'paid'
-    );
+    this.selectedPaymentsForBulkPay = this.paymentHistory.filter(p => p.month === month && p.status !== 'paid');
   }
 
   selectPaymentsByClass(classId: string): void {
@@ -1656,567 +2123,32 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
       this.selectAllPendingPayments();
       return;
     }
-    
-    this.selectedPaymentsForBulkPay = this.paymentHistory.filter(p => 
-      (p.class?._id === classId || p.class === classId) && p.status !== 'paid'
-    );
+    this.selectedPaymentsForBulkPay = this.paymentHistory.filter(p => (p.class?._id === classId || p.class === classId) && p.status !== 'paid');
   }
 
-  openBulkPayConfirmation(): void {
-    if (this.selectedPaymentsForBulkPay.length === 0) {
-      Swal.fire('تنبيه', 'يرجى اختيار مدفوعات للدفع', 'warning');
-      return;
-    }
-  
-    this.showBulkPayConfirmation = true;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  getSelectedPaymentsTotal(): number {
+    return this.selectedPaymentsForBulkPay.reduce((total, p) => total + p.amount, 0);
   }
 
-  closeBulkPayConfirmation(): void {
-    this.showBulkPayConfirmation = false;
-  }
-
-  // ===== Bulk Payment Management =====
-  openBulkPaymentModal(): void {
-    const currentDate = new Date();
-    const currentMonth = this.months[currentDate.getMonth()];
-    const currentYear = currentDate.getFullYear();
-    
-    this.bulkPayment = {
-      studentIds: [],
-      classId: '',
-      amount: 0,
-      month: `${currentMonth} ${currentYear}`,
-      paymentMethod: 'cash',
-      notes: 'دفعة جماعية'
-    };
-    
-    // Auto-select current student
-    if (this.student) {
-      this.toggleStudentSelection(this.student);
-    }
-    
-    this.showBulkPaymentModal = true;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-  
-  closeBulkPaymentModal(): void {
-    this.showBulkPaymentModal = false;
-    this.bulkPayment = {
-      studentIds: [],
-      classId: '',
-      amount: 0,
-      month: '',
-      paymentMethod: 'cash',
-      notes: ''
-    };
-    this.selectedStudents = [];
-    this.classForBulkPayment = null;
-    this.bulkPaymentResults = [];
-    this.bulkPaymentProgress = 0;
-  }
-
-  // Student selection for bulk payment
-  toggleStudentSelection(student: Student): void {
-    const studentId = student._id || student.id;
-    if (!studentId) return;
-    
-    const index = this.selectedStudents.findIndex(s => 
-      (s._id || s.id) === studentId
-    );
-    
-    if (index > -1) {
-      this.selectedStudents.splice(index, 1);
-      // Remove from bulkPayment.studentIds
-      const studentIdsIndex = this.bulkPayment.studentIds.indexOf(studentId);
-      if (studentIdsIndex > -1) {
-        this.bulkPayment.studentIds.splice(studentIdsIndex, 1);
-      }
-    } else {
-      this.selectedStudents.push(student);
-      this.bulkPayment.studentIds.push(studentId);
-    }
-  }
-
-  isStudentSelected(student: Student): boolean {
-    const studentId = student._id || student.id;
-    if (!studentId) return false;
-    
-    return this.selectedStudents.some(s => 
-      (s._id || s.id) === studentId
-    );
-  }
-
-  selectAllStudents(): void {
-    this.selectedStudents = [...this.filteredStudents];
-    this.bulkPayment.studentIds = this.filteredStudents
-      .map(s => s._id || s.id)
-      .filter(id => id !== undefined) as string[];
-  }
-
-  deselectAllStudents(): void {
-    this.selectedStudents = [];
-    this.bulkPayment.studentIds = [];
-  }
-
-  filterStudents(): void {
-    if (!this.studentSearchTerm.trim()) {
-      this.filteredStudents = [...this.allStudents];
-      return;
-    }
-    
-    const searchTerm = this.studentSearchTerm.toLowerCase();
-    this.filteredStudents = this.allStudents.filter(student => 
-      student.name.toLowerCase().includes(searchTerm) ||
-      student.studentId.toLowerCase().includes(searchTerm) ||
-      (student.parentName && student.parentName.toLowerCase().includes(searchTerm))
-    );
-  }
-
-  // Class selection for bulk payment
-  selectClassForBulkPayment(classItem: Class): void {
-    this.classForBulkPayment = classItem;
-    this.bulkPayment.classId = classItem._id || classItem.id || '';
-    this.bulkPayment.amount = classItem.price || 0;
-  }
-
-  // Process bulk payment
-  async processBulkPayment(): Promise<void> {
-    if (this.selectedStudents.length === 0) {
-      Swal.fire('خطأ', 'يرجى اختيار طالب واحد على الأقل', 'error');
-      return;
-    }
-
-    if (!this.bulkPayment.amount || this.bulkPayment.amount <= 0) {
-      Swal.fire('خطأ', 'يرجى إدخال مبلغ صحيح', 'error');
-      return;
-    }
-
-    if (!this.bulkPayment.month) {
-      Swal.fire('خطأ', 'يرجى اختيار الشهر', 'error');
-      return;
-    }
-
-    const confirmation = await Swal.fire({
-      title: 'تأكيد الدفع الجماعي',
-      html: `
-        <div class="text-start">
-          <p><strong>عدد الطلاب:</strong> ${this.selectedStudents.length}</p>
-          <p><strong>المبلغ للطالب الواحد:</strong> ${this.bulkPayment.amount.toLocaleString()} د.ج</p>
-          <p><strong>الإجمالي:</strong> ${(this.selectedStudents.length * this.bulkPayment.amount).toLocaleString()} د.ج</p>
-          <p><strong>الشهر:</strong> ${this.bulkPayment.month}</p>
-          <p><strong>طريقة الدفع:</strong> ${this.getPaymentMethodLabel(this.bulkPayment.paymentMethod)}</p>
-          ${this.classForBulkPayment ? `<p><strong>الحصة:</strong> ${this.classForBulkPayment.name}</p>` : ''}
-        </div>
-      `,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'نعم، دفع الجماعي',
-      cancelButtonText: 'إلغاء',
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33'
+  getUniqueStudentsCount(): number {
+    const studentIds = new Set<string>();
+    this.selectedPaymentsForBulkPay.forEach(payment => {
+      if (payment.student?._id) studentIds.add(payment.student._id);
+      else if (payment.student) studentIds.add(payment.student);
     });
-
-    if (!confirmation.isConfirmed) return;
-
-    this.isProcessingBulkPayment = true;
-    this.bulkPaymentProgress = 0;
-    this.bulkPaymentResults = [];
-
-    const totalStudents = this.selectedStudents.length;
-    let successfulPayments = 0;
-    let failedPayments = 0;
-
-    // Create payment data array
-    const paymentsData = this.selectedStudents.map(student => ({
-      student: student._id || student.id,
-      class: this.bulkPayment.classId,
-      amount: this.bulkPayment.amount,
-      month: this.bulkPayment.month,
-      paymentMethod: this.bulkPayment.paymentMethod,
-      notes: `${this.bulkPayment.notes} - ${student.name}`
-    }));
-
-    // Process payments in batches
-    const batchSize = 5;
-    for (let i = 0; i < paymentsData.length; i += batchSize) {
-      const batch = paymentsData.slice(i, i + batchSize);
-      
-      try {
-        // Process batch concurrently
-        const batchPromises = batch.map(paymentData => 
-          this.http.post<any>(`${this.apiUrl}/payments`, paymentData, {
-            headers: this.getHeaders()
-          }).toPromise()
-        );
-
-        const batchResults = await Promise.allSettled(batchPromises);
-        
-        batchResults.forEach((result, index) => {
-          const studentIndex = i + index;
-          const student = this.selectedStudents[studentIndex];
-          
-          if (result.status === 'fulfilled' && result.value) {
-            successfulPayments++;
-            this.bulkPaymentResults.push({
-              student: student.name,
-              success: true,
-              message: 'تم الدفع بنجاح',
-              receiptNumber: result.value.payment?.invoiceNumber || 'غير محدد'
-            });
-            
-            // Print receipt if printer is available
-            if (this.printerService.checkConnectionStatus()) {
-              this.printBulkPaymentReceipt(student, result.value.payment);
-            }
-          } else {
-            failedPayments++;
-            this.bulkPaymentResults.push({
-              student: student.name,
-              success: false,
-              message: result.status === 'rejected' ? result.reason?.error?.message || 'فشل في الدفع' : 'فشل غير معروف'
-            });
-          }
-        });
-
-        // Update progress
-        this.bulkPaymentProgress = Math.round(((i + batch.length) / totalStudents) * 100);
-        
-        // Small delay between batches
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-      } catch (error) {
-        console.error('Error processing batch:', error);
-        failedPayments += batch.length;
-      }
-    }
-
-    this.isProcessingBulkPayment = false;
-
-    // Show results
-    const resultsHtml = `
-      <div class="text-start">
-        <div class="alert alert-success">
-          <h6><i class="fas fa-check-circle me-2"></i>تمت الدفعات بنجاح</h6>
-          <p class="mb-1"><strong>النجاحات:</strong> ${successfulPayments}</p>
-          <p class="mb-1"><strong>الفشل:</strong> ${failedPayments}</p>
-          <p class="mb-0"><strong>الإجمالي:</strong> ${totalStudents}</p>
-        </div>
-        
-        ${failedPayments > 0 ? `
-          <div class="alert alert-danger mt-3">
-            <h6><i class="fas fa-exclamation-triangle me-2"></i>فشل في بعض الدفعات:</h6>
-            <div class="mt-2" style="max-height: 200px; overflow-y: auto;">
-              ${this.bulkPaymentResults
-                .filter(r => !r.success)
-                .map(r => `<div class="mb-1">• ${r.student}: ${r.message}</div>`)
-                .join('')}
-            </div>
-          </div>
-        ` : ''}
-      </div>
-    `;
-
-    Swal.fire({
-      title: 'نتائج الدفع الجماعي',
-      html: resultsHtml,
-      icon: successfulPayments > 0 ? 'success' : 'error',
-      showCancelButton: false,
-      confirmButtonText: 'حسناً',
-      didClose: () => {
-        // Refresh payment history for current student
-        if (this.student) {
-          this.loadPaymentHistory(this.getStudentId());
-          this.loadStudentPaymentSystems(this.getStudentId());
-        }
-        this.closeBulkPaymentModal();
-      }
-    });
+    return studentIds.size;
   }
 
-  // Print receipt for bulk payment
-  private async printBulkPaymentReceipt(student: Student, paymentData: any): Promise<void> {
-    try {
-      const receiptData: ReceiptData = {
-        receiptNumber: paymentData.invoiceNumber || `BULK-${Date.now().toString().slice(-8)}`,
-        date: new Date().toLocaleDateString('ar-EG'),
-        time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-        studentName: student.name,
-        studentId: student.studentId,
-        className: this.classForBulkPayment?.name || 'دفعة جماعية',
-        month: this.bulkPayment.month,
-        amount: this.bulkPayment.amount,
-        paymentMethod: this.bulkPayment.paymentMethod,
-        academicYear: student.academicYear,
-        parentPhone: student.parentPhone,
-        notes: `${this.bulkPayment.notes} - ${student.name}`
-      };
-
-      await this.printerService.printProfessionalReceipt(receiptData);
-    } catch (error) {
-      console.error('Error printing bulk payment receipt:', error);
-    }
-  }
-
-  // ===== Class Payments View =====
-  openClassPaymentsModal(classItem: any): void {
-    this.selectedClassForPayments = classItem;
-    this.loadClassPayments(classItem._id || classItem.id);
-    this.showClassPaymentsModal = true;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-  
-  closeClassPaymentsModal(): void {
-    this.showClassPaymentsModal = false;
-    this.selectedClassForPayments = null;
-    this.classPayments = [];
-  }
-
-  // Edit Payment
-  openEditPaymentModal(payment: Payment): void {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    this.editingPayment = { ...payment };
-    this.showEditPaymentModal = true;
-  }
-  
-  closeEditPaymentModal(): void {
-    this.showEditPaymentModal = false;
-    this.editingPayment = null;
-  }
-
-  // Delete Payment
-  openDeleteConfirmModal(payment: Payment): void {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    this.paymentToDelete = payment;
-    this.showDeleteConfirmModal = true;
-  }
-
-  closeDeleteConfirmModal(): void {
-    this.showDeleteConfirmModal = false;
-    this.paymentToDelete = null;
-  }
-
-  // Add Single Payment
-  addPayment(): void {
-    if (!this.student || !this.newPayment.amount || this.newPayment.amount <= 0) {
-      Swal.fire('خطأ', 'يرجى إدخال مبلغ صحيح', 'error');
-      return;
-    }
-
-    if (!this.newPayment.month) {
-      Swal.fire('خطأ', 'يرجى اختيار الشهر', 'error');
-      return;
-    }
-
-    Swal.fire({
-      title: 'جاري تسجيل الدفعة...',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      }
-    });
-
-    this.http.post<any>(`${this.apiUrl}/payments`, this.newPayment, {
-      headers: this.getHeaders()
-    }).subscribe({
-      next: (response) => {
-        Swal.fire({
-          icon: 'success',
-          title: 'نجاح',
-          text: 'تم تسجيل الدفعة بنجاح',
-          timer: 1500,
-          showConfirmButton: false
-        });
-
-        this.closePaymentModal();
-        this.loadPaymentHistory(this.getStudentId());
-        this.loadStudentPaymentSystems(this.getStudentId());
-      },
-      error: (error) => {
-        console.error('Error adding payment:', error);
-        Swal.fire('خطأ', 'فشل في تسجيل الدفعة', 'error');
-      }
-    });
-  }
-
-  // Update Payment
-  updatePayment(): void {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (!this.editingPayment || !this.editingPayment._id) return;
-
-    if (!this.editingPayment.amount || this.editingPayment.amount <= 0) {
-      Swal.fire('خطأ', 'يرجى إدخال مبلغ صحيح', 'error');
-      return;
-    }
-
-    Swal.fire({
-      title: 'جاري تحديث الدفعة...',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      }
-    });
-
-    const paymentId = this.editingPayment._id;
-    
-    this.http.put<any>(`${this.apiUrl}/payments/${paymentId}`, this.editingPayment, {
-      headers: this.getHeaders()
-    }).subscribe({
-      next: (response) => {
-        Swal.fire({
-          icon: 'success',
-          title: 'نجاح',
-          text: 'تم تحديث الدفعة بنجاح',
-          timer: 1500,
-          showConfirmButton: false
-        });
-
-        this.closeEditPaymentModal();
-        this.loadPaymentHistory(this.getStudentId());
-        this.loadStudentPaymentSystems(this.getStudentId());
-      },
-      error: (error) => {
-        console.error('Error updating payment:', error);
-        Swal.fire('خطأ', 'فشل في تحديث الدفعة', 'error');
-      }
-    });
-  }
-
-  // Delete Payment
-  deletePayment(): void {
-    if (!this.paymentToDelete) return;
-
-    Swal.fire({
-      title: 'جاري حذف الدفعة...',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      }
-    });
-
-    const paymentId = this.paymentToDelete._id || this.paymentToDelete.id;
-    
-    this.http.delete<any>(`${this.apiUrl}/payments/${paymentId}`, {
-      headers: this.getHeaders()
-    }).subscribe({
-      next: () => {
-        Swal.fire({
-          icon: 'success',
-          title: 'نجاح',
-          text: 'تم حذف الدفعة بنجاح',
-          timer: 1500,
-          showConfirmButton: false
-        });
-
-        this.closeDeleteConfirmModal();
-        this.loadPaymentHistory(this.getStudentId());
-        this.loadStudentPaymentSystems(this.getStudentId());
-      },
-      error: (error) => {
-        console.error('Error deleting payment:', error);
-        Swal.fire('خطأ', 'فشل في حذف الدفعة', 'error');
-      }
-    });
-  }
-
-  // Pay Payment with automatic printing
-  payPayment(payment: Payment): void {
-    Swal.fire({
-      title: 'تأكيد الدفع',
-      html: `
-        <div class="text-start">
-          <p><strong>المبلغ:</strong> ${payment.amount.toLocaleString()} د.ج</p>
-          <p><strong>الشهر:</strong> ${payment.month}</p>
-          ${payment.className ? `<p><strong>الحصة:</strong> ${payment.className}</p>` : ''}
-        </div>
-      `,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'دفع وطباعة',
-      cancelButtonText: 'دفع فقط',
-      showDenyButton: true,
-      denyButtonText: 'إلغاء',
-      confirmButtonColor: '#3085d6',
-      denyButtonColor: '#d33',
-      cancelButtonColor: '#6c757d',
-      input: 'select',
-      inputOptions: {
-        'cash': 'نقداً',
-        'bank': 'تحويل بنكي',
-        'card': 'بطاقة ائتمان',
-        'online': 'دفع إلكتروني'
-      },
-      inputPlaceholder: 'اختر طريقة الدفع',
-      inputValue: 'cash'
-    }).then((result) => {
-      if (result.isConfirmed && result.value) {
-        // الدفع والطباعة
-        this.processPaymentWithPrint(payment, result.value, true);
-      } else if (result.dismiss === Swal.DismissReason.cancel) {
-        // الدفع فقط
-        this.processPaymentWithPrint(payment, result.value || 'cash', false);
-      }
-    });
-  }
-
-  private processPaymentWithPrint(payment: Payment, method: string, shouldPrint: boolean): void {
-    const paymentData = {
-      paymentMethod: method,
-      paymentDate: new Date().toISOString(),
-      notes: 'تم الدفع من خلال النظام'
-    };
-
-    Swal.fire({
-      title: 'جاري الدفع...',
-      allowOutsideClick: false,
-      didOpen: () => {
-        Swal.showLoading();
-      }
-    });
-
-    const paymentId = payment._id || payment.id;
-    
-    this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/pay`, paymentData, {
-      headers: this.getHeaders()
-    }).subscribe({
-      next: async (response) => {
-        Swal.fire({
-          icon: 'success',
-          title: 'نجاح',
-          text: 'تم دفع الدفعة بنجاح',
-          timer: 1500,
-          showConfirmButton: false
-        });
-
-        // تحديث البيانات
-        this.loadPaymentHistory(this.getStudentId());
-        this.loadStudentPaymentSystems(this.getStudentId());
-        
-        // الطباعة التلقائية إذا طلب المستخدم
-        if (shouldPrint && response.payment) {
-          await this.printPaymentReceipt(response.payment);
-        }
-      },
-      error: (error) => {
-        console.error('Error paying payment:', error);
-        Swal.fire('خطأ', 'فشل في دفع الدفعة', 'error');
-      }
-    });
-  }
-
-  // ===== Class Enrollment =====
+  // ==================== CLASS ENROLLMENT METHODS ====================
   openAddToLessonsModal(): void {
     if (!this.student) return;
-    
     this.showAddToLessonsModal = true;
     this.selectedClasses = [];
     this.filterSubject = '';
     this.filterLevel = '';
-    
     this.loadAvailableClasses();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
-  
+
   closeAddToLessonsModal(): void {
     this.showAddToLessonsModal = false;
     this.availableClasses = [];
@@ -2226,29 +2158,16 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
     this.selectedClassForRounds = null;
     this.showRoundSelectionModal = false;
   }
-  
+
   loadAvailableClasses(): void {
     if (!this.student) return;
-    
     this.loadingAvailableClasses = true;
-    
-    this.http.get<Class[]>(`${this.apiUrl}/classes/available`, {
-      headers: this.getHeaders()
-    }).subscribe({
+    this.http.get<Class[]>(`${this.apiUrl}/classes/available`, { headers: this.getHeaders() }).subscribe({
       next: (classes) => {
         this.availableClasses = classes;
-        
-        // Get already enrolled classes
         const enrolledClassIds = this.studentClasses.map(c => c._id || c.id);
-        this.alreadyEnrolledClasses = classes.filter(c => 
-          enrolledClassIds.includes(c._id || c.id)
-        );
-        
-        // Filter out already enrolled classes
-        this.availableClasses = classes.filter(c => 
-          !enrolledClassIds.includes(c._id || c.id)
-        );
-        
+        this.alreadyEnrolledClasses = classes.filter(c => enrolledClassIds.includes(c._id || c.id));
+        this.availableClasses = classes.filter(c => !enrolledClassIds.includes(c._id || c.id));
         this.filterAvailableClasses();
         this.loadingAvailableClasses = false;
       },
@@ -2259,81 +2178,45 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
       }
     });
   }
-  
+
   filterAvailableClasses(): void {
     this.filteredAvailableClasses = this.availableClasses.filter((cls: Class) => {
-      if (this.filterSubject && cls.subject !== this.filterSubject) {
-        return false;
-      }
-      
-      if (this.filterLevel && cls.academicYear !== this.filterLevel) {
-        return false;
-      }
-      
+      if (this.filterSubject && cls.subject !== this.filterSubject) return false;
+      if (this.filterLevel && cls.academicYear !== this.filterLevel) return false;
       return true;
     });
   }
-  
-  isLevelCompatible(classObj: Class): boolean {
-    if (!this.student || !classObj.academicYear) return true;
-    
-    if (!classObj.academicYear || classObj.academicYear === 'NS' || 
-        classObj.academicYear === 'غير محدد') {
-      return true;
-    }
-    
-    return classObj.academicYear === this.student.academicYear;
+
+  isClassSelected(classId: string): boolean {
+    return this.selectedClasses.some(c => (c._id || c.id) === classId);
   }
-  
+
   toggleClassSelection(classObj: Class): void {
-    const index = this.selectedClasses.findIndex(c => {
-      const cId = c._id || c.id;
-      const classObjId = classObj._id || classObj.id;
-      return cId === classObjId;
-    });
-    
+    const index = this.selectedClasses.findIndex(c => (c._id || c.id) === (classObj._id || classObj.id));
     if (index > -1) {
       this.selectedClasses.splice(index, 1);
     } else {
       this.selectedClasses.push(classObj);
     }
   }
-  
-  isClassSelected(classId: string): boolean {
-    return this.selectedClasses.some(c => {
-      const cId = c._id || c.id;
-      return cId === classId;
-    });
-  }
-  
+
   calculateMonthlyTotal(): number {
     return this.selectedClasses.reduce((total, cls) => total + (cls.price || 0), 0);
   }
-  
-  // Check payment type and proceed accordingly
+
   checkAndEnrollStudentToSelectedClasses(): void {
     if (!this.student || this.selectedClasses.length === 0) return;
-    
-    // Check if there are any classes with rounds system
-    const classesWithRounds = this.selectedClasses.filter(cls => 
-      cls.paymentSystem === 'rounds'
-    );
-    
+    const classesWithRounds = this.selectedClasses.filter(cls => cls.paymentSystem === 'rounds');
     if (classesWithRounds.length > 0) {
-      // If there are classes with rounds, open round selection modal
       this.selectedClassForRounds = classesWithRounds[0];
       this.openRoundSelectionModal();
     } else {
-      // If all classes are monthly, proceed with enrollment
       this.enrollStudentToSelectedClasses();
     }
   }
-  
-  // Open round selection modal
+
   openRoundSelectionModal(): void {
     if (!this.selectedClassForRounds) return;
-    
-    // Set default values
     this.roundSelection = {
       roundNumber: `RND-${Date.now().toString().slice(-6)}`,
       sessionCount: this.selectedClassForRounds.roundSettings?.sessionCount || 8,
@@ -2343,62 +2226,37 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
       endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       notes: `نظام جولات تلقائي للحصة ${this.selectedClassForRounds.name}`
     };
-    
     this.showRoundSelectionModal = true;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
-  
-  // Close round selection modal
+
   closeRoundSelectionModal(): void {
     this.showRoundSelectionModal = false;
     this.selectedClassForRounds = null;
   }
-  
-  // Update total amount when session count changes
+
   updateRoundTotalAmount(): void {
     if (this.selectedClassForRounds) {
       this.roundSelection.totalAmount = this.roundSelection.sessionCount * this.roundSelection.sessionPrice;
     }
   }
-  
-  // Confirm round selection and proceed
+
   confirmRoundSelection(): void {
     if (!this.selectedClassForRounds || !this.roundSelection.sessionCount || this.roundSelection.sessionCount <= 0) {
       Swal.fire('خطأ', 'يرجى تحديد عدد جلسات صحيح', 'error');
       return;
     }
-    
     this.closeRoundSelectionModal();
     this.enrollStudentToSelectedClasses();
   }
-  
+
   enrollStudentToSelectedClasses(): void {
     if (!this.student || this.selectedClasses.length === 0) return;
-    
     const classIds = this.selectedClasses.map(c => c._id || c.id);
     const studentId = this.getStudentId();
-    
     Swal.fire({
       title: 'تأكيد التسجيل',
-      html: `
-        <p>هل تريد تسجيل الطالب في ${this.selectedClasses.length} حصة؟</p>
-        <p><strong>الإجمالي:</strong> ${this.calculateMonthlyTotal().toLocaleString()} د.ج</p>
-        <div class="text-start">
-          ${this.selectedClasses.map(cls => 
-            `<div class="mb-1">• ${cls.name} - ${cls.price.toLocaleString()} د.ج - 
-              <span class="badge ${cls.paymentSystem === 'monthly' ? 'bg-info' : 'bg-warning'}">
-                ${cls.paymentSystem === 'monthly' ? 'شهري' : 'جولات'}
-              </span>
-            </div>`
-          ).join('')}
-        </div>
-      `,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'نعم، سجل الآن',
-      cancelButtonText: 'إلغاء',
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33'
+      html: `<p>هل تريد تسجيل الطالب في ${this.selectedClasses.length} حصة؟</p><p><strong>الإجمالي:</strong> ${this.calculateMonthlyTotal().toLocaleString()} د.ج</p>`,
+      icon: 'question', showCancelButton: true, confirmButtonText: 'نعم، سجل الآن', cancelButtonText: 'إلغاء'
     }).then((result) => {
       if (result.isConfirmed) {
         const validClassIds = classIds.filter(id => id !== undefined && id !== null) as string[];
@@ -2406,36 +2264,17 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
       }
     });
   }
-  
+
   enrollStudentMultiple(studentId: string, classIds: string[]): void {
     this.isEnrolling = true;
-    
-    // Prepare round settings if there's a class with rounds
     const roundSettings = this.selectedClassForRounds ? {
       sessionCount: this.roundSelection.sessionCount,
       sessionDuration: 2,
       breakBetweenSessions: 0
     } : undefined;
-    
-    this.http.post<any>(`${this.apiUrl}/students/${studentId}/enroll-multiple`, 
-      { classIds, roundSettings }, 
-      { headers: this.getHeaders() }
-    ).subscribe({
+    this.http.post<any>(`${this.apiUrl}/students/${studentId}/enroll-multiple`, { classIds, roundSettings }, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
-        Swal.fire({
-          icon: 'success',
-          title: 'تم التسجيل بنجاح',
-          html: `
-            <p>تم تسجيل الطالب في ${response.results?.successful?.length || response.successful?.length || 0} حصة بنجاح</p>
-            ${response.summary?.paymentSystemsCreated ? 
-              `<p class="text-success">تم إنشاء ${response.summary.paymentSystemsCreated} نظام دفع تلقائياً</p>` : 
-              ''}
-          `,
-          timer: 3000,
-          showConfirmButton: false
-        });
-        
-        // Update data
+        Swal.fire({ icon: 'success', title: 'تم التسجيل بنجاح', timer: 3000, showConfirmButton: false });
         this.loadStudentClasses(this.route.snapshot.paramMap.get('id') || '');
         this.loadStudentPaymentSystems(this.route.snapshot.paramMap.get('id') || '');
         this.closeAddToLessonsModal();
@@ -2449,320 +2288,347 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
     });
   }
 
-  // ===== Payment System Management =====
-  payLatePayment(payment: MonthlyPayment): void {
+  // ==================== MODAL CONTROLS ====================
+  setActiveTab(tab: string): void {
+    this.activeTab = tab;
+    if (tab === 'payments' && this.student) {
+      this.loadPaymentHistory(this.getStudentId());
+    }
+  }
+
+  goBack(): void {
+    this.router.navigate(['/home/students-management']);
+  }
+
+  openAddPaymentModal(): void {
+    if (!this.student) return;
+    const currentDate = new Date();
+    const currentMonth = `${this.months[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+    this.newPayment = { student: this.getStudentId(), amount: 0, month: currentMonth, paymentMethod: 'cash', notes: '' };
+    this.showPaymentModal = true;
+  }
+
+  closePaymentModal(): void {
+    this.showPaymentModal = false;
+    this.newPayment = { student: '', amount: 0, month: '', paymentMethod: 'cash', notes: '' };
+  }
+
+  openEditPaymentModal(payment: Payment): void {
+    this.editingPayment = { ...payment };
+    this.showEditPaymentModal = true;
+  }
+
+  closeEditPaymentModal(): void {
+    this.showEditPaymentModal = false;
+    this.editingPayment = null;
+  }
+
+  openDeleteConfirmModal(payment: Payment): void {
+    this.paymentToDelete = payment;
+    this.showDeleteConfirmModal = true;
+  }
+
+  closeDeleteConfirmModal(): void {
+    this.showDeleteConfirmModal = false;
+    this.paymentToDelete = null;
+  }
+
+  openBulkPayConfirmation(): void {
+    if (this.selectedPaymentsForBulkPay.length === 0) {
+      Swal.fire('تنبيه', 'يرجى اختيار مدفوعات للدفع', 'warning');
+      return;
+    }
+    this.showBulkPayConfirmation = true;
+  }
+
+  closeBulkPayConfirmation(): void {
+    this.showBulkPayConfirmation = false;
+  }
+
+  toggleClassPaymentGroup(classId: string): void {
+    const group = this.classPaymentGroups.find(g => g.classId === classId);
+    if (group) group.expanded = !group.expanded;
+  }
+
+  isClassGroupExpanded(classId: string): boolean {
+    const group = this.classPaymentGroups.find(g => g.classId === classId);
+    return group ? group.expanded || false : false;
+  }
+
+  // ==================== PAYMENT ACTIONS ====================
+  addPayment(): void {
+    if (!this.student || !this.newPayment.amount || this.newPayment.amount <= 0) {
+      Swal.fire('خطأ', 'يرجى إدخال مبلغ صحيح', 'error');
+      return;
+    }
+    if (!this.newPayment.month) {
+      Swal.fire('خطأ', 'يرجى اختيار الشهر', 'error');
+      return;
+    }
+    Swal.fire({ title: 'جاري تسجيل الدفعة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    this.http.post<any>(`${this.apiUrl}/payments`, this.newPayment, { headers: this.getHeaders() }).subscribe({
+      next: () => {
+        Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم تسجيل الدفعة بنجاح', timer: 1500, showConfirmButton: false });
+        this.closePaymentModal();
+        this.loadPaymentHistory(this.getStudentId());
+        this.loadStudentPaymentSystems(this.getStudentId());
+      },
+      error: (error) => {
+        console.error('Error adding payment:', error);
+        Swal.fire('خطأ', 'فشل في تسجيل الدفعة', 'error');
+      }
+    });
+  }
+
+  updatePayment(): void {
+    if (!this.editingPayment || !this.editingPayment._id) return;
+    if (!this.editingPayment.amount || this.editingPayment.amount <= 0) {
+      Swal.fire('خطأ', 'يرجى إدخال مبلغ صحيح', 'error');
+      return;
+    }
+    Swal.fire({ title: 'جاري تحديث الدفعة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    this.http.put<any>(`${this.apiUrl}/payments/${this.editingPayment._id}`, this.editingPayment, { headers: this.getHeaders() }).subscribe({
+      next: () => {
+        Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم تحديث الدفعة بنجاح', timer: 1500, showConfirmButton: false });
+        this.closeEditPaymentModal();
+        this.loadPaymentHistory(this.getStudentId());
+        this.loadStudentPaymentSystems(this.getStudentId());
+      },
+      error: (error) => {
+        console.error('Error updating payment:', error);
+        Swal.fire('خطأ', 'فشل في تحديث الدفعة', 'error');
+      }
+    });
+  }
+
+  deletePayment(): void {
+    if (!this.paymentToDelete) return;
+    Swal.fire({ title: 'جاري حذف الدفعة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    const paymentId = this.paymentToDelete._id || this.paymentToDelete.id;
+    this.http.delete<any>(`${this.apiUrl}/payments/${paymentId}`, { headers: this.getHeaders() }).subscribe({
+      next: () => {
+        Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم حذف الدفعة بنجاح', timer: 1500, showConfirmButton: false });
+        this.closeDeleteConfirmModal();
+        this.loadPaymentHistory(this.getStudentId());
+        this.loadStudentPaymentSystems(this.getStudentId());
+      },
+      error: (error) => {
+        console.error('Error deleting payment:', error);
+        Swal.fire('خطأ', 'فشل في حذف الدفعة', 'error');
+      }
+    });
+  }
+
+  payPayment(payment: Payment): void {
     Swal.fire({
+      title: 'تأكيد الدفع',
+      html: `<div class="text-start"><p><strong>المبلغ:</strong> ${payment.amount.toLocaleString()} د.ج</p><p><strong>الشهر:</strong> ${payment.month}</p></div>`,
+      icon: 'question', showCancelButton: true, confirmButtonText: 'دفع وطباعة', cancelButtonText: 'دفع فقط', showDenyButton: true, denyButtonText: 'إلغاء',
+      input: 'select', inputOptions: { 'cash': 'نقداً', 'bank': 'تحويل بنكي', 'card': 'بطاقة ائتمان', 'online': 'دفع إلكتروني' },
+      inputPlaceholder: 'اختر طريقة الدفع', inputValue: 'cash'
+    }).then((result) => {
+      if (result.isConfirmed && result.value) {
+        this.processPaymentWithPrint(payment, result.value, true);
+      } else if (result.dismiss === Swal.DismissReason.cancel) {
+        this.processPaymentWithPrint(payment, result.value || 'cash', false);
+      }
+    });
+  }
+
+  private processPaymentWithPrint(payment: Payment, method: string, shouldPrint: boolean): void {
+    const paymentData = { paymentMethod: method, paymentDate: new Date().toISOString(), notes: 'تم الدفع من خلال النظام' };
+    Swal.fire({ title: 'جاري الدفع...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    const paymentId = payment._id || payment.id;
+    this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/pay`, paymentData, { headers: this.getHeaders() }).subscribe({
+      next: async (response) => {
+        Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم دفع الدفعة بنجاح', timer: 1500, showConfirmButton: false });
+        this.loadPaymentHistory(this.getStudentId());
+        this.loadStudentPaymentSystems(this.getStudentId());
+        if (shouldPrint && response.payment) await this.printPaymentReceipt(response.payment);
+      },
+      error: (error) => {
+        console.error('Error paying payment:', error);
+        Swal.fire('خطأ', 'فشل في دفع الدفعة', 'error');
+      }
+    });
+  }
+
+  async processBulkPaySelected(): Promise<void> {
+    if (this.selectedPaymentsForBulkPay.length === 0) {
+      Swal.fire({ icon: 'warning', title: 'لا توجد مدفوعات مختارة', text: 'يرجى اختيار مدفوعات للدفع أولاً' });
+      return;
+    }
+    const hasPaidPayments = this.selectedPaymentsForBulkPay.some(p => p.status === 'paid');
+    if (hasPaidPayments) {
+      const unpaidPayments = this.selectedPaymentsForBulkPay.filter(p => p.status !== 'paid');
+      const { value: proceed } = await Swal.fire({
+        title: 'تحذير', html: `<div class="text-start"><p class="text-warning">بعض المدفوعات المختارة مدفوعة مسبقاً</p><p><strong>المعلقة:</strong> ${unpaidPayments.length}</p><p>هل تريد المتابعة مع المدفوعات المعلقة فقط؟</p></div>`,
+        icon: 'warning', showCancelButton: true, confirmButtonText: 'نعم، متابعة', cancelButtonText: 'إلغاء'
+      });
+      if (!proceed) return;
+      this.selectedPaymentsForBulkPay = unpaidPayments;
+    }
+
+    const totalAmount = this.getSelectedPaymentsTotal();
+    const uniqueStudents = new Set(this.selectedPaymentsForBulkPay.map(p => p.student?._id || p.student));
+
+    const { value: userChoice } = await Swal.fire({
+      title: 'خيارات الدفع الجماعي',
+      html: `<div class="text-start"><div class="alert alert-info"><h6>تفاصيل الدفع الجماعي</h6><p><strong>عدد المدفوعات:</strong> ${this.selectedPaymentsForBulkPay.length}</p><p><strong>المبلغ الإجمالي:</strong> ${totalAmount.toLocaleString('ar-SA')} د.ج</p></div>
+              <div class="mb-3"><label class="form-label">طريقة الدفع:</label><select class="form-select" id="paymentMethod"><option value="cash">نقداً</option><option value="bank">تحويل بنكي</option><option value="card">بطاقة ائتمان</option><option value="online">دفع إلكتروني</option></select></div>
+              <div class="mb-3"><label class="form-label">خيار الطباعة:</label><select class="form-select" id="printOption"><option value="single">إيصال واحد لجميع الدفعات</option><option value="multiple">إيصالات منفصلة لكل دفعة</option></select></div>
+              <div class="mb-3"><label class="form-label">ملاحظات:</label><textarea class="form-control" id="paymentNotes" rows="2"></textarea></div></div>`,
+      icon: 'question', showCancelButton: true, confirmButtonText: 'دفع', cancelButtonText: 'إلغاء', width: '600px',
+      preConfirm: () => {
+        const paymentMethod = (document.getElementById('paymentMethod') as HTMLSelectElement).value;
+        const printOption = (document.getElementById('printOption') as HTMLSelectElement).value;
+        const paymentNotes = (document.getElementById('paymentNotes') as HTMLTextAreaElement).value;
+        if (!paymentMethod) { Swal.showValidationMessage('يرجى اختيار طريقة الدفع'); return false; }
+        return { paymentMethod, printOption, paymentNotes };
+      }
+    });
+    if (!userChoice) return;
+
+    const { paymentMethod, printOption, paymentNotes } = userChoice;
+    Swal.fire({
+      title: 'جاري معالجة الدفعات...',
+      html: `<div class="text-center"><div class="spinner-border text-primary mb-3"></div><h5>دفع جماعي</h5><p>جاري معالجة ${this.selectedPaymentsForBulkPay.length} دفعة...</p>
+              <div class="progress mt-4"><div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 0%;" id="bulk-pay-progress">0%</div></div>
+              <div class="row mt-4"><div class="col-6 text-end"><small class="text-muted">النجاح:</small><h5 class="text-success" id="success-count">0</h5></div>
+              <div class="col-6 text-start"><small class="text-muted">الفشل:</small><h5 class="text-danger" id="fail-count">0</h5></div></div>
+              <div class="mt-3"><small class="text-muted" id="current-payment">جاري بدء المعالجة...</small></div></div>`,
+      showConfirmButton: false, allowOutsideClick: false, width: '500px'
+    });
+
+    let successfulPayments = 0, failedPayments = 0;
+    const results: any[] = [];
+    const paidPayments: Payment[] = [];
+
+    for (let i = 0; i < this.selectedPaymentsForBulkPay.length; i++) {
+      const payment = this.selectedPaymentsForBulkPay[i];
+      const paymentId = payment._id || payment.id;
+      const progress = Math.round(((i + 1) / this.selectedPaymentsForBulkPay.length) * 100);
+      this.updateProgress(progress, i + 1, successfulPayments, failedPayments, payment);
+
+      if (!paymentId) {
+        failedPayments++;
+        results.push({ payment: payment.month, student: payment.studentName, success: false, message: 'رقم الدفعة غير صالح' });
+        continue;
+      }
+
+      try {
+        const paymentData = { paymentMethod, paymentDate: new Date().toISOString(), notes: paymentNotes || `دفع جماعي - ${new Date().toLocaleDateString('ar-SA')}` };
+        const response = await this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/pay`, paymentData, { headers: this.getHeaders() }).toPromise();
+        successfulPayments++;
+        paidPayments.push({ ...payment, paymentMethod, paymentDate: new Date(), invoiceNumber: response.invoiceNumber, notes: paymentData.notes });
+        results.push({ payment: payment.month, student: payment.studentName, success: true, message: 'تم الدفع بنجاح' });
+      } catch (error: any) {
+        failedPayments++;
+        results.push({ payment: payment.month, student: payment.studentName, success: false, message: error.error?.message || error.message || 'فشل في الدفع' });
+      }
+      await this.delay(100);
+    }
+
+    Swal.close();
+    if (printOption === 'single' && successfulPayments > 0) {
+      await this.printSingleReceiptForMultiplePayments(paidPayments, paymentMethod, paymentNotes);
+    } else if (printOption === 'multiple' && successfulPayments > 0) {
+      await this.printMultipleReceipts(paidPayments);
+    }
+    await this.showBulkPayResults(successfulPayments, failedPayments, results, paidPayments);
+    if (successfulPayments > 0 && this.student) await this.refreshData();
+  }
+
+  private async refreshData(): Promise<void> {
+    if (this.student) {
+      this.loadPaymentHistory(this.getStudentId());
+      this.loadStudentPaymentSystems(this.getStudentId());
+      await this.delay(2000);
+      this.loadPaymentHistory(this.getStudentId());
+    }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private updateProgress(progress: number, current: number, success: number, fail: number, payment: Payment): void {
+    const progressBar = document.getElementById('bulk-pay-progress');
+    const successCount = document.getElementById('success-count');
+    const failCount = document.getElementById('fail-count');
+    const currentPayment = document.getElementById('current-payment');
+    if (progressBar) { progressBar.style.width = `${progress}%`; progressBar.textContent = `${progress}%`; }
+    if (successCount) successCount.textContent = success.toString();
+    if (failCount) failCount.textContent = fail.toString();
+    if (currentPayment) currentPayment.textContent = `جاري معالجة: ${current}/${this.selectedPaymentsForBulkPay.length} - ${payment.month} - ${payment.amount.toLocaleString()} د.ج`;
+  }
+
+  private async showBulkPayResults(successCount: number, failCount: number, results: any[], paidPayments: Payment[]): Promise<void> {
+    const resultsHtml = `<div class="text-start"><div class="alert alert-success"><h5>تمت الدفعات بنجاح</h5><div class="row mt-3"><div class="col-4 text-center"><h2 class="text-success">${successCount}</h2><small>النجاحات</small></div>
+      <div class="col-4 text-center"><h2 class="text-danger">${failCount}</h2><small>الفشل</small></div><div class="col-4 text-center"><h2 class="text-primary">${successCount + failCount}</h2><small>الإجمالي</small></div></div></div></div>`;
+    await Swal.fire({ title: 'نتائج الدفع الجماعي', html: resultsHtml, icon: successCount > 0 ? 'success' : 'error', showConfirmButton: true, confirmButtonText: 'حسناً' });
+  }
+
+  async payLatePayment(payment: MonthlyPayment): Promise<void> {
+    const { value: paymentMethod } = await Swal.fire({
       title: 'تسديد دفعة متأخرة',
-      html: `
-        <div class="text-start">
-          <p>المبلغ: ${payment.amount.toLocaleString()} د.ج</p>
-          ${payment.month ? `<p>الشهر: ${payment.month}</p>` : ''}
-          ${payment.dueDate ? `<p>تاريخ الاستحقاق: ${new Date(payment.dueDate).toLocaleDateString('ar-EG')}</p>` : ''}
-        </div>
-      `,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'تسديد الآن',
-      cancelButtonText: 'إلغاء',
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      input: 'select',
-      inputOptions: {
-        'cash': 'نقداً',
-        'bank': 'تحويل بنكي',
-        'card': 'بطاقة ائتمان',
-        'online': 'دفع إلكتروني'
-      },
-      inputPlaceholder: 'اختر طريقة الدفع'
-    }).then((result) => {
-      if (result.isConfirmed && result.value) {
-        const paymentData = {
-          paymentMethod: result.value,
-          paymentDate: new Date().toISOString(),
-          notes: 'تم تسديد دفعة متأخرة'
-        };
-
-        Swal.fire({
-          title: 'جاري التسديد...',
-          allowOutsideClick: false,
-          didOpen: () => {
-            Swal.showLoading();
-          }
-        });
-
-        if (payment._id) {
-          this.http.put<any>(`${this.apiUrl}/payments/${payment._id}/pay`, paymentData, {
-            headers: this.getHeaders()
-          }).subscribe({
-            next: (response) => {
-              Swal.fire({
-                icon: 'success',
-                title: 'نجاح',
-                text: 'تم تسديد الدفعة المتأخرة بنجاح',
-                timer: 1500,
-                showConfirmButton: false
-              });
-
-              const routeId = this.route.snapshot.paramMap.get('id');
-              if (routeId) {
-                this.loadStudentPaymentSystems(routeId);
-              }
-            },
-            error: (error) => {
-              console.error('Error paying late payment:', error);
-              Swal.fire('خطأ', 'فشل في تسديد الدفعة المتأخرة', 'error');
-            }
-          });
-        }
-      }
+      html: `<div class="text-start"><p>المبلغ: ${payment.amount.toLocaleString()} د.ج</p>${payment.month ? `<p>الشهر: ${payment.month}</p>` : ''}</div>`,
+      icon: 'warning', showCancelButton: true, confirmButtonText: 'تسديد الآن', cancelButtonText: 'إلغاء',
+      input: 'select', inputOptions: { 'cash': 'نقداً', 'bank': 'تحويل بنكي', 'card': 'بطاقة ائتمان', 'online': 'دفع إلكتروني' }
     });
+    if (paymentMethod) {
+      Swal.fire({ title: 'جاري التسديد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      if (payment._id) {
+        this.http.put<any>(`${this.apiUrl}/payments/${payment._id}/pay`, { paymentMethod, paymentDate: new Date().toISOString(), notes: 'تم تسديد دفعة متأخرة' }, { headers: this.getHeaders() }).subscribe({
+          next: () => {
+            Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم تسديد الدفعة المتأخرة بنجاح', timer: 1500, showConfirmButton: false });
+            const routeId = this.route.snapshot.paramMap.get('id');
+            if (routeId) this.loadStudentPaymentSystems(routeId);
+          },
+          error: (error) => { console.error('Error paying late payment:', error); Swal.fire('خطأ', 'فشل في تسديد الدفعة المتأخرة', 'error'); }
+        });
+      }
+    }
   }
 
-  // Pay round
-  payRound(round: RoundPayment): void {
-    Swal.fire({
+  async payRound(round: RoundPayment): Promise<void> {
+    const { value: paymentMethod } = await Swal.fire({
       title: 'دفع الجولة',
-      html: `
-        <div class="text-start">
-          <p>رقم الجولة: ${round.roundNumber}</p>
-          <p>المبلغ: ${round.totalAmount.toLocaleString()} د.ج</p>
-          <p>عدد الجلسات: ${round.sessionCount}</p>
-        </div>
-      `,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'دفع',
-      cancelButtonText: 'إلغاء',
-      confirmButtonColor: '#3085d6',
-      cancelButtonColor: '#d33',
-      input: 'select',
-      inputOptions: {
-        'cash': 'نقداً',
-        'bank': 'تحويل بنكي',
-        'card': 'بطاقة ائتمان',
-        'online': 'دفع إلكتروني'
-      },
-      inputPlaceholder: 'اختر طريقة الدفع',
-      inputValue: 'cash',
-      preConfirm: (paymentMethod) => {
-        if (!paymentMethod) {
-          Swal.showValidationMessage('يرجى اختيار طريقة الدفع');
-        }
-        return paymentMethod;
-      }
-    }).then((result) => {
-      if (result.isConfirmed && result.value) {
-        const paymentData = {
-          paymentMethod: result.value,
-          paymentDate: new Date().toISOString(),
-          notes: `دفع جولة ${round.roundNumber}`
-        };
-
-        Swal.fire({
-          title: 'جاري الدفع...',
-          allowOutsideClick: false,
-          didOpen: () => {
-            Swal.showLoading();
-          }
+      html: `<div class="text-start"><p>رقم الجولة: ${round.roundNumber}</p><p>المبلغ: ${round.totalAmount.toLocaleString()} د.ج</p><p>عدد الجلسات: ${round.sessionCount}</p></div>`,
+      icon: 'question', showCancelButton: true, confirmButtonText: 'دفع', cancelButtonText: 'إلغاء',
+      input: 'select', inputOptions: { 'cash': 'نقداً', 'bank': 'تحويل بنكي', 'card': 'بطاقة ائتمان', 'online': 'دفع إلكتروني' }, inputValue: 'cash'
+    });
+    if (paymentMethod) {
+      Swal.fire({ title: 'جاري الدفع...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      const roundId = round._id || round.id;
+      if (roundId) {
+        this.http.put<any>(`${this.apiUrl}/payment-systems/rounds/${roundId}/pay`, { paymentMethod, paymentDate: new Date().toISOString(), notes: `دفع جولة ${round.roundNumber}` }, { headers: this.getHeaders() }).subscribe({
+          next: () => {
+            Swal.fire({ icon: 'success', title: 'تم الدفع بنجاح', timer: 3000, showConfirmButton: false });
+            const studentId = this.route.snapshot.paramMap.get('id');
+            if (studentId) { this.loadStudentPaymentSystems(studentId); this.loadPaymentHistory(studentId); }
+          },
+          error: (error) => { console.error('Error paying round:', error); Swal.fire('خطأ', `فشل في دفع الجولة: ${error.error?.error || error.message}`, 'error'); }
         });
-
-        const roundId = round._id || round.id;
-        if (roundId) {
-          this.http.put<any>(`${this.apiUrl}/payment-systems/rounds/${roundId}/pay`, paymentData, {
-            headers: this.getHeaders()
-          }).subscribe({
-            next: (response) => {
-              Swal.fire({
-                icon: 'success',
-                title: 'تم الدفع بنجاح',
-                html: `
-                  <div class="text-start">
-                    <p>تم دفع الجولة ${round.roundNumber} بنجاح</p>
-                    <p><strong>المبلغ:</strong> ${round.totalAmount.toLocaleString()} د.ج</p>
-                    <p><strong>طريقة الدفع:</strong> ${this.getPaymentMethodLabel(result.value)}</p>
-                    ${response.receiptNumber ? `<p><strong>رقم الإيصال:</strong> ${response.receiptNumber}</p>` : ''}
-                  </div>
-                `,
-                timer: 3000,
-                showConfirmButton: false
-              });
-              
-              // تحديث البيانات
-              const studentId = this.route.snapshot.paramMap.get('id');
-              if (studentId) {
-                this.loadStudentPaymentSystems(studentId);
-                this.loadPaymentHistory(studentId);
-              }
-            },
-            error: (error) => {
-              console.error('Error paying round:', error);
-              
-              let errorMessage = 'فشل في دفع الجولة';
-              if (error.error?.error) {
-                errorMessage += `: ${error.error.error}`;
-              } else if (error.message) {
-                errorMessage += `: ${error.message}`;
-              }
-              
-              Swal.fire({
-                icon: 'error',
-                title: 'خطأ',
-                text: errorMessage,
-                confirmButtonText: 'حسناً'
-              });
-            }
-          });
-        }
       }
-    });
+    }
   }
 
-  // View round details
   viewRoundDetails(round: RoundPayment): void {
-    let sessionsHTML = '<div class="table-responsive"><table class="table table-sm">';
-    sessionsHTML += '<thead><tr><th>#</th><th>التاريخ</th><th>السعر</th><th>الحالة</th></tr></thead><tbody>';
-    
+    let sessionsHTML = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>#</th><th>التاريخ</th><th>السعر</th><th>الحالة</th></tr></thead><tbody>';
     (round.sessions || []).forEach(session => {
-      sessionsHTML += `
-        <tr>
-          <td>${session.sessionNumber}</td>
-          <td>${new Date(session.date).toLocaleDateString('ar-EG')}</td>
-          <td>${session.price} د.ج</td>
-          <td><span class="badge ${session.status === 'completed' ? 'bg-success' : 'bg-warning'}">
-            ${session.status === 'completed' ? 'مكتملة' : 'معلقة'}
-          </span></td>
-        </tr>
-      `;
+      sessionsHTML += `<tr><td>${session.sessionNumber}</td><td>${new Date(session.date).toLocaleDateString('ar-EG')}</td><td>${session.price} د.ج</td>
+        <td><span class="badge ${session.status === 'completed' ? 'bg-success' : 'bg-warning'}">${session.status === 'completed' ? 'مكتملة' : 'معلقة'}</span></td></tr>`;
     });
-    
     sessionsHTML += '</tbody></table></div>';
-
-    Swal.fire({
-      title: `تفاصيل الجولة ${round.roundNumber}`,
-      html: `
-        <div class="text-start">
-          <p><strong>رقم الجولة:</strong> ${round.roundNumber}</p>
-          <p><strong>عدد الجلسات:</strong> ${round.sessionCount}</p>
-          <p><strong>سعر الجلسة:</strong> ${round.sessionPrice.toLocaleString()} د.ج</p>
-          <p><strong>المجموع الكلي:</strong> ${round.totalAmount.toLocaleString()} د.ج</p>
-          <p><strong>تاريخ البدء:</strong> ${new Date(round.startDate).toLocaleDateString('ar-EG')}</p>
-          <p><strong>تاريخ الانتهاء:</strong> ${new Date(round.endDate).toLocaleDateString('ar-EG')}</p>
-          <p><strong>الحالة:</strong> <span class="${round.statusClass}">${round.statusText}</span></p>
-          <hr>
-          <h6>تفاصيل الجلسات:</h6>
-          ${sessionsHTML}
-        </div>
-      `,
-      icon: 'info',
-      showCancelButton: false,
-      confirmButtonText: 'حسناً'
-    });
+    Swal.fire({ title: `تفاصيل الجولة ${round.roundNumber}`, html: `<div class="text-start"><p><strong>رقم الجولة:</strong> ${round.roundNumber}</p><p><strong>عدد الجلسات:</strong> ${round.sessionCount}</p>
+      <p><strong>المجموع الكلي:</strong> ${round.totalAmount.toLocaleString()} د.ج</p><p><strong>تاريخ البدء:</strong> ${new Date(round.startDate).toLocaleDateString('ar-EG')}</p>
+      <p><strong>تاريخ الانتهاء:</strong> ${new Date(round.endDate).toLocaleDateString('ar-EG')}</p><p><strong>الحالة:</strong> <span class="${round.statusClass}">${round.statusText}</span></p><hr><h6>تفاصيل الجلسات:</h6>${sessionsHTML}</div>`,
+      icon: 'info', confirmButtonText: 'حسناً' });
   }
 
-  // ===== Helper Methods =====
-  getPaymentMethodLabel(value: string): string {
-    const method = this.paymentMethods.find(m => m.value === value);
-    return method ? method.label : value;
-  }
-
-  getAcademicYearName(code: string): string {
-    const year = this.academicYears.find(y => y.value === code);
-    return year ? year.label : code;
-  }
-
-  calculateAge(birthDate: string | undefined): number {
-    if (!birthDate) return 0;
-    
-    const birth = new Date(birthDate);
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    
-    return age;
-  }
-
-  getStudentClassesNames(): string {
-    if (this.studentClasses.length === 0) return 'لا توجد حصص مسجلة';
-    
-    const classNames = this.studentClasses.map(c => c.name);
-    return classNames.join('، ');
-  }
-
-  getTotalPaid(): number {
-    return this.paymentHistory
-      .filter(p => p.status === 'paid')
-      .reduce((sum, p) => sum + p.amount, 0);
-  }
-
-  getTotalPending(): number {
-    return this.paymentHistory
-      .filter(p => p.status === 'pending' || p.status === 'late')
-      .reduce((sum, p) => sum + p.amount, 0);
-  }
-
-  getCurrentMonth(): string {
-    const currentDate = new Date();
-    const monthIndex = currentDate.getMonth();
-    const year = currentDate.getFullYear();
-    return `${this.months[monthIndex]} ${year}`;
-  }
-
-  // Check if there are rounds classes
-  hasRoundsClasses(): boolean {
-    return this.selectedClasses.some(c => c.paymentSystem === 'rounds');
-  }
-
-  // Generate month options for 3 years
-  generateMonthOptions(): string[] {
-    const options: string[] = [];
-    const currentDate = new Date();
-    
-    for (let yearOffset = 0; yearOffset < 3; yearOffset++) {
-      const year = currentDate.getFullYear() + yearOffset;
-      
-      for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
-        const monthName = this.months[monthIndex];
-        options.push(`${monthName} ${year}`);
-      }
-    }
-    
-    return options;
-  }
-
-  // Get payment status class
-  getPaymentStatusClass(payment: Payment): string {
-    if (payment.isLate) {
-      return 'badge bg-danger';
-    }
-    
-    switch(payment.status) {
-      case 'paid': return 'badge bg-success';
-      case 'pending': return 'badge bg-warning';
-      case 'late': return 'badge bg-danger';
-      default: return 'badge bg-secondary';
-    }
-  }
-
-  // Get payment status text
-  getPaymentStatusText(payment: Payment): string {
-    if (payment.isLate) {
-      return 'متأخر';
-    }
-    
-    switch(payment.status) {
-      case 'paid': return 'مدفوع';
-      case 'pending': return 'معلق';
-      case 'late': return 'متأخر';
-      default: return 'غير محدد';
-    }
-  }
-
-  // Print receipt
-  printPaymentReceipt(payment: Payment): void {
+  // ==================== PRINTING METHODS ====================
+  async printPaymentReceipt(payment: Payment): Promise<void> {
     const receiptData: ReceiptData = {
       receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
       date: new Date().toLocaleDateString('en-US'),
@@ -2777,43 +2643,90 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
       parentPhone: this.student?.parentPhone,
       notes: payment.notes || 'دفعة فردية'
     };
-
-    this.printerService.printProfessionalReceipt(receiptData).then(success => {
-      if (success) {
-        Swal.fire({
-          icon: 'success',
-          title: 'تمت الطباعة',
-          text: 'تم طباعة الإيصال بنجاح',
-          timer: 1500,
-          showConfirmButton: false
-        });
-      }
-    });
+    const success = await this.printerService.printProfessionalReceipt(receiptData);
+    if (success) {
+      Swal.fire({ icon: 'success', title: 'تمت الطباعة', text: 'تم طباعة الإيصال بنجاح', timer: 1500, showConfirmButton: false });
+    }
   }
 
-  // Print student report
+  private async printMultipleReceipts(payments: Payment[]): Promise<void> {
+    if (!payments?.length) {
+      Swal.fire({ icon: 'warning', title: 'لا توجد إيصالات للطباعة', confirmButtonText: 'حسناً' });
+      return;
+    }
+    Swal.fire({ title: 'جاري الطباعة...', html: `<div class="text-center"><div class="spinner-border text-primary mb-3"></div><p>جاري طباعة ${payments.length} إيصال...</p>
+      <div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%" id="print-progress">0%</div></div></div>`, showConfirmButton: false });
+    let printedCount = 0;
+    for (let i = 0; i < payments.length; i++) {
+      const payment = payments[i];
+      try {
+        const receiptData: ReceiptData = {
+          receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}-${i}`,
+          date: new Date().toLocaleDateString('en-US'),
+          time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          studentName: payment.studentName || this.student?.name || '',
+          studentId: payment.studentId || this.student?.studentId || '',
+          className: payment.className || 'عام',
+          month: payment.month,
+          amount: payment.amount,
+          paymentMethod: payment.paymentMethod || 'cash',
+          academicYear: this.student?.academicYear,
+          parentPhone: this.student?.parentPhone,
+          notes: `دفعة جماعية - ${payment.notes || ''}`
+        };
+        await this.printerService.printProfessionalReceipt(receiptData);
+        printedCount++;
+        const progress = Math.round(((i + 1) / payments.length) * 100);
+        const progressBar = document.getElementById('print-progress');
+        if (progressBar) { progressBar.style.width = `${progress}%`; progressBar.textContent = `${progress}%`; }
+        await this.delay(500);
+      } catch (error) { console.error(`فشل طباعة إيصال ${i + 1}:`, error); }
+    }
+    Swal.close();
+    Swal.fire({ title: 'نتائج الطباعة', html: `<div class="alert alert-success"><h6>تمت الطباعة بنجاح</h6><p><strong>المطبوع:</strong> ${printedCount}</p><p><strong>الإجمالي:</strong> ${payments.length}</p></div>`, icon: 'success', confirmButtonText: 'حسناً' });
+  }
+
+  private async printSingleReceiptForMultiplePayments(payments: Payment[], paymentMethod: string, notes?: string): Promise<void> {
+    if (!payments?.length) return;
+    try {
+      Swal.fire({ title: 'جاري إنشاء الإيصال الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+      const bulkReceiptData: BulkReceiptData = {
+        receiptNumber: `BLK-${Date.now().toString().slice(-8)}`,
+        date: new Date().toLocaleDateString('ar-SA'),
+        time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
+        totalAmount: totalAmount,
+        paymentCount: payments.length,
+        studentCount: new Set(payments.map(p => p.studentName || this.student?.name || '')).size,
+        paymentMethod: paymentMethod,
+        payments: payments.map(p => ({
+          studentName: p.studentName || this.student?.name || 'طالب',
+          studentId: p.studentId || this.student?.studentId || '',
+          className: p.className || 'عام',
+          month: p.month,
+          amount: p.amount,
+          notes: p.notes
+        })),
+        notes: notes || `دفع جماعي لـ ${payments.length} دفعة`
+      };
+      const success = await this.printerService.printBulkReceipt(bulkReceiptData);
+      if (success) {
+        Swal.fire({ icon: 'success', title: 'تم الطباعة', text: 'تم طباعة الإيصال الموحد بنجاح', timer: 1500, showConfirmButton: false });
+      } else {
+        throw new Error('فشل في طباعة الإيصال');
+      }
+    } catch (error) {
+      console.error('خطأ في طباعة الإيصال الموحد:', error);
+      Swal.fire({ icon: 'error', title: 'خطأ في الطباعة', text: 'فشل في طباعة الإيصال الموحد', confirmButtonText: 'حسناً' });
+    }
+  }
+
   printStudentReport(): void {
     if (!this.student) return;
-
     try {
-      Swal.fire({
-        title: 'جاري إنشاء التقرير...',
-        allowOutsideClick: false,
-        didOpen: () => {
-          Swal.showLoading();
-        }
-      });
-
+      Swal.fire({ title: 'جاري إنشاء التقرير...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       const totalPaid = this.getTotalPaid();
-
-      const reportData = {
-        student: this.student,
-        classes: this.studentClasses,
-        payments: this.paymentHistory,
-        totalPaid: totalPaid,
-        date: new Date().toLocaleDateString('ar-EG')
-      };
-
+      const reportData = { student: this.student, classes: this.studentClasses, payments: this.paymentHistory, totalPaid: totalPaid, date: new Date().toLocaleDateString('ar-EG') };
       const printContent = this.generateReportHTML(reportData);
       const printWindow = window.open('', '_blank', 'width=800,height=600');
       if (printWindow) {
@@ -2823,7 +2736,6 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
         printWindow.print();
         printWindow.close();
       }
-
       Swal.fire('نجاح', 'تم إنشاء التقرير بنجاح', 'success');
     } catch (error) {
       console.error('Error printing report:', error);
@@ -2831,319 +2743,39 @@ private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, widt
     }
   }
 
-  // Generate report HTML
   private generateReportHTML(data: any): string {
-    return `
-      <!DOCTYPE html>
-      <html dir="rtl">
-      <head>
-        <meta charset="UTF-8">
-        <title>تقرير الطالب</title>
-        <style>
-          body { font-family: 'Arial', sans-serif; padding: 20px; }
-          .report { max-width: 800px; margin: 0 auto; }
-          .header { text-align: center; margin-bottom: 30px; }
-          .header h1 { color: #333; margin-bottom: 10px; }
-          .student-info { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-          .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-          .section { margin-bottom: 30px; }
-          .section h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-          th, td { padding: 10px; text-align: right; border: 1px solid #ddd; }
-          th { background-color: #3498db; color: white; }
-          tr:nth-child(even) { background-color: #f9f9f9; }
-          .total { font-weight: bold; color: #2ecc71; font-size: 18px; }
-          .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="report">
-          <div class="header">
-            <h1>تقرير الطالب</h1>
-            <p>التاريخ: ${data.date}</p>
-          </div>
-          
-          <div class="student-info">
-            <div class="info-grid">
-              <div><strong>اسم الطالب:</strong> ${data.student.name}</div>
-              <div><strong>رقم الطالب:</strong> ${data.student.studentId}</div>
-              <div><strong>المستوى الدراسي:</strong> ${this.getAcademicYearName(data.student.academicYear)}</div>
-              <div><strong>تاريخ التسجيل:</strong> ${new Date(data.student.registrationDate).toLocaleDateString('ar-EG')}</div>
-              <div><strong>ولي الأمر:</strong> ${data.student.parentName}</div>
-              <div><strong>هاتف ولي الأمر:</strong> ${data.student.parentPhone}</div>
-            </div>
-          </div>
-          
-          <div class="section">
-            <h2>الحصص المسجلة</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>اسم الحصة</th>
-                  <th>المادة</th>
-                  <th>المعلم</th>
-                  <th>السعر الشهري</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${data.classes.map((cls: any) => `
-                  <tr>
-                    <td>${cls.name}</td>
-                    <td>${cls.subject}</td>
-                    <td>${cls.teacher?.name || 'غير محدد'}</td>
-                    <td>${cls.price ? cls.price.toLocaleString() + ' د.ج' : 'غير محدد'}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-          
-          <div class="section">
-            <h2>سجل المدفوعات</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>التاريخ</th>
-                  <th>المبلغ</th>
-                  <th>الشهر</th>
-                  <th>طريقة الدفع</th>
-                  <th>الحالة</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${data.payments.map((payment: any) => `
-                  <tr>
-                    <td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : 'لم يتم الدفع'}</td>
-                    <td>${payment.amount.toLocaleString()} د.ج</td>
-                    <td>${payment.month}</td>
-                    <td>${this.getPaymentMethodLabel(payment.paymentMethod)}</td>
-                    <td>${this.getPaymentStatusText(payment)}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-            <p class="total">الإجمالي المدفوع: ${data.totalPaid.toLocaleString()} د.ج</p>
-          </div>
-          
-          <div class="footer">
-            <p>تم إنشاء التقرير تلقائياً من نظام إدارة المدرسة</p>
-            <p>© ${new Date().getFullYear()} جميع الحقوق محفوظة</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
+    return `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير الطالب</title><style>
+      body { font-family: 'Arial', sans-serif; padding: 20px; } .report { max-width: 800px; margin: 0 auto; }
+      .header { text-align: center; margin-bottom: 30px; } .student-info { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+      .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; } .section { margin-bottom: 30px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; } th, td { padding: 10px; text-align: right; border: 1px solid #ddd; }
+      th { background-color: #3498db; color: white; } .total { font-weight: bold; color: #2ecc71; font-size: 18px; }
+    </style></head><body><div class="report"><div class="header"><h1>تقرير الطالب</h1><p>التاريخ: ${data.date}</p></div>
+    <div class="student-info"><div class="info-grid"><div><strong>اسم الطالب:</strong> ${data.student.name}</div><div><strong>رقم الطالب:</strong> ${data.student.studentId}</div>
+    <div><strong>المستوى الدراسي:</strong> ${this.getAcademicYearName(data.student.academicYear)}</div><div><strong>ولي الأمر:</strong> ${data.student.parentName}</div>
+    <div><strong>هاتف ولي الأمر:</strong> ${data.student.parentPhone}</div></div></div>
+    <div class="section"><h2>الحصص المسجلة</h2><table><thead><tr><th>اسم الحصة</th><th>المادة</th><th>المعلم</th><th>السعر الشهري</th></tr></thead><tbody>
+    ${data.classes.map((cls: any) => `<tr><td>${cls.name}</td><td>${cls.subject}</td><td>${cls.teacher?.name || 'غير محدد'}</td><td>${cls.price ? cls.price.toLocaleString() + ' د.ج' : 'غير محدد'}</td></tr>`).join('')}
+    </tbody></table></div><div class="section"><h2>سجل المدفوعات</h2><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الشهر</th><th>طريقة الدفع</th><th>الحالة</th></tr></thead><tbody>
+    ${data.payments.map((payment: any) => `<tr><td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : 'لم يتم الدفع'}</td>
+      <td>${payment.amount.toLocaleString()} د.ج</td><td>${payment.month}</td><td>${this.getPaymentMethodLabel(payment.paymentMethod)}</td>
+      <td>${this.getPaymentStatusText(payment)}</td></tr>`).join('')}</tbody></table><p class="total">الإجمالي المدفوع: ${data.totalPaid.toLocaleString()} د.ج</p></div>
+    <div class="footer"><p>تم إنشاء التقرير تلقائياً من نظام إدارة المدرسة</p><p>© ${new Date().getFullYear()} جميع الحقوق محفوظة</p></div></div></body></html>`;
   }
 
-  // دالة للتحقق من وجود مدفوعات مدفوعة
-  hasPaidPaymentsSelected(): boolean {
-    return this.selectedPaymentsForBulkPay.some(p => p.status === 'paid');
+  // ==================== COMMUNICATION METHODS ====================
+  makeCall(phone: string): void {
+    window.location.href = `tel:${phone}`;
   }
 
-  // دالة للحصول على المدفوعات المدفوعة المحددة
-  getPaidSelectedPayments(): Payment[] {
-    return this.selectedPaymentsForBulkPay.filter(p => p.status === 'paid');
+  sendEmail(email: string): void {
+    window.location.href = `mailto:${email}`;
   }
 
-  // دالة طباعة المدفوعات المحددة
-  async printSelectedPaymentsReceipt(): Promise<void> {
-    const paidPayments = this.getPaidSelectedPayments();
-    
-    if (paidPayments.length === 0) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'لا توجد مدفوعات مدفوعة',
-        text: 'يرجى تحديد مدفوعات مدفوعة للطباعة',
-        confirmButtonText: 'حسناً'
-      });
-      return;
+  sendWhatsAppMessage(): void {
+    if (this.student?.parentPhone) {
+      const message = `عزيزي ولي أمر الطالب ${this.student.name}، هذا تذكير من نظام إدارة المدرسة.`;
+      window.open(`https://wa.me/${this.student.parentPhone}?text=${encodeURIComponent(message)}`, '_blank');
     }
-
-    // عرض خيارات الطباعة
-    const { value: printOption } = await Swal.fire({
-      title: 'خيارات الطباعة',
-      html: `
-        <div class="text-start">
-          <div class="alert alert-info">
-            <h6><i class="fas fa-info-circle me-2"></i>تفاصيل الطباعة</h6>
-            <p class="mb-1"><strong>عدد الدفعات:</strong> ${paidPayments.length}</p>
-            <p class="mb-1"><strong>المبلغ الإجمالي:</strong> ${paidPayments.reduce((sum, p) => sum + p.amount, 0).toLocaleString()} د.ج</p>
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label"><strong>اختر طريقة الطباعة:</strong></label>
-            <select class="form-select" id="receiptOption">
-              <option value="single">إيصال واحد لجميع الدفعات</option>
-              <option value="multiple">إيصالات منفصلة لكل دفعة</option>
-            </select>
-          </div>
-        </div>
-      `,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'طباعة',
-      cancelButtonText: 'إلغاء',
-      preConfirm: () => {
-        const receiptOption = (document.getElementById('receiptOption') as HTMLSelectElement).value;
-        return { receiptOption };
-      }
-    });
-
-    if (!printOption) return;
-
-    const { receiptOption } = printOption;
-
-    if (receiptOption === 'single') {
-      // طباعة إيصال واحد
-      await this.printSingleReceiptForMultiplePayments(
-        paidPayments, 
-        paidPayments[0]?.paymentMethod || 'cash',
-        'طباعة إيصال موحد للدفعات المدفوعة'
-      );
-    } else if (receiptOption === 'multiple') {
-      // طباعة إيصالات منفصلة
-      await this.printMultipleReceipts(paidPayments);
-    }
-  }
-
-  // دالة مساعدة لتحديث البيانات
-  private async refreshData(): Promise<void> {
-    if (this.student) {
-      this.loadPaymentHistory(this.getStudentId());
-      this.loadStudentPaymentSystems(this.getStudentId());
-      
-      // تحديث تلقائي بعد 2 ثانية للتأكد من تحديث البيانات
-      await this.delay(2000);
-      this.loadPaymentHistory(this.getStudentId());
-    }
-  }
-
-  // دالة مساعدة لعرض تفاصيل الدفع الجماعي
-  private viewBulkPayDetails(paidPayments: Payment[], results: any[]): void {
-    const detailsHtml = `
-      <div class="text-start">
-        <div class="table-responsive">
-          <table class="table table-sm table-hover">
-            <thead class="table-light">
-              <tr>
-                <th>#</th>
-                <th>اسم الطالب</th>
-                <th>الشهر</th>
-                <th>المبلغ</th>
-                <th>رقم الفاتورة</th>
-                <th>الحالة</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${results.map((r, index) => `
-                <tr class="${r.success ? 'table-success' : 'table-danger'}">
-                  <td>${index + 1}</td>
-                  <td>${r.student || 'غير محدد'}</td>
-                  <td>${r.payment}</td>
-                  <td>${paidPayments[index]?.amount?.toLocaleString('ar-SA') || '0'} د.ج</td>
-                  <td>${r.receiptNumber || 'بدون'}</td>
-                  <td>
-                    <span class="badge ${r.success ? 'bg-success' : 'bg-danger'}">
-                      ${r.success ? 'ناجح' : 'فاشل'}
-                    </span>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
-
-    Swal.fire({
-      title: 'تفاصيل الدفع الجماعي',
-      html: detailsHtml,
-      width: '800px',
-      showConfirmButton: true,
-      confirmButtonText: 'حسناً',
-      showCancelButton: true,
-      cancelButtonText: 'طباعة التقرير'
-    }).then(result => {
-      if (result.dismiss === Swal.DismissReason.cancel) {
-        this.printBulkPayReport(paidPayments, results);
-      }
-    });
-  }
-
-  // دالة مساعدة لطباعة تقرير الدفع الجماعي
-  private printBulkPayReport(paidPayments: Payment[], results: any[]): void {
-    // تنفيذ طباعة التقرير
-    console.log('طباعة تقرير الدفع الجماعي:', { paidPayments, results });
-    // يمكن تنفيذ طباعة تقرير PDF أو طباعة مباشرة
-  }
-
-  // دالة مساعدة للحصول على عدد الطلاب المميزين
-  getUniqueStudentsCount(): number {
-    const studentIds = new Set<string>();
-    this.selectedPaymentsForBulkPay.forEach(payment => {
-      if (payment.student?._id) {
-        studentIds.add(payment.student._id);
-      } else if (payment.student) {
-        studentIds.add(payment.student);
-      }
-    });
-    return studentIds.size;
-  }
-
-  // دالة مساعدة للحصول على عدد الدفعات المدفوعة
-  getPaidCount(): number {
-    return this.selectedPaymentsForBulkPay.filter(p => p.status === 'paid').length;
-  }
-
-  // دالة مساعدة للحصول على عدد الدفعات المعلقة
-  getPendingCount(): number {
-    return this.selectedPaymentsForBulkPay.filter(p => p.status !== 'paid').length;
-  }
-
-  // دالة مساعدة للتحقق إذا تم تحديد جميع المدفوعات
-  isAllSelected(): boolean {
-    return this.selectedPaymentsForBulkPay.length > 0 && 
-           this.selectedPaymentsForBulkPay.every(p => this.isPaymentSelected(p));
-  }
-
-  // دالة مساعدة لتحديد/إلغاء تحديد جميع المدفوعات
-  toggleAllPayments(): void {
-    if (this.isAllSelected()) {
-      this.selectedPaymentsForBulkPay = [];
-    } else {
-      // إعادة تعيين وتحديد الكل
-      this.selectedPaymentsForBulkPay = [...this.paymentHistory.filter(p => p.status !== 'paid')];
-    }
-  }
-
-  // دالة مساعدة لمعالجة الدفع بإيصال واحد
-  async processSingleReceiptPayment(): Promise<void> {
-    this.closeBulkPayConfirmation();
-    await this.processBulkPayWithSingleReceipt();
-  }
-
-  // دالة مساعدة لمعالجة الدفع بإيصالات متعددة
-  async processMultipleReceiptsPayment(): Promise<void> {
-    this.closeBulkPayConfirmation();
-    await this.processBulkPayWithMultipleReceipts();
-  }
-
-  // دالة مساعدة لمعالجة الدفع مع إيصال واحد
-  async processBulkPayWithSingleReceipt(): Promise<void> {
-    if (this.selectedPaymentsForBulkPay.length === 0) return;
-
-    // نستخدم نفس دالة processBulkPaySelected ولكن مع تحديد الإيصال الواحد
-    this.selectedReceiptOption = 'single';
-    
-    await this.processBulkPaySelected();
-  }
-
-  // دالة مساعدة لمعالجة الدفع مع إيصالات متعددة
-  async processBulkPayWithMultipleReceipts(): Promise<void> {
-    if (this.selectedPaymentsForBulkPay.length === 0) return;
-
-    // نستخدم نفس دالة processBulkPaySelected ولكن مع تحديد إيصالات متعددة
-    this.selectedReceiptOption = 'multiple';
-    await this.processBulkPaySelected();
   }
 }

@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { RouterModule, Router, NavigationEnd } from '@angular/router';
 import { Subscription, interval } from 'rxjs';
 import { switchMap, filter } from 'rxjs/operators';
-
+import { environment } from '../../../../environments/environment.development';
 interface NotificationData {
   success: boolean;
   timestamp: Date;
@@ -508,7 +508,7 @@ interface NotificationData {
 export class NotificationsComponent implements OnInit, OnDestroy {
   @Output() onClose = new EventEmitter<void>();
   
-  private apiUrl = 'http://localhost:5090/api';
+  private apiUrl = environment.apiUrl;
   
   isOpen = false; // القيمة الافتراضية false (النافذة مغلقة)
   loading = false;

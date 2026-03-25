@@ -35,45 +35,55 @@ interface Class {
     <div class="dashboard-wrapper" dir="rtl">
       <header class="page-header">
         <div class="header-content">
-          <div>
+          <div class="header-title">
             <h1>إدارة الحصص والدروس</h1>
             <p class="subtitle">قم بتنظيم ومتابعة كافة الحصص التعليمية في مكان واحد</p>
           </div>
           <div class="header-actions">
             <button class="btn btn-primary" (click)="openAddLessonDialog()">
-              <i class="fas fa-plus"></i> إضافة حصة جديدة
+              <i class="fas fa-plus"></i>
+              <span class="btn-text-mobile">إضافة حصة</span>
             </button>
             <button class="btn btn-outline" (click)="exportToExcel()">
-              <i class="fas fa-file-export"></i> تصدير البيانات
+              <i class="fas fa-file-export"></i>
+              <span class="btn-text-mobile">تصدير</span>
             </button>
           </div>
         </div>
       </header>
 
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-icon blue"><i class="fas fa-book"></i></div>
-          <div class="stat-info">
-            <span class="label">إجمالي الحصص</span>
-            <span class="value">{{ lessons.length }}</span>
+      <!-- Stats in horizontal row -->
+      <div class="stats-horizontal">
+        <div class="stat-card-horizontal">
+          <div class="stat-icon-small blue">
+            <i class="fas fa-book"></i>
+          </div>
+          <div class="stat-info-horizontal">
+            <span class="label-small">إجمالي الحصص</span>
+            <span class="value-small">{{ lessons.length }}</span>
           </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon green"><i class="fas fa-users"></i></div>
-          <div class="stat-info">
-            <span class="label">إجمالي الطلاب</span>
-            <span class="value">{{ getTotalStudents() }}</span>
+        <div class="stat-card-horizontal">
+          <div class="stat-icon-small green">
+            <i class="fas fa-users"></i>
+          </div>
+          <div class="stat-info-horizontal">
+            <span class="label-small">إجمالي الطلاب</span>
+            <span class="value-small">{{ getTotalStudents() }}</span>
           </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-icon orange"><i class="fas fa-wallet"></i></div>
-          <div class="stat-info">
-            <span class="label">متوسط السعر</span>
-            <span class="value">{{ formatPrice(getAveragePrice()) }}</span>
+        <div class="stat-card-horizontal">
+          <div class="stat-icon-small orange">
+            <i class="fas fa-wallet"></i>
+          </div>
+          <div class="stat-info-horizontal">
+            <span class="label-small">متوسط السعر</span>
+            <span class="value-small">{{ formatPrice(getAveragePrice()) }}</span>
           </div>
         </div>
       </div>
 
+      <!-- Filter Section -->
       <section class="filter-section">
         <div class="filter-grid">
           <div class="form-group">
@@ -84,103 +94,180 @@ interface Class {
             </select>
           </div>
           <div class="form-group">
-            <label>المستوى الدراسي</label>
+            <label>المستوى</label>
             <select [(ngModel)]="filterAcademicYear" (change)="applyFilter()" class="form-control">
               <option value="">كل المستويات</option>
               <option *ngFor="let y of academicYears" [value]="y">{{y}}</option>
             </select>
           </div>
           <div class="form-group">
-            <label>بحث عن أستاذ</label>
+            <label>الأستاذ</label>
             <input type="text" [(ngModel)]="filterTeacher" (input)="applyFilter()" 
                    placeholder="اسم الأستاذ..." class="form-control">
           </div>
           <div class="filter-btns">
-             <button class="btn btn-secondary" (click)="clearFilters()">مسح التصفية</button>
+            <button class="btn btn-secondary btn-sm-full" (click)="clearFilters()">مسح</button>
           </div>
         </div>
       </section>
 
-      <div class="table-container shadow">
+      <!-- Table Container with Card View for Mobile -->
+      <div class="table-container">
         <div class="table-header-actions" *ngIf="selectedLessons.size > 0">
-           <span>تم تحديد {{ selectedLessons.size }} حصة</span>
-           <button class="btn btn-danger btn-sm" (click)="deleteSelectedLessons()">حذف المحدد</button>
+          <span>تم تحديد {{ selectedLessons.size }} حصة</span>
+          <button class="btn btn-danger btn-sm" (click)="deleteSelectedLessons()">حذف المحدد</button>
         </div>
 
-        <table class="custom-table">
-          <thead>
-            <tr>
-              <th width="40">
-                <input type="checkbox" (change)="toggleAllSelection()" 
-                       [checked]="selectedLessons.size === paginatedLessons.length && paginatedLessons.length > 0">
-              </th>
-              <th (click)="onSort('name')" class="sortable">اسم الحصة <i class="fas fa-sort"></i></th>
-              <th>المادة</th>
-              <th>الأستاذ</th>
-              <th>المستوى</th>
-              <th>السعر</th>
-              <th>النظام</th>
-              <th>الطلاب</th>
-              <th class="text-center">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let lesson of paginatedLessons" (click)="navigateToDetails(lesson._id)" class="clickable-row">
-              <td (click)="$event.stopPropagation()">
-                <input type="checkbox" [checked]="selectedLessons.has(lesson._id)" 
-                       (change)="toggleSelection(lesson._id, $event)">
-              </td>
-              <td><strong>{{ lesson.name }}</strong></td>
-              <td><span class="badge badge-info">{{ lesson.subject }}</span></td>
-              <td>{{ getTeacherName(lesson) }}</td>
-              <td>{{ lesson.academicYear }}</td>
-              <td>{{ formatPrice(lesson.price) }}</td>
-              <td>
-                <span [class]="'system-tag ' + lesson.paymentSystem">
-                  {{ getPaymentSystemText(lesson.paymentSystem) }}
-                </span>
-              </td>
-              <td>
-                <div class="student-count">
-                  <i class="fas fa-user-graduate"></i> {{ getStudentsCount(lesson) }}
-                </div>
-              </td>
-              <td class="text-center" (click)="$event.stopPropagation()">
-                <div class="action-btns">
-                  <button class="icon-btn edit" (click)="navigateToDetails(lesson._id)" title="تعديل">
-                    <i class="fas fa-edit"></i>
-                  </button>
-                  <button class="icon-btn delete" (click)="deleteLesson(lesson._id, $event)" title="حذف">
-                    <i class="fas fa-trash"></i>
-                  </button>
-                </div>
-              </td>
-            </tr>
-            <tr *ngIf="filteredLessons.length === 0">
-              <td colspan="9" class="empty-state">
-                <i class="fas fa-folder-open"></i>
-                <p>لا توجد نتائج تطابق بحثك</p>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- Desktop Table View -->
+        <div class="desktop-table-view">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th width="40">
+                  <input type="checkbox" (change)="toggleAllSelection()" 
+                         [checked]="selectedLessons.size === paginatedLessons.length && paginatedLessons.length > 0">
+                </th>
+                <th (click)="onSort('name')" class="sortable">اسم الحصة</th>
+                <th>المادة</th>
+                <th>الأستاذ</th>
+                <th>المستوى</th>
+                <th>السعر</th>
+                <th>النظام</th>
+                <th>الطلاب</th>
+                <th class="text-center">الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let lesson of paginatedLessons">
+                <td (click)="$event.stopPropagation()">
+                  <input type="checkbox" [checked]="selectedLessons.has(lesson._id)" 
+                         (change)="toggleSelection(lesson._id, $event)">
+                </td>
+                <td (click)="navigateToDetails(lesson._id)" class="clickable-cell">
+                  <strong>{{ lesson.name }}</strong>
+                </td>
+                <td (click)="navigateToDetails(lesson._id)" class="clickable-cell">
+                  <span class="badge badge-info">{{ lesson.subject }}</span>
+                </td>
+                <td (click)="navigateToDetails(lesson._id)" class="clickable-cell">
+                  {{ getTeacherName(lesson) }}
+                </td>
+                <td (click)="navigateToDetails(lesson._id)" class="clickable-cell">
+                  {{ lesson.academicYear }}
+                </td>
+                <td (click)="navigateToDetails(lesson._id)" class="clickable-cell">
+                  {{ formatPrice(lesson.price) }}
+                </td>
+                <td (click)="navigateToDetails(lesson._id)" class="clickable-cell">
+                  <span [class]="'system-tag ' + lesson.paymentSystem">
+                    {{ getPaymentSystemText(lesson.paymentSystem) }}
+                  </span>
+                </td>
+                <td (click)="navigateToDetails(lesson._id)" class="clickable-cell">
+                  <div class="student-count">
+                    <i class="fas fa-user-graduate"></i>
+                    <span>{{ getStudentsCount(lesson) }}</span>
+                  </div>
+                </td>
+                <td class="text-center" (click)="$event.stopPropagation()">
+                  <div class="action-btns">
+                    <button class="icon-btn edit" (click)="navigateToDetails(lesson._id)" title="تعديل">
+                      <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="icon-btn delete" (click)="deleteLesson(lesson._id, $event)" title="حذف">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr *ngIf="filteredLessons.length === 0">
+                <td colspan="9" class="empty-state">
+                  <i class="fas fa-folder-open"></i>
+                  <p>لا توجد نتائج تطابق بحثك</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
+        <!-- Mobile Card View -->
+        <div class="mobile-card-view">
+          <div *ngFor="let lesson of paginatedLessons" class="lesson-card">
+            <div class="card-header">
+              <input type="checkbox" [checked]="selectedLessons.has(lesson._id)" 
+                     (change)="toggleSelection(lesson._id, $event)"
+                     (click)="$event.stopPropagation()">
+              <div class="card-title" (click)="navigateToDetails(lesson._id)">
+                <strong>{{ lesson.name }}</strong>
+              </div>
+              <div class="card-actions">
+                <button class="icon-btn edit" (click)="navigateToDetails(lesson._id)" title="تعديل">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="icon-btn delete" (click)="deleteLesson(lesson._id, $event)" title="حذف">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+            <div class="card-body" (click)="navigateToDetails(lesson._id)">
+              <div class="card-info-grid">
+                <div class="info-item">
+                  <span class="info-label">المادة:</span>
+                  <span class="badge badge-info">{{ lesson.subject }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">الأستاذ:</span>
+                  <span>{{ getTeacherName(lesson) }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">المستوى:</span>
+                  <span>{{ lesson.academicYear }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">السعر:</span>
+                  <span class="price">{{ formatPrice(lesson.price) }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">النظام:</span>
+                  <span [class]="'system-tag ' + lesson.paymentSystem">
+                    {{ getPaymentSystemText(lesson.paymentSystem) }}
+                  </span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">الطلاب:</span>
+                  <span>{{ getStudentsCount(lesson) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div *ngIf="filteredLessons.length === 0" class="empty-state-mobile">
+            <i class="fas fa-folder-open"></i>
+            <p>لا توجد نتائج تطابق بحثك</p>
+          </div>
+        </div>
+
+        <!-- Pagination -->
         <div class="pagination-footer">
           <span class="total-info">عرض {{ paginatedLessons.length }} من {{ totalItems }}</span>
           <div class="pagination-controls">
-            <button [disabled]="currentPage === 1" (click)="prevPage()" class="page-btn">السابق</button>
+            <button [disabled]="currentPage === 1" (click)="prevPage()" class="page-btn">
+              <i class="fas fa-chevron-right"></i>
+            </button>
             <button *ngFor="let page of getVisiblePages()" 
                     [class.active]="currentPage === page"
                     (click)="page !== '...' ? goToPage(page) : null"
                     class="page-btn">
               {{ page }}
             </button>
-            <button [disabled]="currentPage === totalPages" (click)="nextPage()" class="page-btn">التالي</button>
+            <button [disabled]="currentPage === totalPages" (click)="nextPage()" class="page-btn">
+              <i class="fas fa-chevron-left"></i>
+            </button>
           </div>
         </div>
       </div>
 
-      <div class="popup-backdrop" *ngIf="showAddDialog">
+      <!-- Add Lesson Dialog -->
+      <div class="popup-backdrop" *ngIf="showAddDialog" (click)="closeDialogOnBackdrop($event)">
         <div class="popup-container">
           <div class="popup-header">
             <h3>إنشاء حصة تعليمية جديدة</h3>
@@ -190,7 +277,8 @@ interface Class {
             <div class="form-grid">
               <div class="form-group full">
                 <label>اسم الحصة *</label>
-                <input type="text" [(ngModel)]="newLesson.name" class="form-control" placeholder="مثلاً: مراجعة الميكانيك للباكالوريا">
+                <input type="text" [(ngModel)]="newLesson.name" class="form-control" 
+                       placeholder="مثلاً: مراجعة الميكانيك للباكالوريا">
               </div>
               <div class="form-group">
                 <label>المادة</label>
@@ -228,17 +316,19 @@ interface Class {
                 <h4>التوقيت والمكان</h4>
                 <button class="btn-text" (click)="addScheduleRow()">+ إضافة موعد</button>
               </div>
-              <div class="schedule-row" *ngFor="let row of newLesson.schedule; let i = index">
-                <select [(ngModel)]="row.day" class="form-control small">
-                  <option value="">اليوم</option>
-                  <option *ngFor="let d of days" [value]="d">{{d}}</option>
-                </select>
-                <input type="time" [(ngModel)]="row.time" class="form-control small">
-                <select [(ngModel)]="row.classroom" class="form-control small">
-                  <option value="">القاعة</option>
-                  <option *ngFor="let c of classrooms" [value]="c._id">{{c.name}}</option>
-                </select>
-                <button class="remove-btn" (click)="removeScheduleRow(i)">&times;</button>
+              <div class="schedule-rows">
+                <div class="schedule-row" *ngFor="let row of newLesson.schedule; let i = index">
+                  <select [(ngModel)]="row.day" class="form-control small">
+                    <option value="">اليوم</option>
+                    <option *ngFor="let d of days" [value]="d">{{d}}</option>
+                  </select>
+                  <input type="time" [(ngModel)]="row.time" class="form-control small">
+                  <select [(ngModel)]="row.classroom" class="form-control small">
+                    <option value="">القاعة</option>
+                    <option *ngFor="let c of classrooms" [value]="c._id">{{c.name}}</option>
+                  </select>
+                  <button class="remove-btn" (click)="removeScheduleRow(i)">&times;</button>
+                </div>
               </div>
             </div>
           </div>
@@ -251,224 +341,714 @@ interface Class {
         </div>
       </div>
 
-      <div class="toast success" *ngIf="successMessage">{{ successMessage }}</div>
-      <div class="toast error" *ngIf="errorMessage">{{ errorMessage }}</div>
+      <!-- Toast Messages -->
+      <div class="toast success" *ngIf="successMessage">
+        <i class="fas fa-check-circle"></i>
+        <span>{{ successMessage }}</span>
+      </div>
+      <div class="toast error" *ngIf="errorMessage">
+        <i class="fas fa-exclamation-circle"></i>
+        <span>{{ errorMessage }}</span>
+      </div>
     </div>
   `,
   styles: [`
     :host {
       --primary: #4361ee;
+      --primary-dark: #3a56d4;
       --secondary: #7209b7;
       --success: #4cc9f0;
       --danger: #f72585;
+      --warning: #f8961e;
       --bg: #f8f9fc;
       --text-main: #2b2d42;
-      --text-muted: #8d99ae;
+      --text-muted: #6c757d;
       --white: #ffffff;
-      --border: #edf2f4;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      --border: #e9ecef;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08);
+      --shadow-hover: 0 4px 12px rgba(0,0,0,0.1);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
 
     .dashboard-wrapper {
-      padding: 2rem;
+      padding: 1rem;
       background: var(--bg);
       min-height: 100vh;
       color: var(--text-main);
+      max-width: 100%;
+      overflow-x: hidden;
     }
 
     /* Header */
     .page-header {
-      margin-bottom: 2rem;
+      margin-bottom: 1.25rem;
     }
+
     .header-content {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
     }
+
+    .header-title {
+      flex: 1;
+    }
+
     .page-header h1 {
-      font-size: 1.8rem;
+      font-size: 1.25rem;
       font-weight: 700;
       margin: 0;
-      color: var(--text-main);
     }
-    .subtitle { color: var(--text-muted); margin-top: 5px; }
 
-    /* Stats */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 2rem;
+    .subtitle {
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+      font-size: 0.75rem;
     }
-    .stat-card {
-      background: var(--white);
-      padding: 1.5rem;
-      border-radius: 12px;
+
+    .header-actions {
       display: flex;
-      align-items: center;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+      gap: 0.5rem;
     }
-    .stat-icon {
-      width: 50px;
-      height: 50px;
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      margin-left: 1rem;
-    }
-    .stat-icon.blue { background: #e0e7ff; color: #4361ee; }
-    .stat-icon.green { background: #dcfce7; color: #16a34a; }
-    .stat-icon.orange { background: #ffedd5; color: #ea580c; }
-    .stat-info .label { font-size: 0.9rem; color: var(--text-muted); display: block; }
-    .stat-info .value { font-size: 1.4rem; font-weight: 700; }
 
     /* Buttons */
     .btn {
-      padding: 0.6rem 1.2rem;
-      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-sm);
       border: none;
       cursor: pointer;
       font-weight: 600;
-      transition: all 0.3s;
+      transition: all 0.2s ease;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 0.5rem;
+      font-size: 0.75rem;
     }
-    .btn-primary { background: var(--primary); color: white; }
-    .btn-primary:hover { background: #3046bc; transform: translateY(-2px); }
-    .btn-outline { background: transparent; border: 1.5px solid var(--border); }
-    .btn-danger { background: var(--danger); color: white; }
 
-    /* Table */
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1.5px solid var(--border);
+      color: var(--text-main);
+    }
+
+    .btn-outline:hover {
+      background: var(--white);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-secondary {
+      background: var(--white);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .btn-sm {
+      padding: 0.375rem 0.75rem;
+      font-size: 0.7rem;
+    }
+
+    /* Horizontal Stats */
+    .stats-horizontal {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .stats-horizontal::-webkit-scrollbar {
+      display: none;
+    }
+
+    .stat-card-horizontal {
+      background: var(--white);
+      padding: 0.75rem;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex: 1;
+      min-width: 120px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat-icon-small {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .stat-icon-small.blue { background: #e3f2fd; color: #1976d2; }
+    .stat-icon-small.green { background: #e8f5e9; color: #388e3c; }
+    .stat-icon-small.orange { background: #fff3e0; color: #f57c00; }
+
+    .stat-info-horizontal {
+      flex: 1;
+    }
+
+    .label-small {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      display: block;
+    }
+
+    .value-small {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    /* Filter Section */
+    .filter-section {
+      background: var(--white);
+      padding: 1rem;
+      border-radius: var(--radius);
+      margin-bottom: 1.25rem;
+      box-shadow: var(--shadow);
+    }
+
+    .filter-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: flex-end;
+    }
+
+    .form-group {
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.25rem;
+      font-weight: 500;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      outline: none;
+      font-size: 0.8rem;
+    }
+
+    .form-control:focus {
+      border-color: var(--primary);
+    }
+
+    .filter-btns {
+      flex-shrink: 0;
+    }
+
+    /* Table Container */
     .table-container {
       background: var(--white);
-      border-radius: 12px;
+      border-radius: var(--radius);
       overflow: hidden;
-      margin-top: 2rem;
+      box-shadow: var(--shadow);
     }
+
+    /* Desktop Table View */
+    .desktop-table-view {
+      display: block;
+      overflow-x: auto;
+    }
+
     .custom-table {
       width: 100%;
       border-collapse: collapse;
+      min-width: 800px;
+    }
+
+    .custom-table th {
+      background: #f8f9fa;
+      padding: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 0.7rem;
       text-align: right;
     }
-    .custom-table th {
-      background: #f1f5f9;
-      padding: 1rem;
-      font-weight: 600;
-      color: #64748b;
-      font-size: 0.85rem;
-    }
+
     .custom-table td {
-      padding: 1rem;
+      padding: 0.75rem;
       border-bottom: 1px solid var(--border);
-    }
-    .clickable-row:hover { background: #f8fafc; cursor: pointer; }
-    
-    .badge {
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-    .badge-info { background: #e0f2fe; color: #0369a1; }
-    
-    .system-tag {
-      padding: 3px 8px;
-      border-radius: 5px;
       font-size: 0.8rem;
     }
-    .system-tag.monthly { background: #fef3c7; color: #92400e; }
-    .system-tag.rounds { background: #dcfce7; color: #166534; }
 
-    /* Popup Logic (Replacing Modal) */
+    .clickable-cell {
+      cursor: pointer;
+    }
+
+    .sortable {
+      cursor: pointer;
+    }
+
+    .badge {
+      padding: 0.25rem 0.5rem;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .badge-info {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .system-tag {
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      display: inline-block;
+    }
+
+    .system-tag.monthly {
+      background: #fff3e0;
+      color: #f57c00;
+    }
+
+    .system-tag.rounds {
+      background: #e8f5e9;
+      color: #388e3c;
+    }
+
+    .student-count {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .action-btns {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .icon-btn.edit {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .icon-btn.delete {
+      background: #ffebee;
+      color: var(--danger);
+    }
+
+    .table-header-actions {
+      padding: 0.75rem;
+      background: #fff3e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Mobile Card View */
+    .mobile-card-view {
+      display: none;
+    }
+
+    .lesson-card {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .card-title {
+      flex: 1;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .card-body {
+      cursor: pointer;
+    }
+
+    .card-info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.5rem;
+    }
+
+    .info-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+    }
+
+    .info-label {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .price {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .empty-state-mobile {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+    }
+
+    /* Pagination */
+    .pagination-footer {
+      padding: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .total-info {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+
+    .pagination-controls {
+      display: flex;
+      gap: 0.25rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .page-btn {
+      padding: 0.375rem 0.625rem;
+      border: 1px solid var(--border);
+      background: white;
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      transition: all 0.2s;
+    }
+
+    .page-btn:hover:not(:disabled) {
+      background: var(--primary);
+      color: white;
+    }
+
+    .page-btn.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    .page-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 2rem !important;
+      color: var(--text-muted);
+    }
+
+    /* Popup Dialog */
     .popup-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.5);
+      background: rgba(0, 0, 0, 0.5);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 1000;
-      backdrop-filter: blur(4px);
+      padding: 1rem;
     }
+
     .popup-container {
       background: var(--white);
-      width: 90%;
-      max-width: 700px;
-      border-radius: 16px;
+      width: 100%;
+      max-width: 600px;
+      border-radius: var(--radius);
       max-height: 90vh;
       overflow-y: auto;
-      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
     }
+
     .popup-header {
-      padding: 1.5rem;
+      padding: 1rem;
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    .popup-body { padding: 1.5rem; }
+
+    .popup-header h3 {
+      font-size: 1rem;
+    }
+
+    .close-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      font-size: 1.25rem;
+      cursor: pointer;
+    }
+
+    .popup-body {
+      padding: 1rem;
+    }
+
     .popup-footer {
-      padding: 1.5rem;
+      padding: 1rem;
       border-top: 1px solid var(--border);
       display: flex;
       justify-content: flex-end;
-      gap: 1rem;
+      gap: 0.75rem;
     }
 
-    /* Forms */
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    .form-group.full { grid-column: span 2; }
-    .form-group label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; }
-    .form-control {
-      width: 100%;
-      padding: 0.6rem;
-      border: 1.5px solid var(--border);
-      border-radius: 8px;
-      outline: none;
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
     }
-    .form-control:focus { border-color: var(--primary); }
 
-    /* Schedule */
-    .schedule-section { margin-top: 1.5rem; background: #f8fafc; padding: 1rem; border-radius: 10px; }
-    .section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-    .schedule-row { display: grid; grid-template-columns: 1fr 1fr 1fr 40px; gap: 10px; margin-bottom: 10px; }
-    
-    /* Toasts */
-    .toast {
-      position: fixed;
-      bottom: 2rem;
-      left: 2rem;
-      padding: 1rem 2rem;
-      border-radius: 10px;
-      color: white;
-      z-index: 2000;
-      animation: slideIn 0.3s ease;
+    .form-group.full {
+      grid-column: span 2;
     }
-    .toast.success { background: #10b981; }
-    .toast.error { background: #ef4444; }
 
-    @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+    /* Schedule Section */
+    .schedule-section {
+      margin-top: 1rem;
+      background: #f8f9fa;
+      padding: 0.75rem;
+      border-radius: var(--radius-sm);
+    }
 
-    /* Pagination */
-    .pagination-footer {
-      padding: 1rem;
+    .section-title {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-top: 1px solid var(--border);
+      margin-bottom: 0.75rem;
     }
-    .page-btn {
-      padding: 5px 12px;
+
+    .section-title h4 {
+      font-size: 0.8rem;
+    }
+
+    .schedule-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .schedule-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr auto;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .form-control.small {
+      padding: 0.375rem;
+      font-size: 0.7rem;
+    }
+
+    .remove-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
       border: 1px solid var(--border);
       background: white;
       cursor: pointer;
-      border-radius: 5px;
     }
-    .page-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-    .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-text {
+      background: none;
+      border: none;
+      color: var(--primary);
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 1rem;
+      left: 1rem;
+      padding: 0.625rem 1rem;
+      border-radius: var(--radius-sm);
+      color: white;
+      z-index: 2000;
+      animation: slideIn 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+    }
+
+    .toast.success {
+      background: #10b981;
+    }
+
+    .toast.error {
+      background: #ef4444;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(-100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .dashboard-wrapper {
+        padding: 0.75rem;
+      }
+
+      .desktop-table-view {
+        display: none;
+      }
+
+      .mobile-card-view {
+        display: block;
+      }
+
+      .stats-horizontal {
+        gap: 0.5rem;
+      }
+
+      .stat-card-horizontal {
+        min-width: 100px;
+        padding: 0.5rem;
+      }
+
+      .stat-icon-small {
+        width: 32px;
+        height: 32px;
+      }
+
+      .filter-grid {
+        flex-direction: column;
+      }
+
+      .form-group {
+        width: 100%;
+      }
+
+      .filter-btns {
+        width: 100%;
+      }
+
+      .btn-sm-full {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .btn-text-mobile {
+        display: inline;
+      }
+
+      .card-info-grid {
+        grid-template-columns: 1fr;
+        gap: 0.375rem;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+      }
+
+      .form-group.full {
+        grid-column: span 1;
+      }
+
+      .schedule-row {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+      }
+
+      .remove-btn {
+        justify-self: end;
+      }
+
+      .popup-container {
+        margin: 0.5rem;
+      }
+    }
+
+    @media (min-width: 769px) {
+      .btn-text-mobile {
+        display: inline;
+      }
+    }
+
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: var(--primary);
+    }
   `]
 })
 export class LessonManagementComponent implements OnInit {
@@ -607,6 +1187,12 @@ export class LessonManagementComponent implements OnInit {
     };
   }
   
+  closeDialogOnBackdrop(event: MouseEvent): void {
+    if ((event.target as HTMLElement).classList.contains('popup-backdrop')) {
+      this.showAddDialog = false;
+    }
+  }
+  
   addScheduleRow(): void {
     this.newLesson.schedule.push({ day: '', time: '', classroom: '' });
   }
@@ -715,5 +1301,7 @@ export class LessonManagementComponent implements OnInit {
     return pages;
   }
   
-  exportToExcel(): void { alert('جاري تحضير ملف الإكسل...'); }
+  exportToExcel(): void { 
+    this.showToast('جاري تحضير ملف الإكسل...', 'success');
+  }
 }

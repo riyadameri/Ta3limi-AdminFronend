@@ -1,0 +1,773 @@
+<div class="lesson-detail-container" dir="rtl">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="header-right">
+        <button class="icon-btn back-btn" (click)="goBack()">
+          <i class="fas fa-arrow-right"></i>
+        </button>
+        <div class="title-section">
+          <h1>{{ lesson?.name || 'جاري التحميل...' }}</h1>
+          <span class="subject-badge">{{ lesson?.subject }}</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="action-btn secondary" (click)="openEditClassPopup()">
+          <i class="fas fa-edit"></i> تعديل الحصة
+        </button>
+        <button class="action-btn info" (click)="openSendMessagePopup()">
+          <i class="fab fa-whatsapp"></i> إرسال رسالة
+        </button>
+        <button class="action-btn secondary" (click)="openAddStudentPopup()">
+          <i class="fas fa-user-plus"></i> إضافة طالب
+        </button>
+        <button class="action-btn primary" (click)="openAddPaymentPopup()">
+          <i class="fas fa-money-bill-wave"></i> تسجيل دفع
+        </button>
+      </div>
+    </div>
+  
+    <!-- WhatsApp Status Badge -->
+    <div class="whatsapp-status" *ngIf="whatsappStatus">
+      <span class="status-badge" [class.connected]="whatsappStatus.connected" [class.disconnected]="!whatsappStatus.connected">
+        <i class="fab fa-whatsapp"></i>
+        {{ whatsappStatus.connected ? 'واتساب متصل' : 'واتساب غير متصل' }}
+      </span>
+      <span class="phone-number" *ngIf="whatsappStatus.number">
+        {{ whatsappStatus.number }}
+      </span>
+    </div>
+  
+    <!-- Statistics Cards -->
+    <div class="stats-cards">
+      <div class="stat-card">
+        <div class="stat-icon blue-bg">
+          <i class="fas fa-users"></i>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">إجمالي الطلاب</span>
+          <span class="stat-value">{{ statistics.totalStudents }}</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green-bg">
+          <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">مدفوعات هذا الشهر</span>
+          <span class="stat-value green-text">{{ formatPrice(getMonthPaidAmount()) }}</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon orange-bg">
+          <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">دفعات معلقة</span>
+          <span class="stat-value orange-text">{{ formatPrice(getMonthPendingAmount()) }}</span>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Tabs -->
+    <div class="tabs-container">
+      <button class="tab-btn" [class.active]="activeTab === 'overview'" (click)="setActiveTab('overview')">
+        <i class="fas fa-info-circle"></i> نظرة عامة
+      </button>
+      <button class="tab-btn" [class.active]="activeTab === 'students'" (click)="setActiveTab('students')">
+        <i class="fas fa-user-graduate"></i> قائمة الطلاب
+      </button>
+      <button class="tab-btn" [class.active]="activeTab === 'payments'" (click)="setActiveTab('payments')">
+        <i class="fas fa-credit-card"></i> سجل المدفوعات
+      </button>
+      <button class="tab-btn" [class.active]="activeTab === 'attendance'" (click)="loadAttendance(); setActiveTab('attendance')">
+        <i class="fas fa-calendar-check"></i> سجل الغيابات
+      </button>
+    </div>
+  
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <!-- Overview Tab -->
+      <div class="tab-pane" [class.active]="activeTab === 'overview'">
+        <div class="info-grid">
+          <div class="info-card">
+            <h3><i class="fas fa-chalkboard-teacher"></i> تفاصيل الحصة</h3>
+            <ul class="details-list">
+              <li><span class="detail-label">الأستاذ:</span> <span class="detail-value">{{ lesson?.teacher?.name || 'غير محدد' }}</span></li>
+              <li><span class="detail-label">السنة الدراسية:</span> <span class="detail-value">{{ lesson?.academicYear }}</span></li>
+              <li><span class="detail-label">نظام الدفع:</span> <span class="detail-value">{{ getPaymentSystemText(lesson?.paymentSystem || '') }}</span></li>
+              <li><span class="detail-label">سعر الحصة:</span> <span class="detail-value price">{{ formatPrice(lesson?.price || 0) }}</span></li>
+              <li *ngIf="lesson?.description"><span class="detail-label">الوصف:</span> <span class="detail-value">{{ lesson?.description }}</span></li>
+            </ul>
+          </div>
+          <div class="info-card">
+            <h3><i class="fas fa-calendar-alt"></i> الجدول الزمني</h3>
+            <div class="schedule-list">
+              <div *ngFor="let s of lesson?.schedule" class="schedule-item">
+                <span class="schedule-day">{{ s.day }}</span>
+                <span class="schedule-time">{{ s.time }}</span>
+                <span class="schedule-classroom">{{ s.classroom?.name || 'بدون قاعة' }}</span>
+              </div>
+              <div *ngIf="!lesson?.schedule?.length" class="empty-message">لا يوجد جدول زمني</div>
+            </div>
+            <button class="btn-link" (click)="openEditClassPopup()">
+              <i class="fas fa-plus-circle"></i> تعديل الجدول
+            </button>
+          </div>
+        </div>
+      </div>
+  
+      <!-- Students Tab -->
+      <div class="tab-pane" [class.active]="activeTab === 'students'">
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>اسم الطالب</th>
+                <th>كود الطالب</th>
+                <th>السنة الدراسية</th>
+                <th>حالة الدفع ({{ formatMonth(selectedMonth) }})</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let student of lesson?.students">
+                <td class="student-name">{{ student.name }}</td>
+                <td><span class="student-id">{{ student.studentId }}</span></td>
+                <td>{{ student.academicYear }}</td>
+                <td>
+                  <span class="status-badge" [class]="getStatusClass(getStudentPaymentStatus(student._id))">
+                    {{ getStatusText(getStudentPaymentStatus(student._id)) }}
+                  </span>
+                </td>
+                <td>
+                  <div class="action-buttons">
+                    <button class="icon-btn small blue" (click)="openAddPaymentPopup(student)" title="تسجيل دفع">
+                      <i class="fas fa-cash-register"></i>
+                    </button>
+                    <button class="icon-btn small green" (click)="sendPaymentReminderToStudent(student)" title="إرسال تذكير دفع">
+                      <i class="fab fa-whatsapp"></i>
+                    </button>
+                    <button class="icon-btn small red" (click)="removeStudent(student._id)" title="إزالة من الحصة">
+                      <i class="fas fa-user-minus"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr *ngIf="!lesson?.students?.length">
+                <td colspan="5" class="empty-table">لا يوجد طلاب مسجلين في هذه الحصة</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+  
+      <!-- Payments Tab -->
+      <div class="tab-pane" [class.active]="activeTab === 'payments'">
+        <div class="filter-bar">
+          <select [(ngModel)]="selectedMonth" (change)="applyMonthFilter()" class="filter-select">
+            <option *ngFor="let m of quickMonths" [value]="m.value">{{ m.label }}</option>
+          </select>
+          
+          <div class="payments-summary" *ngIf="filteredPayments.length">
+            <span class="summary-item">
+              <span class="summary-label">الإجمالي:</span>
+              <span class="summary-value">{{ formatPrice(getTotalPaymentsAmount()) }}</span>
+            </span>
+            <span class="summary-item">
+              <span class="summary-label">المدفوع:</span>
+              <span class="summary-value green-text">{{ formatPrice(getTotalPaidAmount()) }}</span>
+            </span>
+            <span class="summary-item">
+              <span class="summary-label">المعلق:</span>
+              <span class="summary-value orange-text">{{ formatPrice(getTotalPendingAmount()) }}</span>
+            </span>
+          </div>
+        </div>
+        
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>الطالب</th>
+                <th>المبلغ</th>
+                <th>الشهر</th>
+                <th>تاريخ الدفع</th>
+                <th>الوسيلة</th>
+                <th>الحالة</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let p of paginatedPayments">
+                <td>{{ getStudentName(p.student) }}</td>
+                <td class="amount">{{ formatPrice(p.amount) }}</td>
+                <td>{{ p.month }}</td>
+                <td>{{ formatDate(p.paymentDate) }}</td>
+                <td>{{ getPaymentMethodText(p.paymentMethod) }}</td>
+                <td>
+                  <span class="status-badge" [class]="getStatusClass(p.status)">
+                    {{ getStatusText(p.status) }}
+                  </span>
+                </td>
+                <td>
+                  <div class="action-buttons">
+                    <button class="icon-btn small green" (click)="printReceipt(p)" title="طباعة الإيصال">
+                      <i class="fas fa-print"></i>
+                    </button>
+                    <button class="icon-btn small blue" (click)="updatePaymentAmount(p)" title="تعديل المبلغ">
+                      <i class="fas fa-edit"></i>
+                    </button>
+                    <button *ngIf="p.status === 'paid'" class="icon-btn small orange" (click)="openCancelPaymentPopup(p)" title="إلغاء الدفع">
+                      <i class="fas fa-undo-alt"></i>
+                    </button>
+                    <button class="icon-btn small red" (click)="deletePayment(p)" title="حذف الدفعة">
+                      <i class="fas fa-trash-alt"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr *ngIf="!filteredPayments.length">
+                <td colspan="7" class="empty-table">لا توجد مدفوعات مسجلة</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div class="pagination" *ngIf="filteredPayments.length > itemsPerPage">
+          <button class="page-btn" [disabled]="currentPage === 1" (click)="changePage(currentPage - 1)">
+            <i class="fas fa-chevron-right"></i>
+          </button>
+          <span class="page-info">الصفحة {{ currentPage }} من {{ totalPages }}</span>
+          <button class="page-btn" [disabled]="currentPage === totalPages" (click)="changePage(currentPage + 1)">
+            <i class="fas fa-chevron-left"></i>
+          </button>
+        </div>
+      </div>
+  
+      <!-- Attendance Tab -->
+      <div class="tab-pane" [class.active]="activeTab === 'attendance'">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label>من تاريخ:</label>
+            <input type="date" [(ngModel)]="attendanceFilter.startDate" class="filter-input" (change)="loadAttendance()">
+          </div>
+          <div class="filter-group">
+            <label>إلى تاريخ:</label>
+            <input type="date" [(ngModel)]="attendanceFilter.endDate" class="filter-input" (change)="loadAttendance()">
+          </div>
+          <button class="btn-secondary small" (click)="resetAttendanceFilter()">
+            <i class="fas fa-redo-alt"></i> إعادة تعيين
+          </button>
+        </div>
+  
+        <div class="attendance-stats" *ngIf="attendanceStats">
+          <div class="stat-mini-card">
+            <span class="stat-label">إجمالي الحصص</span>
+            <span class="stat-value">{{ attendanceStats.totalClasses }}</span>
+          </div>
+          <div class="stat-mini-card">
+            <span class="stat-label">نسبة الحضور</span>
+            <span class="stat-value">{{ attendanceStats.averageAttendance }}%</span>
+          </div>
+          <div class="stat-mini-card present">
+            <span class="stat-label">حضور</span>
+            <span class="stat-value">{{ attendanceStats.totalPresent }}</span>
+          </div>
+          <div class="stat-mini-card absent">
+            <span class="stat-label">غياب</span>
+            <span class="stat-value">{{ attendanceStats.totalAbsent }}</span>
+          </div>
+          <div class="stat-mini-card late">
+            <span class="stat-label">تأخير</span>
+            <span class="stat-value">{{ attendanceStats.totalLate }}</span>
+          </div>
+        </div>
+  
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>الطالب</th>
+                <th>كود الطالب</th>
+                <th>إجمالي الحصص</th>
+                <th>حضور</th>
+                <th>غياب</th>
+                <th>تأخير</th>
+                <th>نسبة الحضور</th>
+                <th>آخر حضور</th>
+                <th>التفاصيل</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let record of paginatedAttendance" [class.high-absent]="record.absent > record.totalClasses / 2">
+                <td class="student-name">{{ record.student.name }}</td>
+                <td><span class="student-id">{{ record.student.studentId }}</span></td>
+                <td>{{ record.totalClasses }}</td>
+                <td class="present-count">{{ record.present }}</td>
+                <td class="absent-count">{{ record.absent }}</td>
+                <td class="late-count">{{ record.late }}</td>
+                <td>
+                  <div class="progress-container">
+                    <div class="progress-bar" 
+                         [style.width.%]="record.attendanceRate"
+                         [class.good]="record.attendanceRate >= 75"
+                         [class.warning]="record.attendanceRate >= 50 && record.attendanceRate < 75"
+                         [class.bad]="record.attendanceRate < 50">
+                      {{ record.attendanceRate }}%
+                    </div>
+                  </div>
+                </td>
+                <td>{{ getLastAttendanceDate(record) }}</td>
+                <td>
+                  <button class="icon-btn small blue" (click)="showAttendanceDetails(record)" title="عرض التفاصيل">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </td>
+              </tr>
+              <tr *ngIf="!attendanceRecords.length">
+                <td colspan="9" class="empty-table">لا توجد بيانات غيابات متاحة</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+  
+        <div class="classes-timeline" *ngIf="attendanceClassesDetails?.length">
+          <h4><i class="fas fa-history"></i> تفاصيل الحصص</h4>
+          <div class="timeline-grid">
+            <div *ngFor="let cls of attendanceClassesDetails" class="timeline-card">
+              <div class="timeline-header">
+                <span class="timeline-date">{{ formatDate(cls.date) }}</span>
+                <span class="timeline-time">{{ cls.startTime }} - {{ cls.endTime }}</span>
+              </div>
+              <div class="timeline-body">
+                <div class="timeline-stat present">
+                  <i class="fas fa-user-check"></i> {{ cls.presentCount }}
+                </div>
+                <div class="timeline-stat absent">
+                  <i class="fas fa-user-times"></i> {{ cls.absentCount }}
+                </div>
+                <div class="timeline-stat late">
+                  <i class="fas fa-user-clock"></i> {{ cls.lateCount }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Edit Class Popup -->
+    <div class="popup-overlay" *ngIf="showEditClassPopup" (click)="closeEditClassPopup($event)">
+      <div class="popup-container" (click)="$event.stopPropagation()">
+        <div class="popup-header">
+          <h3><i class="fas fa-edit"></i> تعديل معلومات الحصة</h3>
+          <button class="close-btn" (click)="closeEditClassPopup()">&times;</button>
+        </div>
+        <div class="popup-body">
+          <form [formGroup]="editClassForm">
+            <div class="form-group">
+              <label>اسم الحصة</label>
+              <input type="text" formControlName="name" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>المادة</label>
+              <select formControlName="subject" class="form-control">
+                <option value="رياضيات">رياضيات</option>
+                <option value="فيزياء">فيزياء</option>
+                <option value="علوم">علوم</option>
+                <option value="لغة عربية">لغة عربية</option>
+                <option value="لغة فرنسية">لغة فرنسية</option>
+                <option value="لغة انجليزية">لغة انجليزية</option>
+                <option value="تاريخ">تاريخ</option>
+                <option value="جغرافيا">جغرافيا</option>
+                <option value="فلسفة">فلسفة</option>
+                <option value="إعلام آلي">إعلام آلي</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group half">
+                <label>السنة الدراسية</label>
+                <select formControlName="academicYear" class="form-control">
+                  <option value="1AS">1AS</option>
+                  <option value="2AS">2AS</option>
+                  <option value="3AS">3AS</option>
+                  <option value="1MS">1MS</option>
+                  <option value="2MS">2MS</option>
+                  <option value="3MS">3MS</option>
+                  <option value="4MS">4MS</option>
+                  <option value="5MS">5MS</option>
+                  <option value="NS">NS</option>
+                </select>
+              </div>
+              <div class="form-group half">
+                <label>السعر (د.ج)</label>
+                <input type="number" formControlName="price" class="form-control">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>نظام الدفع</label>
+              <select formControlName="paymentSystem" class="form-control">
+                <option value="monthly">شهري</option>
+                <option value="rounds">جولات</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>الوصف</label>
+              <textarea formControlName="description" class="form-control" rows="3"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="popup-footer">
+          <button class="btn-cancel" (click)="closeEditClassPopup()">إلغاء</button>
+          <button class="btn-save" (click)="updateClass()" [disabled]="editClassForm.invalid">
+            <i class="fas fa-save"></i> حفظ التعديلات
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Send Message Popup -->
+    <div class="popup-overlay" *ngIf="showSendMessagePopup" (click)="closeSendMessagePopup($event)">
+      <div class="popup-container" (click)="$event.stopPropagation()">
+        <div class="popup-header">
+          <h3><i class="fab fa-whatsapp"></i> إرسال رسالة</h3>
+          <button class="close-btn" (click)="closeSendMessagePopup()">&times;</button>
+        </div>
+        <div class="popup-body">
+          <div class="whatsapp-info" *ngIf="!whatsappStatus.connected">
+            <div class="warning-message">
+              <i class="fab fa-whatsapp"></i>
+              <p>واتساب غير متصل. يرجى الاتصال بالمسؤول لتشغيل خدمة واتساب.</p>
+            </div>
+          </div>
+          <form [formGroup]="sendMessageForm">
+            <div class="form-group">
+              <label>نص الرسالة</label>
+              <textarea formControlName="message" class="form-control" rows="5" placeholder="أدخل نص الرسالة..."></textarea>
+            </div>
+            <div class="form-group">
+              <label>نوع المستلمين</label>
+              <select formControlName="recipientType" class="form-control">
+                <option value="all">جميع الطلاب</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>وسيلة الإرسال</label>
+              <div class="checkbox-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" formControlName="sendWhatsApp">
+                  <span>واتساب</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" formControlName="sendEmail">
+                  <span>البريد الإلكتروني</span>
+                </label>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="popup-footer">
+          <button class="btn-cancel" (click)="closeSendMessagePopup()">إلغاء</button>
+          <button class="btn-save" (click)="sendMessageToClass()" [disabled]="sendMessageForm.invalid">
+            <i class="fab fa-whatsapp"></i> إرسال
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Add Student Popup -->
+    <div class="popup-overlay" *ngIf="showAddStudentPopup" (click)="closeAddStudentPopup($event)">
+      <div class="popup-container" (click)="$event.stopPropagation()">
+        <div class="popup-header">
+          <h3><i class="fas fa-user-plus"></i> إضافة طالب للحصة</h3>
+          <button class="close-btn" (click)="closeAddStudentPopup()">&times;</button>
+        </div>
+        <div class="popup-body">
+          <form [formGroup]="addStudentForm">
+            <div class="form-group">
+              <label>اختر الطالب</label>
+              <select formControlName="studentId" class="form-control">
+                <option value="">-- اختر طالب من القائمة --</option>
+                <option *ngFor="let s of availableStudents" [value]="s._id">
+                  {{ s.name }} ({{ s.studentId }}) - {{ s.academicYear }}
+                </option>
+              </select>
+            </div>
+          </form>
+        </div>
+        <div class="popup-footer">
+          <button class="btn-cancel" (click)="closeAddStudentPopup()">إلغاء</button>
+          <button class="btn-save" (click)="enrollStudent()" [disabled]="addStudentForm.invalid">
+            <i class="fas fa-check"></i> تأكيد الإضافة
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Add Payment Popup -->
+    <div class="popup-overlay" *ngIf="showAddPaymentPopup" (click)="closeAddPaymentPopup($event)">
+      <div class="popup-container" (click)="$event.stopPropagation()">
+        <div class="popup-header">
+          <h3><i class="fas fa-money-bill-wave"></i> تسجيل دفعة جديدة</h3>
+          <button class="close-btn" (click)="closeAddPaymentPopup()">&times;</button>
+        </div>
+        <div class="popup-body">
+          <form [formGroup]="paymentForm">
+            <div class="form-group">
+              <label>الطالب</label>
+              <select formControlName="studentId" class="form-control">
+                <option value="">-- اختر الطالب --</option>
+                <option *ngFor="let s of lesson?.students" [value]="s._id">
+                  {{ s.name }}
+                </option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group half">
+                <label>المبلغ (د.ج)</label>
+                <input type="number" formControlName="amount" class="form-control">
+              </div>
+              <div class="form-group half">
+                <label>الشهر</label>
+                <input type="month" formControlName="month" class="form-control">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>طريقة الدفع</label>
+              <select formControlName="paymentMethod" class="form-control">
+                <option value="cash">نقداً</option>
+                <option value="baridimob">بريدي موب</option>
+                <option value="bank">تحويل بنكي</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>ملاحظات</label>
+              <textarea formControlName="notes" class="form-control" rows="3"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="popup-footer">
+          <button class="btn-cancel" (click)="closeAddPaymentPopup()">إلغاء</button>
+          <button class="btn-save" (click)="createPayment()" [disabled]="paymentForm.invalid">
+            <i class="fas fa-check"></i> تأكيد الدفع
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Edit Payment Popup -->
+    <div class="popup-overlay" *ngIf="showEditPaymentPopup" (click)="closeEditPaymentPopup($event)">
+      <div class="popup-container" (click)="$event.stopPropagation()">
+        <div class="popup-header">
+          <h3><i class="fas fa-edit"></i> تعديل الدفعة</h3>
+          <button class="close-btn" (click)="closeEditPaymentPopup()">&times;</button>
+        </div>
+        <div class="popup-body">
+          <form [formGroup]="editPaymentForm" *ngIf="selectedPayment">
+            <div class="form-group">
+              <label>الطالب</label>
+              <input type="text" class="form-control" [value]="getStudentName(selectedPayment.student)" readonly disabled>
+            </div>
+            <div class="form-group">
+              <label>الشهر</label>
+              <input type="text" class="form-control" [value]="selectedPayment.month" readonly disabled>
+            </div>
+            <div class="form-group">
+              <label>المبلغ (د.ج)</label>
+              <input type="number" formControlName="amount" class="form-control">
+            </div>
+            <div class="form-group">
+              <label>طريقة الدفع</label>
+              <select formControlName="paymentMethod" class="form-control">
+                <option value="cash">نقداً</option>
+                <option value="baridimob">بريدي موب</option>
+                <option value="bank">تحويل بنكي</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>الحالة</label>
+              <select formControlName="status" class="form-control">
+                <option value="paid">مدفوع</option>
+                <option value="pending">معلق</option>
+                <option value="late">متأخر</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>ملاحظات</label>
+              <textarea formControlName="notes" class="form-control" rows="3"></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="popup-footer">
+          <button class="btn-cancel" (click)="closeEditPaymentPopup()">إلغاء</button>
+          <button class="btn-save" (click)="updatePayment()" [disabled]="editPaymentForm.invalid">
+            <i class="fas fa-save"></i> حفظ التعديلات
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Cancel Payment Popup -->
+    <div class="popup-overlay" *ngIf="showCancelPaymentPopup" (click)="closeCancelPaymentPopup($event)">
+      <div class="popup-container" (click)="$event.stopPropagation()">
+        <div class="popup-header warning">
+          <h3><i class="fas fa-exclamation-triangle"></i> إلغاء الدفعة</h3>
+          <button class="close-btn" (click)="closeCancelPaymentPopup()">&times;</button>
+        </div>
+        <div class="popup-body">
+          <div class="warning-message">
+            <i class="fas fa-info-circle"></i>
+            <p>هل أنت متأكد من إلغاء هذه الدفعة؟ سيتم تغيير حالتها إلى "معلق" وإلغاء أي عمولات مرتبطة بها.</p>
+          </div>
+          <div class="payment-details" *ngIf="selectedPayment">
+            <div class="detail-row">
+              <span class="detail-label">الطالب:</span>
+              <span class="detail-value">{{ getStudentName(selectedPayment.student) }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">المبلغ:</span>
+              <span class="detail-value">{{ formatPrice(selectedPayment.amount) }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">الشهر:</span>
+              <span class="detail-value">{{ selectedPayment.month }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">تاريخ الدفع:</span>
+              <span class="detail-value">{{ formatDate(selectedPayment.paymentDate) }}</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>سبب الإلغاء</label>
+            <textarea [(ngModel)]="cancelReason" class="form-control" rows="3" placeholder="أدخل سبب الإلغاء..."></textarea>
+          </div>
+        </div>
+        <div class="popup-footer">
+          <button class="btn-cancel" (click)="closeCancelPaymentPopup()">تراجع</button>
+          <button class="btn-danger" (click)="cancelPayment()">
+            <i class="fas fa-undo-alt"></i> تأكيد الإلغاء
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Delete Payment Popup -->
+    <div class="popup-overlay" *ngIf="showDeleteConfirmPopup" (click)="closeDeleteConfirmPopup($event)">
+      <div class="popup-container" (click)="$event.stopPropagation()">
+        <div class="popup-header danger">
+          <h3><i class="fas fa-trash-alt"></i> حذف الدفعة</h3>
+          <button class="close-btn" (click)="closeDeleteConfirmPopup()">&times;</button>
+        </div>
+        <div class="popup-body">
+          <div class="warning-message">
+            <i class="fas fa-exclamation-circle"></i>
+            <p>هل أنت متأكد من حذف هذه الدفعة نهائياً؟ هذا الإجراء لا يمكن التراجع عنه.</p>
+          </div>
+          <div class="payment-details" *ngIf="selectedPayment">
+            <div class="detail-row">
+              <span class="detail-label">الطالب:</span>
+              <span class="detail-value">{{ getStudentName(selectedPayment.student) }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">المبلغ:</span>
+              <span class="detail-value">{{ formatPrice(selectedPayment.amount) }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">الشهر:</span>
+              <span class="detail-value">{{ selectedPayment.month }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="popup-footer">
+          <button class="btn-cancel" (click)="closeDeleteConfirmPopup()">إلغاء</button>
+          <button class="btn-danger" (click)="confirmDeletePayment()">
+            <i class="fas fa-trash-alt"></i> تأكيد الحذف
+          </button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Attendance Details Popup -->
+    <div class="popup-overlay" *ngIf="showAttendanceDetailsPopup" (click)="closeAttendanceDetailsPopup($event)">
+      <div class="popup-container large" (click)="$event.stopPropagation()">
+        <div class="popup-header">
+          <h3><i class="fas fa-calendar-alt"></i> تفاصيل الغيابات</h3>
+          <button class="close-btn" (click)="closeAttendanceDetailsPopup()">&times;</button>
+        </div>
+        <div class="popup-body">
+          <div class="student-info" *ngIf="selectedAttendanceRecord">
+            <div class="student-avatar">
+              {{ selectedAttendanceRecord.student.name.charAt(0) }}
+            </div>
+            <div class="student-details">
+              <h4>{{ selectedAttendanceRecord.student.name }}</h4>
+              <p>كود الطالب: {{ selectedAttendanceRecord.student.studentId }}</p>
+              <p>السنة الدراسية: {{ selectedAttendanceRecord.student.academicYear }}</p>
+            </div>
+          </div>
+  
+          <div class="attendance-summary" *ngIf="selectedAttendanceRecord">
+            <div class="summary-item">
+              <span class="label">إجمالي الحصص</span>
+              <span class="value">{{ selectedAttendanceRecord.totalClasses }}</span>
+            </div>
+            <div class="summary-item present">
+              <span class="label">حضور</span>
+              <span class="value">{{ selectedAttendanceRecord.present }}</span>
+            </div>
+            <div class="summary-item absent">
+              <span class="label">غياب</span>
+              <span class="value">{{ selectedAttendanceRecord.absent }}</span>
+            </div>
+            <div class="summary-item late">
+              <span class="label">تأخير</span>
+              <span class="value">{{ selectedAttendanceRecord.late }}</span>
+            </div>
+          </div>
+  
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>الوقت</th>
+                  <th>الحالة</th>
+                  <th>الأستاذ</th>
+                  <th>وقت التسجيل</th>
+                 </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let rec of selectedAttendanceRecord?.records">
+                  <td>{{ formatDate(rec.date) }}</td>
+                  <td>{{ rec.startTime }} - {{ rec.endTime }}</td>
+                  <td>
+                    <span class="status-badge" [class]="'attendance-' + rec.status">
+                      {{ getAttendanceStatusText(rec.status) }}
+                    </span>
+                  </td>
+                  <td>{{ rec.teacher || 'غير محدد' }}</td>
+                  <td>{{ rec.joinedAt ? formatDateTime(rec.joinedAt) : '---' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="popup-footer">
+          <button class="btn-cancel" (click)="closeAttendanceDetailsPopup()">إغلاق</button>
+        </div>
+      </div>
+    </div>
+  
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" *ngIf="loading">
+      <div class="spinner"></div>
+    </div>
+  
+    <!-- Toast Messages -->
+    <div class="toast success" *ngIf="successMessage">
+      <i class="fas fa-check-circle"></i> {{ successMessage }}
+    </div>
+    <div class="toast error" *ngIf="errorMessage">
+      <i class="fas fa-exclamation-circle"></i> {{ errorMessage }}
+    </div>
+  </div>

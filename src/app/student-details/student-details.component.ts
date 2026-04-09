@@ -289,6 +289,63 @@ interface RoundPayment {
               </div>
             </div>
           </div>
+
+          <!-- Absences Summary Card -->
+          <div class="card absence-summary-card" *ngIf="absenceSummary?.monthly">
+            <div class="card-header">
+              <h3 class="card-title">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                سجل الغيابات
+              </h3>
+              <button class="action-btn-sm info" (click)="openAbsencesModal()">
+                عرض التفاصيل
+              </button>
+            </div>
+            
+            <div class="absence-stats-grid">
+              <div class="absence-stat">
+                <div class="stat-value text-success">{{ absenceSummary?.monthly?.present || 0 }}</div>
+                <div class="stat-label">حاضر</div>
+              </div>
+              <div class="absence-stat">
+                <div class="stat-value text-warning">{{ absenceSummary?.monthly?.late || 0 }}</div>
+                <div class="stat-label">متأخر</div>
+              </div>
+              <div class="absence-stat">
+                <div class="stat-value text-danger">{{ absenceSummary?.monthly?.absent || 0 }}</div>
+                <div class="stat-label">غائب</div>
+              </div>
+              <div class="absence-stat">
+                <div class="stat-value">{{ absenceSummary?.monthly?.attendanceRate || 100 }}%</div>
+                <div class="stat-label">نسبة الحضور</div>
+              </div>
+            </div>
+            
+            <div class="progress-section">
+              <div class="progress-label">
+                <span>نسبة الحضور الشهرية</span>
+                <span>{{ absenceSummary?.monthly?.attendanceRate || 100 }}%</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" 
+                     [style.width.%]="absenceSummary?.monthly?.attendanceRate || 100"
+                     [ngClass]="{
+                        'bg-success': (absenceSummary?.monthly?.attendanceRate || 100) >= 80,
+                        'bg-warning': (absenceSummary?.monthly?.attendanceRate || 100) >= 60 && (absenceSummary?.monthly?.attendanceRate || 100) < 80,
+                        'bg-danger': (absenceSummary?.monthly?.attendanceRate || 100) < 60
+                     }">
+                </div>
+              </div>
+            </div>
+            
+            <div class="absence-period">
+              <small class="text-muted">{{ absenceSummary?.monthly?.monthName }}</small>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -777,6 +834,128 @@ interface RoundPayment {
         </div>
       </div>
     </div>
+
+    <!-- Absences Modal -->
+    <div class="modal-overlay" *ngIf="showAbsencesModal" (click)="closeAbsencesModal()">
+      <div class="modal-content large" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            سجل غيابات الطالب: {{ student?.name }}
+          </h3>
+          <button class="close-btn" (click)="closeAbsencesModal()">✕</button>
+        </div>
+        
+        <div class="modal-body">
+          <!-- Summary Stats -->
+          <div class="summary-stats" *ngIf="absenceSummary">
+            <div class="stat-card">
+              <div class="stat-value">{{ absenceSummary.totalClasses || 0 }}</div>
+              <div class="stat-label">إجمالي الحصص</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value text-success">{{ absenceSummary.present || 0 }}</div>
+              <div class="stat-label">حاضر</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value text-warning">{{ absenceSummary.late || 0 }}</div>
+              <div class="stat-label">متأخر</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value text-danger">{{ absenceSummary.absent || 0 }}</div>
+              <div class="stat-label">غائب</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">{{ absenceSummary.attendanceRate || 100 }}%</div>
+              <div class="stat-label">نسبة الحضور</div>
+            </div>
+          </div>
+          
+          <!-- Filter Controls -->
+          <div class="filter-row">
+            <div class="filter-group">
+              <label>من تاريخ</label>
+              <input type="date" [(ngModel)]="absenceFilterStartDate" class="form-control" (change)="filterAbsencesByDate()">
+            </div>
+            <div class="filter-group">
+              <label>إلى تاريخ</label>
+              <input type="date" [(ngModel)]="absenceFilterEndDate" class="form-control" (change)="filterAbsencesByDate()">
+            </div>
+            <div class="filter-group">
+              <label>&nbsp;</label>
+              <button class="btn-secondary" (click)="resetAbsenceFilter()">إعادة تعيين</button>
+            </div>
+            <div class="filter-group">
+              <label>&nbsp;</label>
+              <button class="btn-success" (click)="exportAbsencesToExcel()" [disabled]="studentAbsences.length === 0">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                تصدير Excel
+              </button>
+            </div>
+          </div>
+          
+          <!-- Loading State -->
+          <div *ngIf="loadingAbsences" class="loading-state">
+            <div class="spinner-sm"></div>
+            <p>جاري تحميل سجل الغيابات...</p>
+          </div>
+          
+          <!-- Absences Table -->
+          <div *ngIf="!loadingAbsences && studentAbsences.length > 0" class="table-responsive">
+            <table class="modern-table">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>اليوم</th>
+                  <th>الحصة</th>
+                  <th>المادة</th>
+                  <th>الأستاذ</th>
+                  <th>الوقت</th>
+                  <th>الحالة</th>
+                  <th>ملاحظات</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let absence of studentAbsences">
+                  <td>{{ absence.dateFormatted }}</td>
+                  <td>{{ absence.dayName }}</td>
+                  <td>{{ absence.className }}</td>
+                  <td>{{ absence.subject }}</td>
+                  <td>{{ absence.teacherName }}</td>
+                  <td>{{ absence.startTime }} - {{ absence.endTime }}</td>
+                  <td>
+                    <span class="status-badge-sm" [class]="getAbsenceStatusClass(absence.status)">
+                      {{ getAbsenceStatusText(absence.status) }}
+                    </span>
+                    <span *ngIf="absence.autoMarked" class="auto-badge" title="تم التسجيل تلقائياً">آلي</span>
+                  </td>
+                  <td>{{ absence.notes || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- Empty State -->
+          <div *ngIf="!loadingAbsences && studentAbsences.length === 0" class="empty-state">
+            <div class="empty-icon">📋</div>
+            <p>لا توجد سجلات غياب لهذا الطالب</p>
+            <p class="text-muted small">جميع الحصص مسجلة كحضور</p>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeAbsencesModal()">إغلاق</button>
+        </div>
+      </div>
+    </div>
   `,
   styles: [`
     /* Modern CSS Variables */
@@ -1104,9 +1283,77 @@ interface RoundPayment {
     }
     .progress-fill {
       height: 100%;
-      background: var(--success);
       border-radius: 4px;
       transition: width 0.3s ease;
+    }
+    .progress-fill.bg-success { background: var(--success); }
+    .progress-fill.bg-warning { background: var(--warning); }
+    .progress-fill.bg-danger { background: var(--danger); }
+
+    /* Absences Styles */
+    .absence-summary-card {
+      margin-top: 0;
+    }
+    .absence-summary-card .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.1rem;
+      margin: 0;
+    }
+    .absence-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .absence-stat {
+      text-align: center;
+      padding: 0.75rem;
+      background: var(--gray-50);
+      border-radius: var(--radius-md);
+    }
+    .absence-stat .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+    .absence-stat .stat-label {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+    }
+    .text-success { color: var(--success); }
+    .text-warning { color: var(--warning); }
+    .text-danger { color: var(--danger); }
+    .absence-period {
+      margin-top: 1rem;
+      text-align: center;
+    }
+    .action-btn-sm {
+      padding: 0.4rem 0.8rem;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+    .action-btn-sm.info {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+    .action-btn-sm.success {
+      background: var(--success);
+      color: white;
     }
 
     /* Classes Grid */
@@ -1440,17 +1687,6 @@ interface RoundPayment {
       gap: 0.5rem;
       margin-top: 1rem;
     }
-    .action-btn-sm {
-      padding: 0.4rem 0.8rem;
-      border: none;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      font-size: 0.75rem;
-    }
-    .action-btn-sm.success {
-      background: var(--success);
-      color: white;
-    }
 
     /* Empty States */
     .empty-state {
@@ -1489,7 +1725,7 @@ interface RoundPayment {
       overflow-y: auto;
     }
     .modal-content.large {
-      max-width: 700px;
+      max-width: 1000px;
     }
     .modal-header {
       display: flex;
@@ -1500,6 +1736,9 @@ interface RoundPayment {
     }
     .modal-header h3 {
       margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
     .close-btn {
       background: none;
@@ -1637,6 +1876,84 @@ interface RoundPayment {
       color: var(--danger);
     }
 
+    /* Absences Modal Styles */
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .summary-stats .stat-card {
+      text-align: center;
+      padding: 0.75rem;
+      background: var(--gray-50);
+      border-radius: var(--radius-md);
+    }
+    .summary-stats .stat-card .stat-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+    .filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      background: var(--gray-50);
+      border-radius: var(--radius-md);
+    }
+    .filter-row .filter-group {
+      flex: 1;
+      min-width: 150px;
+    }
+    .filter-row label {
+      display: block;
+      margin-bottom: 0.25rem;
+      font-size: 0.8rem;
+      color: var(--gray-600);
+    }
+    .loading-state {
+      text-align: center;
+      padding: 2rem;
+    }
+    .spinner-sm {
+      width: 30px;
+      height: 30px;
+      border: 3px solid var(--gray-200);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    .status-badge-sm {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 500;
+    }
+    .status-badge-sm.bg-success {
+      background: #d4edda;
+      color: #155724;
+    }
+    .status-badge-sm.bg-warning {
+      background: #fff3cd;
+      color: #856404;
+    }
+    .status-badge-sm.bg-danger {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    .auto-badge {
+      display: inline-block;
+      background: #e3f2fd;
+      color: #1976d2;
+      font-size: 0.65rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 10px;
+      margin-right: 0.5rem;
+    }
+
     /* Icons */
     .icon, .icon-sm, .icon-xs {
       stroke-width: 2;
@@ -1646,6 +1963,25 @@ interface RoundPayment {
     .icon { width: 1.2rem; height: 1.2rem; }
     .icon-sm { width: 1rem; height: 1rem; }
     .icon-xs { width: 0.9rem; height: 0.9rem; }
+
+    /* Checkbox Styles */
+    .checkbox-wrapper input,
+    .payment-checkbox-input,
+    .item-select input {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    .group-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    /* Table Responsive */
+    .table-responsive {
+      overflow-x: auto;
+    }
 
     /* Responsive */
     @media (max-width: 768px) {
@@ -1687,20 +2023,15 @@ interface RoundPayment {
       .modal-content {
         margin: 1rem;
       }
-    }
-
-    /* Checkbox Styles */
-    .checkbox-wrapper input,
-    .payment-checkbox-input,
-    .item-select input {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-    }
-    .group-checkbox {
-      width: 20px;
-      height: 20px;
-      cursor: pointer;
+      .summary-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .absence-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .filter-row {
+        flex-direction: column;
+      }
     }
   `]
 })
@@ -1723,6 +2054,7 @@ export class StudentDetailsComponent implements OnInit {
   showBulkPayConfirmation: boolean = false;
   showAddToLessonsModal: boolean = false;
   showRoundSelectionModal: boolean = false;
+  showAbsencesModal: boolean = false;
   
   // Payment Data
   classPaymentGroups: ClassPaymentGroup[] = [];
@@ -1780,6 +2112,14 @@ export class StudentDetailsComponent implements OnInit {
   filterLevel: string = '';
   selectedReceiptOption: 'single' | 'multiple' = 'single';
   
+  // Absences Data
+  studentAbsences: any[] = [];
+  absenceSummary: any = null;
+  loadingAbsences: boolean = false;
+  absenceFilterStartDate: string = '';
+  absenceFilterEndDate: string = '';
+  absenceLimit: number = 50;
+  
   // Static Data
   months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
   
@@ -1821,6 +2161,7 @@ export class StudentDetailsComponent implements OnInit {
     this.loadStudentDetails();
     this.loadAllStudents();
     this.roundSelection.roundNumber = `RND-${Date.now().toString().slice(-6)}`;
+    this.loadAbsenceSummary();
   }
 
   private getHeaders(): HttpHeaders {
@@ -1831,6 +2172,7 @@ export class StudentDetailsComponent implements OnInit {
     });
   }
 
+  // ==================== LOAD DATA METHODS ====================
   loadStudentDetails(): void {
     const studentId = this.route.snapshot.paramMap.get('id');
     if (!studentId) {
@@ -1845,6 +2187,7 @@ export class StudentDetailsComponent implements OnInit {
         this.loadStudentClasses(studentId);
         this.loadPaymentHistory(studentId);
         this.loadStudentPaymentSystems(studentId);
+        this.loadAbsenceSummary();
         this.loading = false;
       },
       error: (error) => {
@@ -1943,6 +2286,142 @@ export class StudentDetailsComponent implements OnInit {
     });
   }
 
+  // ==================== ABSENCE METHODS ====================
+  loadStudentAbsences(): void {
+    const studentId = this.getStudentId();
+    if (!studentId) return;
+
+    this.loadingAbsences = true;
+    let url = `${this.apiUrl}/students/${studentId}/absences`;
+    const params = new URLSearchParams();
+    
+    if (this.absenceFilterStartDate) params.append('startDate', this.absenceFilterStartDate);
+    if (this.absenceFilterEndDate) params.append('endDate', this.absenceFilterEndDate);
+    params.append('limit', this.absenceLimit.toString());
+    
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+
+    this.http.get<any>(url, { headers: this.getHeaders() }).subscribe({
+      next: (response) => {
+        if (response.success) {
+          this.studentAbsences = response.allAbsences || [];
+          this.absenceSummary = response.statistics;
+          console.log(`تم تحميل ${this.studentAbsences.length} سجل غياب`);
+        } else {
+          this.studentAbsences = [];
+          this.absenceSummary = null;
+        }
+        this.loadingAbsences = false;
+      },
+      error: (error) => {
+        console.error('Error loading student absences:', error);
+        this.studentAbsences = [];
+        this.absenceSummary = null;
+        this.loadingAbsences = false;
+        Swal.fire('خطأ', 'فشل في تحميل سجل الغيابات', 'error');
+      }
+    });
+  }
+
+  loadAbsenceSummary(): void {
+    const studentId = this.getStudentId();
+    if (!studentId) return;
+
+    this.http.get<any>(`${this.apiUrl}/students/${studentId}/absences-summary`, { headers: this.getHeaders() }).subscribe({
+      next: (response) => {
+        if (response.success) {
+          this.absenceSummary = response;
+        }
+      },
+      error: (error) => {
+        console.error('Error loading absence summary:', error);
+      }
+    });
+  }
+
+  openAbsencesModal(): void {
+    this.showAbsencesModal = true;
+    this.loadStudentAbsences();
+  }
+
+  closeAbsencesModal(): void {
+    this.showAbsencesModal = false;
+  }
+
+  filterAbsencesByDate(): void {
+    this.loadStudentAbsences();
+  }
+
+  resetAbsenceFilter(): void {
+    this.absenceFilterStartDate = '';
+    this.absenceFilterEndDate = '';
+    this.loadStudentAbsences();
+  }
+
+  exportAbsencesToExcel(): void {
+    if (!this.studentAbsences.length) {
+      Swal.fire('تنبيه', 'لا توجد بيانات للتصدير', 'warning');
+      return;
+    }
+
+    const exportData = this.studentAbsences.map(absence => ({
+      'التاريخ': absence.dateFormatted,
+      'اليوم': absence.dayName,
+      'الوقت': `${absence.startTime} - ${absence.endTime || ''}`,
+      'الحصة': absence.className,
+      'المادة': absence.subject,
+      'الأستاذ': absence.teacherName,
+      'الحالة': absence.statusText,
+      'القاعة': absence.classroom,
+      'ملاحظات': absence.notes || ''
+    }));
+
+    const headers = Object.keys(exportData[0]);
+    const csvRows: string[] = [];
+    csvRows.push(headers.join(','));
+    
+    for (const row of exportData) {
+      const values = headers.map(header => {
+        const value = row[header as keyof typeof row] || '';
+        return `"${value.toString().replace(/"/g, '""')}"`;
+      });
+      csvRows.push(values.join(','));
+    }
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `غيابات_${this.student?.name}_${new Date().toLocaleDateString('ar-EG')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    Swal.fire('نجاح', 'تم تصدير البيانات بنجاح', 'success');
+  }
+
+  getAbsenceStatusClass(status: string): string {
+    switch(status) {
+      case 'present': return 'bg-success';
+      case 'late': return 'bg-warning';
+      case 'absent': return 'bg-danger';
+      default: return 'bg-secondary';
+    }
+  }
+
+  getAbsenceStatusText(status: string): string {
+    switch(status) {
+      case 'present': return 'حاضر';
+      case 'late': return 'متأخر';
+      case 'absent': return 'غائب';
+      default: return 'غير محدد';
+    }
+  }
+
   // ==================== HELPER METHODS ====================
   private groupPaymentsByClass(payments: Payment[]): ClassPaymentGroup[] {
     const groups: { [key: string]: ClassPaymentGroup } = {};
@@ -2004,7 +2483,77 @@ export class StudentDetailsComponent implements OnInit {
     const total = this.getTotalPaid() + this.getTotalPending();
     return total > 0 ? Math.round((this.getTotalPaid() / total) * 100) : 0;
   }
+  getAttendanceStatusClass(liveClass: any, studentId: string): string {
+    if (!liveClass.attendance || liveClass.attendance.length === 0) {
+        return 'absent';
+    }
+    
+    const attendance = liveClass.attendance.find((a: any) => {
+        const attStudentId = a.student?._id || a.student;
+        return attStudentId === studentId;
+    });
+    
+    if (!attendance) {
+        return 'absent';
+    }
+    
+    return attendance.status;
+}
+isStudentPresent(liveClass: any, studentId: string): boolean {
+  if (!liveClass.attendance || liveClass.attendance.length === 0) {
+      return false;  // لا توجد سجلات = ليس حاضراً
+  }
+  
+  const attendance = liveClass.attendance.find((a: any) => {
+      const attStudentId = a.student?._id || a.student;
+      return attStudentId === studentId;
+  });
+  
+  // فقط إذا كان السجل موجوداً والحالة present
+  return attendance && attendance.status === 'present';
+}
 
+isStudentAbsent(liveClass: any, studentId: string): boolean {
+  if (!liveClass.attendance || liveClass.attendance.length === 0) {
+      return true;  // لا توجد سجلات = غائب
+  }
+  
+  const attendance = liveClass.attendance.find((a: any) => {
+      const attStudentId = a.student?._id || a.student;
+      return attStudentId === studentId;
+  });
+  
+  // غائب إذا: لا يوجد سجل، أو السجل موجود وحالته absent
+  return !attendance || attendance.status === 'absent';
+}
+
+getAttendanceStatus(liveClass: any, studentId: string): string {
+  // التحقق من وجود سجلات حضور
+  if (!liveClass.attendance || liveClass.attendance.length === 0) {
+      console.log(`لا توجد سجلات حضور للحصة ${liveClass._id}`);
+      return 'غائب';  // افتراضياً غائب
+  }
+  
+  // البحث عن سجل الطالب
+  const attendance = liveClass.attendance.find((a: any) => {
+      const attStudentId = a.student?._id || a.student;
+      return attStudentId === studentId;
+  });
+  
+  // إذا لم يوجد سجل للطالب
+  if (!attendance) {
+      console.log(`الطالب ${studentId} ليس لديه سجل في الحصة ${liveClass._id}`);
+      return 'غائب';  // لا يوجد سجل = غائب
+  }
+  
+  // ترجمة الحالة
+  switch(attendance.status) {
+      case 'present': return 'حاضر';
+      case 'absent': return 'غائب';
+      case 'late': return 'متأخر';
+      default: return 'غائب';
+  }
+}
   getUniqueMonths(): string[] {
     const monthsSet = new Set<string>();
     this.paymentHistory.forEach(payment => { if (payment.month) monthsSet.add(payment.month); });

@@ -1,3 +1,4 @@
+// student-details.component.ts
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -120,7 +121,7 @@ interface RoundPayment {
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <!-- Modern Container with Responsive Design -->
+    <!-- Modern Container -->
     <div class="modern-container">
       <!-- Loading Overlay -->
       <div class="loading-overlay" *ngIf="loading">
@@ -128,7 +129,7 @@ interface RoundPayment {
         <p class="loading-text">جاري تحميل البيانات...</p>
       </div>
 
-      <!-- Header Section with Responsive Layout -->
+      <!-- Header Section -->
       <div class="header-section">
         <div class="header-content">
           <button class="back-btn" (click)="goBack()">
@@ -200,7 +201,6 @@ interface RoundPayment {
       <!-- Student Info Tab -->
       <div *ngIf="activeTab === 'info'" class="tab-content">
         <div class="info-grid" *ngIf="student">
-          <!-- Student Profile Card -->
           <div class="card profile-card">
             <div class="profile-header">
               <div class="profile-avatar">
@@ -262,7 +262,6 @@ interface RoundPayment {
             </div>
           </div>
 
-          <!-- Financial Summary Card -->
           <div class="card financial-card">
             <h3 class="card-title">الملخص المالي</h3>
             <div class="financial-stats">
@@ -290,7 +289,6 @@ interface RoundPayment {
             </div>
           </div>
 
-          <!-- Absences Summary Card -->
           <div class="card absence-summary-card" *ngIf="absenceSummary?.monthly">
             <div class="card-header">
               <h3 class="card-title">
@@ -417,7 +415,7 @@ interface RoundPayment {
             </div>
           </div>
 
-          <!-- Filter Controls - Responsive -->
+          <!-- Filter Controls -->
           <div class="filter-section">
             <div class="filter-group">
               <select [(ngModel)]="selectedMonthForGroupPay" (change)="selectPaymentsByMonth(selectedMonthForGroupPay)" class="filter-select">
@@ -484,18 +482,28 @@ interface RoundPayment {
                     </div>
                   </div>
                   <div class="payment-actions">
-                    <button class="icon-btn" (click)="printPaymentReceipt(payment)" title="طباعة">
+                    <button class="icon-btn print" (click)="printPaymentReceipt(payment)" title="طباعة">
                       <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M6 18L18 18M6 14L18 14M6 10L18 10M6 6L18 6"/>
                         <rect x="6" y="2" width="12" height="20" rx="1" ry="1"/>
                       </svg>
                     </button>
-                    <button class="icon-btn" *ngIf="payment.status !== 'paid'" (click)="payPayment(payment)" title="دفع">
+                    
+                    <button class="icon-btn pay" *ngIf="payment.status !== 'paid'" (click)="payPayment(payment)" title="دفع">
                       <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M5 12h14M12 5l7 7-7 7"/>
                       </svg>
                     </button>
-                    <button class="icon-btn delete" (click)="openDeleteConfirmModal(payment)" title="حذف">
+                    
+                    <button class="icon-btn cancel" *ngIf="payment.status === 'paid'" (click)="cancelPayment(payment)" title="إلغاء الدفعة">
+                      <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+
+                    <button class="icon-btn delete" *ngIf="payment.status !== 'paid'" (click)="openDeleteConfirmModal(payment)" title="حذف">
                       <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                       </svg>
@@ -534,7 +542,7 @@ interface RoundPayment {
                     <th>الحالة</th>
                     <th>تاريخ الدفع</th>
                     <th>الإجراءات</th>
-                  </tr>
+                   </tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let payment of studentMonthlyPayments">
@@ -547,7 +555,7 @@ interface RoundPayment {
                     </td>
                     <td>{{ payment.paymentDate ? (payment.paymentDate | date:'dd/MM/yyyy') : '—' }}</td>
                     <td>
-                      <button class="icon-btn" *ngIf="payment.status !== 'paid'" (click)="payLatePayment(payment)" title="دفع">
+                      <button class="icon-btn pay" *ngIf="payment.status !== 'paid'" (click)="payLatePayment(payment)" title="دفع">
                         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M5 12h14M12 5l7 7-7 7"/>
                         </svg>
@@ -936,7 +944,7 @@ interface RoundPayment {
                       {{ getAbsenceStatusText(absence.status) }}
                     </span>
                     <span *ngIf="absence.autoMarked" class="auto-badge" title="تم التسجيل تلقائياً">آلي</span>
-                  </td>
+                   </td>
                   <td>{{ absence.notes || '—' }}</td>
                 </tr>
               </tbody>
@@ -1586,18 +1594,40 @@ interface RoundPayment {
       background: none;
       border: none;
       cursor: pointer;
-      padding: 0.4rem;
+      padding: 0.5rem;
       border-radius: var(--radius-sm);
       transition: var(--transition);
       display: inline-flex;
       align-items: center;
+      justify-content: center;
     }
-    .icon-btn:hover {
-      background: var(--gray-200);
+    .icon-btn.print {
+      color: var(--primary);
+    }
+    .icon-btn.print:hover {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+    .icon-btn.pay {
+      color: var(--success);
+    }
+    .icon-btn.pay:hover {
+      background: #d4edda;
+      color: #155724;
+    }
+    .icon-btn.cancel {
+      color: var(--warning);
+    }
+    .icon-btn.cancel:hover {
+      background: #fff3cd;
+      color: #856404;
+    }
+    .icon-btn.delete {
+      color: var(--danger);
     }
     .icon-btn.delete:hover {
       background: #f8d7da;
-      color: var(--danger);
+      color: #721c24;
     }
     .payments-summary {
       background: var(--primary);
@@ -2483,77 +2513,7 @@ export class StudentDetailsComponent implements OnInit {
     const total = this.getTotalPaid() + this.getTotalPending();
     return total > 0 ? Math.round((this.getTotalPaid() / total) * 100) : 0;
   }
-  getAttendanceStatusClass(liveClass: any, studentId: string): string {
-    if (!liveClass.attendance || liveClass.attendance.length === 0) {
-        return 'absent';
-    }
-    
-    const attendance = liveClass.attendance.find((a: any) => {
-        const attStudentId = a.student?._id || a.student;
-        return attStudentId === studentId;
-    });
-    
-    if (!attendance) {
-        return 'absent';
-    }
-    
-    return attendance.status;
-}
-isStudentPresent(liveClass: any, studentId: string): boolean {
-  if (!liveClass.attendance || liveClass.attendance.length === 0) {
-      return false;  // لا توجد سجلات = ليس حاضراً
-  }
-  
-  const attendance = liveClass.attendance.find((a: any) => {
-      const attStudentId = a.student?._id || a.student;
-      return attStudentId === studentId;
-  });
-  
-  // فقط إذا كان السجل موجوداً والحالة present
-  return attendance && attendance.status === 'present';
-}
 
-isStudentAbsent(liveClass: any, studentId: string): boolean {
-  if (!liveClass.attendance || liveClass.attendance.length === 0) {
-      return true;  // لا توجد سجلات = غائب
-  }
-  
-  const attendance = liveClass.attendance.find((a: any) => {
-      const attStudentId = a.student?._id || a.student;
-      return attStudentId === studentId;
-  });
-  
-  // غائب إذا: لا يوجد سجل، أو السجل موجود وحالته absent
-  return !attendance || attendance.status === 'absent';
-}
-
-getAttendanceStatus(liveClass: any, studentId: string): string {
-  // التحقق من وجود سجلات حضور
-  if (!liveClass.attendance || liveClass.attendance.length === 0) {
-      console.log(`لا توجد سجلات حضور للحصة ${liveClass._id}`);
-      return 'غائب';  // افتراضياً غائب
-  }
-  
-  // البحث عن سجل الطالب
-  const attendance = liveClass.attendance.find((a: any) => {
-      const attStudentId = a.student?._id || a.student;
-      return attStudentId === studentId;
-  });
-  
-  // إذا لم يوجد سجل للطالب
-  if (!attendance) {
-      console.log(`الطالب ${studentId} ليس لديه سجل في الحصة ${liveClass._id}`);
-      return 'غائب';  // لا يوجد سجل = غائب
-  }
-  
-  // ترجمة الحالة
-  switch(attendance.status) {
-      case 'present': return 'حاضر';
-      case 'absent': return 'غائب';
-      case 'late': return 'متأخر';
-      default: return 'غائب';
-  }
-}
   getUniqueMonths(): string[] {
     const monthsSet = new Set<string>();
     this.paymentHistory.forEach(payment => { if (payment.month) monthsSet.add(payment.month); });
@@ -2950,54 +2910,187 @@ getAttendanceStatus(liveClass: any, studentId: string): string {
     });
   }
 
-  deletePayment(): void {
-    if (!this.paymentToDelete) return;
-    Swal.fire({ title: 'جاري حذف الدفعة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-    const paymentId = this.paymentToDelete._id || this.paymentToDelete.id;
-    this.http.delete<any>(`${this.apiUrl}/payments/${paymentId}`, { headers: this.getHeaders() }).subscribe({
-      next: () => {
-        Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم حذف الدفعة بنجاح', timer: 1500, showConfirmButton: false });
-        this.closeDeleteConfirmModal();
-        this.loadPaymentHistory(this.getStudentId());
-        this.loadStudentPaymentSystems(this.getStudentId());
-      },
-      error: (error) => {
-        console.error('Error deleting payment:', error);
-        Swal.fire('خطأ', 'فشل في حذف الدفعة', 'error');
-      }
-    });
-  }
-
+  // دالة دفع الدفعة المحسنة
   payPayment(payment: Payment): void {
     Swal.fire({
       title: 'تأكيد الدفع',
-      html: `<div class="text-start"><p><strong>المبلغ:</strong> ${payment.amount.toLocaleString()} د.ج</p><p><strong>الشهر:</strong> ${payment.month}</p></div>`,
-      icon: 'question', showCancelButton: true, confirmButtonText: 'دفع وطباعة', cancelButtonText: 'دفع فقط', showDenyButton: true, denyButtonText: 'إلغاء',
-      input: 'select', inputOptions: { 'cash': 'نقداً', 'bank': 'تحويل بنكي', 'card': 'بطاقة ائتمان', 'online': 'دفع إلكتروني' },
-      inputPlaceholder: 'اختر طريقة الدفع', inputValue: 'cash'
+      html: `<div class="text-start">
+        <p><strong>المبلغ:</strong> ${payment.amount.toLocaleString()} د.ج</p>
+        <p><strong>الشهر:</strong> ${payment.month}</p>
+        <p><strong>الحصة:</strong> ${payment.className || 'عام'}</p>
+      </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'دفع وطباعة',
+      cancelButtonText: 'دفع فقط',
+      showDenyButton: true,
+      denyButtonText: 'إلغاء',
+      input: 'select',
+      inputOptions: { 
+        'cash': 'نقداً', 
+        'bank': 'تحويل بنكي', 
+        'card': 'بطاقة ائتمان', 
+        'online': 'دفع إلكتروني',
+        'mobile': 'دفع محمول'
+      },
+      inputPlaceholder: 'اختر طريقة الدفع',
+      inputValue: 'cash'
     }).then((result) => {
       if (result.isConfirmed && result.value) {
         this.processPaymentWithPrint(payment, result.value, true);
-      } else if (result.dismiss === Swal.DismissReason.cancel) {
-        this.processPaymentWithPrint(payment, result.value || 'cash', false);
+      } else if (result.dismiss === Swal.DismissReason.cancel && result.value) {
+        this.processPaymentWithPrint(payment, result.value, false);
       }
     });
   }
 
   private processPaymentWithPrint(payment: Payment, method: string, shouldPrint: boolean): void {
-    const paymentData = { paymentMethod: method, paymentDate: new Date().toISOString(), notes: 'تم الدفع من خلال النظام' };
-    Swal.fire({ title: 'جاري الدفع...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    const paymentData = { 
+      paymentMethod: method, 
+      paymentDate: new Date().toISOString(), 
+      notes: 'تم الدفع من خلال النظام' 
+    };
+    
+    Swal.fire({ 
+      title: 'جاري الدفع...', 
+      allowOutsideClick: false, 
+      didOpen: () => Swal.showLoading() 
+    });
+    
     const paymentId = payment._id || payment.id;
-    this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/pay`, paymentData, { headers: this.getHeaders() }).subscribe({
-      next: async (response) => {
-        Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم دفع الدفعة بنجاح', timer: 1500, showConfirmButton: false });
-        this.loadPaymentHistory(this.getStudentId());
-        this.loadStudentPaymentSystems(this.getStudentId());
-        if (shouldPrint && response.payment) await this.printPaymentReceipt(response.payment);
-      },
-      error: (error) => {
-        console.error('Error paying payment:', error);
-        Swal.fire('خطأ', 'فشل في دفع الدفعة', 'error');
+    this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/pay`, paymentData, { headers: this.getHeaders() })
+      .subscribe({
+        next: async (response) => {
+          Swal.fire({ 
+            icon: 'success', 
+            title: 'تم الدفع بنجاح', 
+            text: `تم دفع مبلغ ${payment.amount.toLocaleString()} د.ج`,
+            timer: 2000,
+            showConfirmButton: false 
+          });
+          
+          this.loadPaymentHistory(this.getStudentId());
+          this.loadStudentPaymentSystems(this.getStudentId());
+          
+          if (shouldPrint && response.payment) {
+            await this.printPaymentReceipt(response.payment);
+          }
+        },
+        error: (error) => {
+          console.error('Error paying payment:', error);
+          Swal.fire({ 
+            icon: 'error', 
+            title: 'فشل في الدفع', 
+            text: error.error?.error || error.message || 'حدث خطأ أثناء محاولة الدفع',
+            confirmButtonText: 'حسناً'
+          });
+        }
+      });
+  }
+
+  // دالة إلغاء الدفعة
+  async cancelPayment(payment: Payment): Promise<void> {
+    if (payment.status !== 'paid') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'لا يمكن الإلغاء',
+        text: 'لا يمكن إلغاء دفعة غير مدفوعة. يمكنك فقط حذفها.',
+        confirmButtonText: 'حسناً'
+      });
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: 'تأكيد إلغاء الدفعة',
+      html: `<div class="text-start">
+        <p>هل أنت متأكد من إلغاء هذه الدفعة؟</p>
+        <p><strong>الطالب:</strong> ${payment.studentName || this.student?.name}</p>
+        <p><strong>الشهر:</strong> ${payment.month}</p>
+        <p><strong>المبلغ:</strong> ${payment.amount.toLocaleString()} د.ج</p>
+        <p class="text-danger mt-3">⚠️ سيتم إلغاء الدفعة وإعادتها كـ "معلقة".</p>
+      </div>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'نعم، قم بالإلغاء',
+      cancelButtonText: 'إلغاء'
+    });
+
+    if (result.isConfirmed) {
+      Swal.fire({
+        title: 'جاري الإلغاء...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      const paymentId = payment._id || payment.id;
+      this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/cancel`, {}, { headers: this.getHeaders() })
+        .subscribe({
+          next: (response) => {
+            Swal.fire({
+              icon: 'success',
+              title: 'تم الإلغاء',
+              text: 'تم إلغاء الدفعة بنجاح وإعادتها كمعلقة.',
+              timer: 2000,
+              showConfirmButton: false
+            });
+            this.loadPaymentHistory(this.getStudentId());
+            this.loadStudentPaymentSystems(this.getStudentId());
+          },
+          error: (error) => {
+            console.error('Error canceling payment:', error);
+            Swal.fire({
+              icon: 'error',
+              title: 'فشل الإلغاء',
+              text: error.error?.error || error.message || 'حدث خطأ أثناء محاولة إلغاء الدفعة.',
+              confirmButtonText: 'حسناً'
+            });
+          }
+        });
+    }
+  }
+
+  deletePayment(): void {
+    if (!this.paymentToDelete) return;
+    
+    if (this.paymentToDelete.status === 'paid') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'لا يمكن الحذف المباشر',
+        text: 'هذه الدفعة مدفوعة. لاسترجاعها، يرجى استخدام زر "إلغاء الدفعة" بدلاً من الحذف.',
+        confirmButtonText: 'حسناً'
+      });
+      this.closeDeleteConfirmModal();
+      return;
+    }
+
+    Swal.fire({
+      title: 'تأكيد الحذف النهائي',
+      text: `هل أنت متأكد من حذف دفعة ${this.paymentToDelete.month} بقيمة ${this.paymentToDelete.amount} د.ج؟ هذا الإجراء نهائي ولا يمكن التراجع عنه.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'نعم، احذف نهائياً',
+      cancelButtonText: 'إلغاء'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({ title: 'جاري الحذف...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const paymentId = this.paymentToDelete!._id || this.paymentToDelete!.id;
+        this.http.delete<any>(`${this.apiUrl}/payments/${paymentId}`, { headers: this.getHeaders() })
+          .subscribe({
+            next: () => {
+              Swal.fire({ icon: 'success', title: 'تم الحذف', text: 'تم حذف الدفعة بنجاح', timer: 1500, showConfirmButton: false });
+              this.closeDeleteConfirmModal();
+              this.loadPaymentHistory(this.getStudentId());
+              this.loadStudentPaymentSystems(this.getStudentId());
+            },
+            error: (error) => {
+              console.error('Error deleting payment:', error);
+              Swal.fire('خطأ', 'فشل في حذف الدفعة', 'error');
+            }
+          });
       }
     });
   }
@@ -3007,6 +3100,7 @@ getAttendanceStatus(liveClass: any, studentId: string): string {
       Swal.fire({ icon: 'warning', title: 'لا توجد مدفوعات مختارة', text: 'يرجى اختيار مدفوعات للدفع أولاً' });
       return;
     }
+    
     const hasPaidPayments = this.selectedPaymentsForBulkPay.some(p => p.status === 'paid');
     if (hasPaidPayments) {
       const unpaidPayments = this.selectedPaymentsForBulkPay.filter(p => p.status !== 'paid');
@@ -3019,8 +3113,7 @@ getAttendanceStatus(liveClass: any, studentId: string): string {
     }
 
     const totalAmount = this.getSelectedPaymentsTotal();
-    const uniqueStudents = new Set(this.selectedPaymentsForBulkPay.map(p => p.student?._id || p.student));
-
+    
     const { value: userChoice } = await Swal.fire({
       title: 'خيارات الدفع الجماعي',
       html: `<div class="text-start"><div class="alert alert-info"><h6>تفاصيل الدفع الجماعي</h6><p><strong>عدد المدفوعات:</strong> ${this.selectedPaymentsForBulkPay.length}</p><p><strong>المبلغ الإجمالي:</strong> ${totalAmount.toLocaleString('ar-SA')} د.ج</p></div>
@@ -3039,6 +3132,7 @@ getAttendanceStatus(liveClass: any, studentId: string): string {
     if (!userChoice) return;
 
     const { paymentMethod, printOption, paymentNotes } = userChoice;
+    
     Swal.fire({
       title: 'جاري معالجة الدفعات...',
       html: `<div class="text-center"><div class="spinner-border text-primary mb-3"></div><h5>دفع جماعي</h5><p>جاري معالجة ${this.selectedPaymentsForBulkPay.length} دفعة...</p>
@@ -3057,7 +3151,15 @@ getAttendanceStatus(liveClass: any, studentId: string): string {
       const payment = this.selectedPaymentsForBulkPay[i];
       const paymentId = payment._id || payment.id;
       const progress = Math.round(((i + 1) / this.selectedPaymentsForBulkPay.length) * 100);
-      this.updateProgress(progress, i + 1, successfulPayments, failedPayments, payment);
+      
+      const progressBar = document.getElementById('bulk-pay-progress');
+      const successCount = document.getElementById('success-count');
+      const failCount = document.getElementById('fail-count');
+      const currentPayment = document.getElementById('current-payment');
+      if (progressBar) { progressBar.style.width = `${progress}%`; progressBar.textContent = `${progress}%`; }
+      if (successCount) successCount.textContent = successfulPayments.toString();
+      if (failCount) failCount.textContent = failedPayments.toString();
+      if (currentPayment) currentPayment.textContent = `جاري معالجة: ${i+1}/${this.selectedPaymentsForBulkPay.length} - ${payment.month} - ${payment.amount.toLocaleString()} د.ج`;
 
       if (!paymentId) {
         failedPayments++;
@@ -3084,38 +3186,19 @@ getAttendanceStatus(liveClass: any, studentId: string): string {
     } else if (printOption === 'multiple' && successfulPayments > 0) {
       await this.printMultipleReceipts(paidPayments);
     }
-    await this.showBulkPayResults(successfulPayments, failedPayments, results, paidPayments);
-    if (successfulPayments > 0 && this.student) await this.refreshData();
-  }
-
-  private async refreshData(): Promise<void> {
-    if (this.student) {
+    
+    const resultsHtml = `<div class="text-start"><div class="alert alert-success"><h5>تمت الدفعات بنجاح</h5><div class="row mt-3"><div class="col-4 text-center"><h2 class="text-success">${successfulPayments}</h2><small>النجاحات</small></div>
+      <div class="col-4 text-center"><h2 class="text-danger">${failedPayments}</h2><small>الفشل</small></div><div class="col-4 text-center"><h2 class="text-primary">${successfulPayments + failedPayments}</h2><small>الإجمالي</small></div></div></div></div>`;
+    await Swal.fire({ title: 'نتائج الدفع الجماعي', html: resultsHtml, icon: successfulPayments > 0 ? 'success' : 'error', confirmButtonText: 'حسناً' });
+    
+    if (successfulPayments > 0 && this.student) {
       this.loadPaymentHistory(this.getStudentId());
       this.loadStudentPaymentSystems(this.getStudentId());
-      await this.delay(2000);
-      this.loadPaymentHistory(this.getStudentId());
     }
   }
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  private updateProgress(progress: number, current: number, success: number, fail: number, payment: Payment): void {
-    const progressBar = document.getElementById('bulk-pay-progress');
-    const successCount = document.getElementById('success-count');
-    const failCount = document.getElementById('fail-count');
-    const currentPayment = document.getElementById('current-payment');
-    if (progressBar) { progressBar.style.width = `${progress}%`; progressBar.textContent = `${progress}%`; }
-    if (successCount) successCount.textContent = success.toString();
-    if (failCount) failCount.textContent = fail.toString();
-    if (currentPayment) currentPayment.textContent = `جاري معالجة: ${current}/${this.selectedPaymentsForBulkPay.length} - ${payment.month} - ${payment.amount.toLocaleString()} د.ج`;
-  }
-
-  private async showBulkPayResults(successCount: number, failCount: number, results: any[], paidPayments: Payment[]): Promise<void> {
-    const resultsHtml = `<div class="text-start"><div class="alert alert-success"><h5>تمت الدفعات بنجاح</h5><div class="row mt-3"><div class="col-4 text-center"><h2 class="text-success">${successCount}</h2><small>النجاحات</small></div>
-      <div class="col-4 text-center"><h2 class="text-danger">${failCount}</h2><small>الفشل</small></div><div class="col-4 text-center"><h2 class="text-primary">${successCount + failCount}</h2><small>الإجمالي</small></div></div></div></div>`;
-    await Swal.fire({ title: 'نتائج الدفع الجماعي', html: resultsHtml, icon: successCount > 0 ? 'success' : 'error', showConfirmButton: true, confirmButtonText: 'حسناً' });
   }
 
   async payLatePayment(payment: MonthlyPayment): Promise<void> {
@@ -3177,26 +3260,349 @@ getAttendanceStatus(liveClass: any, studentId: string): string {
   }
 
   // ==================== PRINTING METHODS ====================
-  async printPaymentReceipt(payment: Payment): Promise<void> {
-    const receiptData: ReceiptData = {
-      receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
-      date: new Date().toLocaleDateString('en-US'),
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      studentName: payment.studentName || this.student?.name || '',
-      studentId: payment.studentId || this.student?.studentId || '',
-      className: payment.className || 'عام',
-      month: payment.month,
-      amount: payment.amount,
-      paymentMethod: payment.paymentMethod,
-      academicYear: this.student?.academicYear,
-      parentPhone: this.student?.parentPhone,
-      notes: payment.notes || 'دفعة فردية'
-    };
-    const success = await this.printerService.printProfessionalReceipt(receiptData);
-    if (success) {
-      Swal.fire({ icon: 'success', title: 'تمت الطباعة', text: 'تم طباعة الإيصال بنجاح', timer: 1500, showConfirmButton: false });
+// استبدل دالة printPaymentReceipt بهذا الكود
+
+async printPaymentReceipt(payment: Payment): Promise<void> {
+  // التحقق أولاً من الاتصال بالطابعة
+  if (!this.printerService.checkConnectionStatus()) {
+    // عرض خيار للمستخدم للاتصال بالطابعة
+    const result = await Swal.fire({
+      title: 'الاتصال بالطابعة',
+      html: `
+        <div class="text-start">
+          <p>⚠️ لم يتم الاتصال بالطابعة الحرارية بعد.</p>
+          <p>يرجى النقر على "اتصال" واختيار الطابعة من القائمة.</p>
+          <div class="alert alert-info mt-3">
+            <small>📌 ملاحظة: تأكد من أن الطابعة متصلة بالجهاز ومشغلة.</small>
+          </div>
+        </div>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '🖨️ اتصال بالطابعة',
+      cancelButtonText: 'إلغاء',
+      showDenyButton: true,
+      denyButtonText: '📄 طباعة عادية (بدون طابعة)'
+    });
+
+    if (result.isConfirmed) {
+      // محاولة الاتصال بالطابعة
+      Swal.fire({
+        title: 'جاري الاتصال...',
+        text: 'الرجاء اختيار الطابعة من النافذة المنبثقة',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      const connected = await this.printerService.connectToThermalPrinter();
+      Swal.close();
+
+      if (!connected) {
+        Swal.fire({
+          icon: 'error',
+          title: 'فشل الاتصال',
+          text: 'لم يتم الاتصال بالطابعة. تأكد من أن الطابعة متصلة ومشغلة.',
+          confirmButtonText: 'حسناً'
+        });
+        return;
+      }
+    } else if (result.isDenied) {
+      // طباعة عادية بدون طابعة حرارية
+      await this.printRegularReceipt(payment);
+      return;
+    } else {
+      return;
     }
   }
+
+  // إعداد بيانات الإيصال
+  const receiptData: ReceiptData = {
+    receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
+    date: new Date().toLocaleDateString('en-US'),
+    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    studentName: payment.studentName || this.student?.name || '',
+    studentId: payment.studentId || this.student?.studentId || '',
+    className: payment.className || 'عام',
+    month: payment.month,
+    amount: payment.amount,
+    paymentMethod: payment.paymentMethod || 'cash',
+    academicYear: this.student?.academicYear,
+    parentPhone: this.student?.parentPhone,
+    notes: payment.notes || 'دفعة فردية'
+  };
+
+  try {
+    Swal.fire({
+      title: 'جاري الطباعة...',
+      text: 'يرجى الانتظار، يتم إرسال البيانات إلى الطابعة الحرارية.',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    // محاولة الطباعة على الطابعة الحرارية
+    const success = await this.printerService.printProfessionalReceipt(receiptData);
+    
+    Swal.close();
+
+    if (success) {
+      Swal.fire({
+        icon: 'success',
+        title: 'تمت الطباعة',
+        text: 'تم طباعة الإيصال على الطابعة الحرارية بنجاح',
+        timer: 2000,
+        showConfirmButton: false
+      });
+    } else {
+      throw new Error('فشلت الطباعة');
+    }
+
+  } catch (error) {
+    console.error('خطأ في طباعة الإيصال:', error);
+    Swal.close();
+    
+    // عرض خيار بديل للمستخدم
+    const fallbackResult = await Swal.fire({
+      title: 'فشل الطباعة على الطابعة الحرارية',
+      html: `
+        <div class="text-start">
+          <p>❌ حدث خطأ أثناء محاولة الطباعة على الطابعة الحرارية.</p>
+          <p>الأسباب المحتملة:</p>
+          <ul>
+            <li>الطابعة غير متصلة</li>
+            <li>الطابعة غير مشغلة</li>
+            <li>مشكلة في الاتصال</li>
+          </ul>
+        </div>
+      `,
+      icon: 'error',
+      showCancelButton: true,
+      confirmButtonText: '🔄 محاولة إعادة الاتصال',
+      cancelButtonText: '📄 طباعة عادية',
+      denyButtonText: 'إلغاء'
+    });
+
+    if (fallbackResult.isConfirmed) {
+      // محاولة إعادة الاتصال
+      await this.printerService.connectToThermalPrinter();
+      // إعادة محاولة الطباعة
+      await this.printPaymentReceipt(payment);
+    } else if (fallbackResult.isDenied) {
+      // طباعة عادية
+      await this.printRegularReceipt(payment);
+    }
+  }
+}
+// أضف هذه الدالة في الـ Component
+
+/**
+ * محاولة الاتصال بالطابعة عند تحميل الصفحة (اختياري)
+ */
+async connectToPrinter(): Promise<void> {
+  // يمكنك استدعاء هذه الدالة عند الحاجة، أو ترك المستخدم يختار وقت الاتصال
+  const shouldConnect = await Swal.fire({
+    title: 'الاتصال بالطابعة الحرارية',
+    text: 'هل تريد الاتصال بالطابعة الحرارية الآن؟',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'نعم، اتصال',
+    cancelButtonText: 'لاحقاً'
+  });
+
+  if (shouldConnect.isConfirmed) {
+    Swal.fire({
+      title: 'جاري الاتصال...',
+      text: 'الرجاء اختيار الطابعة من النافذة المنبثقة',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    const connected = await this.printerService.connectToThermalPrinter();
+    Swal.close();
+
+    if (connected) {
+      Swal.fire({
+        icon: 'success',
+        title: 'تم الاتصال',
+        text: 'الطابعة الحرارية جاهزة للطباعة',
+        timer: 2000,
+        showConfirmButton: false
+      });
+    }
+  }
+}
+
+/**
+ * طباعة إيصال عادي (بدون طابعة حرارية)
+ * هذه دالة احتياطية في حالة فشل الطابعة الحرارية
+ */
+private async printRegularReceipt(payment: Payment): Promise<void> {
+  const receiptData = {
+    receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
+    date: new Date().toLocaleDateString('ar-EG'),
+    time: new Date().toLocaleTimeString('ar-EG'),
+    studentName: payment.studentName || this.student?.name || '',
+    studentId: payment.studentId || this.student?.studentId || '',
+    className: payment.className || 'عام',
+    month: payment.month,
+    amount: payment.amount,
+    paymentMethod: payment.paymentMethod || 'cash',
+    notes: payment.notes || 'دفعة فردية'
+  };
+
+  const htmlContent = this.generateSimpleReceiptHTML(receiptData);
+  
+  const printWindow = window.open('', '_blank', 'width=400,height=600');
+  if (printWindow) {
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    
+    Swal.fire({
+      icon: 'success',
+      title: 'تم الطباعة',
+      text: 'تم فتح نافذة الطباعة، يرجى اختيار الطابعة المناسبة',
+      timer: 2000,
+      showConfirmButton: false
+    });
+  } else {
+    Swal.fire({
+      icon: 'error',
+      title: 'خطأ',
+      text: 'لا يمكن فتح نافذة الطباعة. يرجى السماح بالنوافذ المنبثقة.',
+      confirmButtonText: 'حسناً'
+    });
+  }
+}
+
+/**
+ * إنشاء HTML بسيط للإيصال (للطباعة العادية)
+ */
+private generateSimpleReceiptHTML(data: any): string {
+  return `
+    <!DOCTYPE html>
+    <html dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>إيصال دفع - ${data.receiptNumber}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Cairo', 'Tahoma', 'Arial', sans-serif;
+          background: #f5f5f5;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 100vh;
+          padding: 20px;
+        }
+        .receipt {
+          max-width: 350px;
+          width: 100%;
+          background: white;
+          border-radius: 16px;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+          overflow: hidden;
+          direction: rtl;
+        }
+        .receipt-header {
+          background: linear-gradient(135deg, #1e3c72, #2a5298);
+          color: white;
+          text-align: center;
+          padding: 20px;
+        }
+        .receipt-header h1 { font-size: 20px; margin-bottom: 5px; }
+        .receipt-header p { font-size: 12px; opacity: 0.9; }
+        .receipt-body { padding: 20px; }
+        .info-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 1px dashed #e0e0e0;
+        }
+        .info-label { font-weight: bold; color: #555; font-size: 13px; }
+        .info-value { color: #333; font-size: 13px; }
+        .amount-row {
+          background: #e8f5e9;
+          margin: 15px -20px -20px -20px;
+          padding: 15px 20px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .amount-label { font-weight: bold; font-size: 16px; color: #2e7d32; }
+        .amount-value { font-size: 22px; font-weight: bold; color: #2e7d32; }
+        .receipt-footer {
+          background: #f9f9f9;
+          padding: 15px 20px;
+          text-align: center;
+          font-size: 11px;
+          color: #888;
+          border-top: 1px solid #e0e0e0;
+        }
+        @media print {
+          body { background: white; padding: 0; }
+          .receipt { box-shadow: none; border: 1px solid #ddd; }
+          .receipt-header { background: #1e3c72; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .amount-row { background: #e8f5e9; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="receipt">
+        <div class="receipt-header">
+          <h1>أكاديمية الرواد للتعليم والمعارف</h1>
+          <p>إيصال دفع رسمي</p>
+        </div>
+        <div class="receipt-body">
+          <div class="info-row">
+            <span class="info-label">رقم الإيصال:</span>
+            <span class="info-value">${data.receiptNumber}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">التاريخ:</span>
+            <span class="info-value">${data.date}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">الوقت:</span>
+            <span class="info-value">${data.time}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">الطالب:</span>
+            <span class="info-value">${data.studentName} (${data.studentId})</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">الحصة:</span>
+            <span class="info-value">${data.className}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">الشهر:</span>
+            <span class="info-value">${data.month}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">طريقة الدفع:</span>
+            <span class="info-value">${this.getPaymentMethodLabel(data.paymentMethod)}</span>
+          </div>
+          ${data.notes ? `
+          <div class="info-row">
+            <span class="info-label">ملاحظات:</span>
+            <span class="info-value">${data.notes}</span>
+          </div>
+          ` : ''}
+          <div class="amount-row">
+            <span class="amount-label">المبلغ المدفوع:</span>
+            <span class="amount-value">${data.amount.toLocaleString()} د.ج</span>
+          </div>
+        </div>
+        <div class="receipt-footer">
+          <p>شكراً لثقتكم</p>
+          <p>نظام إدارة التعليم - ريدوكس</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
 
   private async printMultipleReceipts(payments: Payment[]): Promise<void> {
     if (!payments?.length) {
@@ -3303,12 +3709,12 @@ getAttendanceStatus(liveClass: any, studentId: string): string {
     <div class="student-info"><div class="info-grid"><div><strong>اسم الطالب:</strong> ${data.student.name}</div><div><strong>رقم الطالب:</strong> ${data.student.studentId}</div>
     <div><strong>المستوى الدراسي:</strong> ${this.getAcademicYearName(data.student.academicYear)}</div><div><strong>ولي الأمر:</strong> ${data.student.parentName}</div>
     <div><strong>هاتف ولي الأمر:</strong> ${data.student.parentPhone}</div></div></div>
-    <div class="section"><h2>الحصص المسجلة</h2><table><thead><tr><th>اسم الحصة</th><th>المادة</th><th>المعلم</th><th>السعر الشهري</th></tr></thead><tbody>
+    <div class="section"><h2>الحصص المسجلة</h2><tr><thead><tr><th>اسم الحصة</th><th>المادة</th><th>المعلم</th><th>السعر الشهري</th></tr></thead><tbody>
     ${data.classes.map((cls: any) => `<tr><td>${cls.name}</td><td>${cls.subject}</td><td>${cls.teacher?.name || 'غير محدد'}</td><td>${cls.price ? cls.price.toLocaleString() + ' د.ج' : 'غير محدد'}</td></tr>`).join('')}
     </tbody></table></div><div class="section"><h2>سجل المدفوعات</h2><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الشهر</th><th>طريقة الدفع</th><th>الحالة</th></tr></thead><tbody>
     ${data.payments.map((payment: any) => `<tr><td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : 'لم يتم الدفع'}</td>
-      <td>${payment.amount.toLocaleString()} د.ج</td><td>${payment.month}</td><td>${this.getPaymentMethodLabel(payment.paymentMethod)}</td>
-      <td>${this.getPaymentStatusText(payment)}</td></tr>`).join('')}</tbody></table><p class="total">الإجمالي المدفوع: ${data.totalPaid.toLocaleString()} د.ج</p></div>
+       <td>${payment.amount.toLocaleString()} د.ج</td><td>${payment.month}</td><td>${this.getPaymentMethodLabel(payment.paymentMethod)}</td>
+       <td>${this.getPaymentStatusText(payment)}</td></tr>`).join('')}</tbody></table><p class="total">الإجمالي المدفوع: ${data.totalPaid.toLocaleString()} د.ج</p></div>
     <div class="footer"><p>تم إنشاء التقرير تلقائياً من نظام إدارة المدرسة</p><p>© ${new Date().getFullYear()} جميع الحقوق محفوظة</p></div></div></body></html>`;
   }
 

@@ -2278,29 +2278,50 @@ export class LessonDetailComponent implements OnInit {
 
   enrollStudent(): void {
     const studentId = this.addStudentForm.value.studentId;
-    if (!studentId) return;
+    if (!studentId) {
+      this.showError('يرجى اختيار طالب');
+      return;
+    }
+    
+    // Debug: Check token
+    const token = localStorage.getItem('token');
+    console.log('🔑 Token present:', !!token);
+    if (token) {
+      console.log('🔑 Token starts with:', token.substring(0, 20) + '...');
+    }
     
     this.loading = true;
     
-    this.http.post(`${environment.apiUrl}/classes/${this.lessonId}/enroll/${studentId}`, {}).subscribe({
-      next: (response: any) => {
-        this.loadLessonDetails();
-        this.closeAddStudentPopup();
-        this.showSuccess('تم إضافة الطالب بنجاح');
-        this.loading = false;
+    // Use fetch for better control
+    const url = `${environment.apiUrl}/classes/${this.lessonId}/enroll/${studentId}`;
+    
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
       },
-      error: (err) => {
-        if (err.status === 200) {
-          this.loadLessonDetails();
-          this.closeAddStudentPopup();
-          this.showSuccess('تم إضافة الطالب بنجاح');
-          this.loading = false;
-          return;
-        }
-        console.error('Error enrolling student:', err);
-        this.showError('فشل في إضافة الطالب');
-        this.loading = false;
+      body: JSON.stringify({})
+    })
+    .then(async response => {
+      const data = await response.json();
+      console.log('📥 Response:', response.status, data);
+      
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'فشل في إضافة الطالب');
       }
+      return data;
+    })
+    .then(() => {
+      this.loadLessonDetails();
+      this.closeAddStudentPopup();
+      this.showSuccess('تم إضافة الطالب بنجاح');
+      this.loading = false;
+    })
+    .catch(error => {
+      console.error('❌ Error:', error);
+      this.showError(error.message || 'فشل في إضافة الطالب');
+      this.loading = false;
     });
   }
 

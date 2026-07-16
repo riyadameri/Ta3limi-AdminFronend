@@ -1,721 +1,1276 @@
-import { Component, OnInit, AfterViewInit, ElementRef, ViewChild, HostListener } from '@angular/core';
-import { RoomsService, Classroom, SchoolMap } from '../services/rooms.service';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { forkJoin } from 'rxjs';
-import * as THREE from 'three';
-// Try changing your import to:
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; 
-// (Note the .js extension at the end, which is often required in modern build tools)
+import { HttpClient, HttpClientModule } from '@angular/common/http';
+
+import { environment } from '../../environments/environment.development';
+export interface Classroom {
+  _id?: string;
+  name: string;
+  capacity: number;
+  floor: number;
+  building: string;
+  location: string;
+  color: string;
+  equipment: string[];
+  status: 'available' | 'occupied' | 'maintenance';
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 @Component({
   selector: 'app-rooms-management-component',
-  imports: [FormsModule,CommonModule],
-  templateUrl: './rooms-management-component.component.html',
-  styleUrl: './rooms-management-component.component.css'
+  standalone: true,
+  imports: [CommonModule, FormsModule, HttpClientModule],
+  template: `
+    <div class="rooms-container">
+      <!-- Page Header -->
+      <div class="page-header">
+        <div class="header-content">
+          <div class="title-section">
+            <h1><i class="fas fa-chalkboard"></i> إدارة الغرف الدراسية</h1>
+            <p class="subtitle">إدارة وتنظيم جميع الغرف الدراسية في المدرسة</p>
+          </div>
+          <button class="btn btn-primary btn-add" (click)="openAddDialog()">
+            <i class="fas fa-plus-circle"></i> إضافة غرفة جديدة
+          </button>
+        </div>
+      </div>
+
+      <!-- Statistics -->
+      <div class="stats-grid" *ngIf="!isLoading">
+        <div class="stat-card">
+          <div class="stat-icon total"><i class="fas fa-door-open"></i></div>
+          <div class="stat-info">
+            <span class="stat-value">{{ statistics.totalRooms }}</span>
+            <span class="stat-label">إجمالي الغرف</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon available"><i class="fas fa-check-circle"></i></div>
+          <div class="stat-info">
+            <span class="stat-value">{{ statistics.availableRooms }}</span>
+            <span class="stat-label">غرف متاحة</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon occupied"><i class="fas fa-users"></i></div>
+          <div class="stat-info">
+            <span class="stat-value">{{ statistics.occupiedRooms }}</span>
+            <span class="stat-label">غرف مشغولة</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon maintenance"><i class="fas fa-tools"></i></div>
+          <div class="stat-info">
+            <span class="stat-value">{{ statistics.maintenanceRooms }}</span>
+            <span class="stat-label">قيد الصيانة</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters Bar -->
+      <div class="filters-bar" *ngIf="!isLoading">
+        <div class="filters-group">
+          <div class="filter-item">
+            <i class="fas fa-layer-group"></i>
+            <select class="form-control" [(ngModel)]="filters.floor" (change)="applyFilters()">
+              <option value="">كل الطوابق</option>
+              <option *ngFor="let floor of availableFloors" [value]="floor">الطابق {{ floor }}</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <i class="fas fa-building"></i>
+            <select class="form-control" [(ngModel)]="filters.building" (change)="applyFilters()">
+              <option value="">كل المباني</option>
+              <option *ngFor="let building of availableBuildings" [value]="building">{{ building }}</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <i class="fas fa-info-circle"></i>
+            <select class="form-control" [(ngModel)]="filters.status" (change)="applyFilters()">
+              <option value="">كل الحالات</option>
+              <option value="available">متاحة</option>
+              <option value="occupied">مشغولة</option>
+              <option value="maintenance">قيد الصيانة</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <i class="fas fa-users"></i>
+            <input type="number" class="form-control" [(ngModel)]="filters.minCapacity" 
+                   (change)="applyFilters()" placeholder="الحد الأدنى للسعة">
+          </div>
+        </div>
+        <button class="btn btn-secondary" (click)="clearFilters()">
+          <i class="fas fa-undo"></i> إعادة تعيين
+        </button>
+      </div>
+
+      <!-- Loading State -->
+      <div class="loading-state" *ngIf="isLoading">
+        <div class="spinner"></div>
+        <p>جاري تحميل الغرف...</p>
+      </div>
+
+      <!-- Rooms Grid -->
+      <div class="rooms-grid" *ngIf="!isLoading">
+        <div *ngFor="let room of filteredRooms" class="room-card" (click)="selectRoom(room)">
+          <div class="room-header" [style.background]="room.color || '#4361ee'">
+            <div class="room-title">
+              <h3>{{ room.name }}</h3>
+              <span class="room-code">{{ room.building }}-{{ room.floor }}{{ room.name }}</span>
+            </div>
+            <span class="status-badge" [class]="room.status">
+              {{ getStatusText(room.status) }}
+            </span>
+          </div>
+          <div class="room-body">
+            <div class="room-info-grid">
+              <div class="info-item">
+                <i class="fas fa-building"></i>
+                <span>{{ room.building }}</span>
+              </div>
+              <div class="info-item">
+                <i class="fas fa-layer-group"></i>
+                <span>الطابق {{ room.floor }}</span>
+              </div>
+              <div class="info-item">
+                <i class="fas fa-users"></i>
+                <span>{{ room.capacity }} طالب</span>
+              </div>
+              <div class="info-item" *ngIf="room.location">
+                <i class="fas fa-map-marker-alt"></i>
+                <span>{{ room.location }}</span>
+              </div>
+            </div>
+            <div class="room-equipment" *ngIf="room.equipment && room.equipment.length > 0">
+              <span *ngFor="let item of room.equipment" class="equipment-tag">
+                <i class="fas fa-check-circle"></i> {{ item }}
+              </span>
+            </div>
+            <div class="room-actions">
+              <button class="btn btn-sm btn-edit" (click)="$event.stopPropagation(); openEditDialog(room)">
+                <i class="fas fa-edit"></i> تعديل
+              </button>
+              <button class="btn btn-sm btn-delete" (click)="$event.stopPropagation(); deleteRoom(room._id || '')">
+                <i class="fas fa-trash"></i> حذف
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" *ngIf="filteredRooms.length === 0">
+          <i class="fas fa-door-open empty-icon"></i>
+          <h3>لا توجد غرف</h3>
+          <p>لم يتم العثور على أي غرف تطابق معايير البحث</p>
+          <button class="btn btn-primary" (click)="openAddDialog()">
+            <i class="fas fa-plus-circle"></i> إضافة غرفة جديدة
+          </button>
+        </div>
+      </div>
+
+      <!-- Room Details Panel -->
+      <div class="details-panel" *ngIf="selectedRoom">
+        <div class="panel-header">
+          <h2>{{ selectedRoom.name }}</h2>
+          <button class="btn btn-close" (click)="selectedRoom = null">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="panel-body">
+          <div class="details-grid">
+            <div class="detail-item">
+              <label>المبنى</label>
+              <span>{{ selectedRoom.building }}</span>
+            </div>
+            <div class="detail-item">
+              <label>الطابق</label>
+              <span>{{ selectedRoom.floor }}</span>
+            </div>
+            <div class="detail-item">
+              <label>السعة</label>
+              <span>{{ selectedRoom.capacity }} طالب</span>
+            </div>
+            <div class="detail-item">
+              <label>الحالة</label>
+              <span class="status-badge" [class]="selectedRoom.status">
+                {{ getStatusText(selectedRoom.status) }}
+              </span>
+            </div>
+            <div class="detail-item" *ngIf="selectedRoom.location">
+              <label>الموقع</label>
+              <span>{{ selectedRoom.location }}</span>
+            </div>
+            <div class="detail-item" *ngIf="selectedRoom.equipment && selectedRoom.equipment.length > 0">
+              <label>التجهيزات</label>
+              <span>{{ selectedRoom.equipment.join(', ') }}</span>
+            </div>
+          </div>
+          <div class="panel-actions">
+            <button class="btn btn-primary" (click)="changeRoomStatus(selectedRoom, getNextStatus(selectedRoom.status))">
+              <i class="fas fa-sync"></i> تغيير الحالة
+            </button>
+            <button class="btn btn-secondary" (click)="openEditDialog(selectedRoom)">
+              <i class="fas fa-edit"></i> تعديل
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add/Edit Dialog -->
+      <div class="dialog-overlay" *ngIf="isDialogOpen">
+        <div class="dialog-box">
+          <div class="dialog-header">
+            <h2><i class="fas" [class.fa-plus-circle]="!editingRoom" [class.fa-edit]="editingRoom"></i> 
+              {{ editingRoom ? 'تعديل الغرفة' : 'إضافة غرفة جديدة' }}
+            </h2>
+            <button class="btn btn-close" (click)="closeDialog()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="dialog-body">
+            <div class="form-group">
+              <label>اسم الغرفة <span class="required">*</span></label>
+              <input type="text" class="form-control" [(ngModel)]="formData.name" 
+                     placeholder="مثال: غرفة 101" required>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>المبنى <span class="required">*</span></label>
+                <input type="text" class="form-control" [(ngModel)]="formData.building" 
+                       placeholder="المبنى الرئيسي" required>
+              </div>
+              <div class="form-group">
+                <label>الطابق <span class="required">*</span></label>
+                <input type="number" class="form-control" [(ngModel)]="formData.floor" 
+                       min="1" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>السعة <span class="required">*</span></label>
+                <input type="number" class="form-control" [(ngModel)]="formData.capacity" 
+                       min="1" required>
+              </div>
+              <div class="form-group">
+                <label>الحالة</label>
+                <select class="form-control" [(ngModel)]="formData.status">
+                  <option value="available">متاحة</option>
+                  <option value="occupied">مشغولة</option>
+                  <option value="maintenance">قيد الصيانة</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>الموقع</label>
+              <input type="text" class="form-control" [(ngModel)]="formData.location" 
+                     placeholder="موقع الغرفة">
+            </div>
+            <div class="form-group">
+              <label>لون الغرفة</label>
+              <div class="color-picker-group">
+                <input type="color" class="color-input" [(ngModel)]="formData.color">
+                <span class="color-hex">{{ formData.color || '#4361ee' }}</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>التجهيزات</label>
+              <div class="equipment-grid">
+                <label class="equipment-item" *ngFor="let item of equipmentOptions">
+                  <input type="checkbox" [checked]="isEquipmentSelected(item)" 
+                         (change)="toggleEquipment(item)">
+                  <i class="fas fa-check-circle" [class.checked]="isEquipmentSelected(item)"></i>
+                  {{ item }}
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="dialog-footer">
+            <button class="btn btn-secondary" (click)="closeDialog()">إلغاء</button>
+            <button class="btn btn-primary" (click)="saveRoom()">
+              <i class="fas fa-save"></i> {{ editingRoom ? 'حفظ التغييرات' : 'إضافة الغرفة' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    :host {
+      display: block;
+      --primary-color: #4361ee;
+      --secondary-color: #7209b7;
+      --success-color: #10b981;
+      --danger-color: #ef4444;
+      --warning-color: #f59e0b;
+      --text-dark: #1e293b;
+      --text-light: #64748b;
+      --bg-light: #f8fafc;
+      --border-color: #e2e8f0;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+      --radius: 12px;
+    }
+
+    .rooms-container {
+      padding: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .page-header {
+      background: white;
+      padding: 24px 30px;
+      border-radius: var(--radius);
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid var(--border-color);
+    }
+
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    .title-section h1 {
+      margin: 0;
+      font-size: 26px;
+      color: var(--text-dark);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .title-section h1 i {
+      color: var(--primary-color);
+    }
+
+    .subtitle {
+      margin: 4px 0 0;
+      color: var(--text-light);
+      font-size: 14px;
+    }
+
+    .btn-add {
+      padding: 12px 24px;
+      font-size: 16px;
+    }
+
+    .btn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: var(--primary-color);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #3651d4;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+    }
+
+    .btn-secondary {
+      background: var(--bg-light);
+      color: var(--text-dark);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: #f1f5f9;
+    }
+
+    .btn-sm {
+      padding: 5px 12px;
+      font-size: 12px;
+    }
+
+    .btn-edit {
+      background: #e0e7ff;
+      color: var(--primary-color);
+    }
+
+    .btn-edit:hover {
+      background: #c7d2fe;
+    }
+
+    .btn-delete {
+      background: #fee2e2;
+      color: var(--danger-color);
+    }
+
+    .btn-delete:hover {
+      background: #fecaca;
+    }
+
+    .btn-close {
+      background: transparent;
+      color: var(--text-light);
+      padding: 4px 8px;
+      font-size: 20px;
+    }
+
+    .btn-close:hover {
+      color: var(--danger-color);
+      transform: rotate(90deg);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .stat-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+
+    .stat-icon.total {
+      background: #e0e7ff;
+      color: var(--primary-color);
+    }
+
+    .stat-icon.available {
+      background: #d1fae5;
+      color: var(--success-color);
+    }
+
+    .stat-icon.occupied {
+      background: #fee2e2;
+      color: var(--danger-color);
+    }
+
+    .stat-icon.maintenance {
+      background: #fef3c7;
+      color: var(--warning-color);
+    }
+
+    .stat-info {
+      flex: 1;
+    }
+
+    .stat-value {
+      display: block;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-dark);
+    }
+
+    .stat-label {
+      color: var(--text-light);
+      font-size: 13px;
+    }
+
+    .filters-bar {
+      background: white;
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .filters-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-light);
+      padding: 4px 12px 4px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .filter-item i {
+      color: var(--text-light);
+      font-size: 14px;
+    }
+
+    .form-control {
+      padding: 6px 10px;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      color: var(--text-dark);
+      min-width: 120px;
+    }
+
+    .form-control:focus {
+      outline: none;
+    }
+
+    .form-control::placeholder {
+      color: var(--text-light);
+    }
+
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      background: white;
+      border-radius: var(--radius);
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--border-color);
+      border-top-color: var(--primary-color);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-state p {
+      margin-top: 16px;
+      color: var(--text-light);
+    }
+
+    .rooms-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .room-card {
+      background: white;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .room-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .room-header {
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: white;
+    }
+
+    .room-title h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .room-code {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .status-badge {
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(255,255,255,0.25);
+      backdrop-filter: blur(4px);
+    }
+
+    .status-badge.available {
+      background: var(--success-color);
+      color: white;
+    }
+
+    .status-badge.occupied {
+      background: var(--danger-color);
+      color: white;
+    }
+
+    .status-badge.maintenance {
+      background: var(--warning-color);
+      color: white;
+    }
+
+    .room-body {
+      padding: 16px 20px;
+    }
+
+    .room-info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .info-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-light);
+      font-size: 13px;
+    }
+
+    .info-item i {
+      width: 16px;
+      color: var(--primary-color);
+    }
+
+    .room-equipment {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .equipment-tag {
+      background: var(--bg-light);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-dark);
+      border: 1px solid var(--border-color);
+    }
+
+    .equipment-tag i {
+      color: var(--success-color);
+      margin-left: 4px;
+    }
+
+    .room-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      border-top: 1px solid var(--border-color);
+      padding-top: 12px;
+    }
+
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      background: white;
+      border-radius: var(--radius);
+      border: 2px dashed var(--border-color);
+    }
+
+    .empty-icon {
+      font-size: 64px;
+      color: var(--border-color);
+      margin-bottom: 16px;
+    }
+
+    .empty-state h3 {
+      margin: 0;
+      color: var(--text-dark);
+    }
+
+    .empty-state p {
+      color: var(--text-light);
+      margin: 8px 0 20px;
+    }
+
+    .details-panel {
+      background: white;
+      border-radius: var(--radius);
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-md);
+      margin-top: 24px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 16px 20px;
+      background: var(--bg-light);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-header h2 {
+      margin: 0;
+      font-size: 20px;
+      color: var(--text-dark);
+    }
+
+    .panel-body {
+      padding: 20px;
+    }
+
+    .details-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .detail-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .detail-item label {
+      font-size: 12px;
+      color: var(--text-light);
+      margin-bottom: 4px;
+    }
+
+    .detail-item span {
+      font-size: 16px;
+      color: var(--text-dark);
+      font-weight: 500;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 12px;
+      border-top: 1px solid var(--border-color);
+      padding-top: 16px;
+    }
+
+    .dialog-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.5);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .dialog-box {
+      background: white;
+      border-radius: 16px;
+      width: 95%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-lg);
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .dialog-header {
+      padding: 20px 24px;
+      border-bottom: 2px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-light);
+      border-radius: 16px 16px 0 0;
+    }
+
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 20px;
+      color: var(--text-dark);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .dialog-header h2 i {
+      color: var(--primary-color);
+    }
+
+    .dialog-body {
+      padding: 24px;
+    }
+
+    .dialog-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      background: var(--bg-light);
+      border-radius: 0 0 16px 16px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+      color: var(--text-dark);
+      font-size: 14px;
+    }
+
+    .required {
+      color: var(--danger-color);
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.3s ease;
+      color: var(--text-dark);
+      background: white;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 4px rgba(67, 97, 238, 0.1);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .color-picker-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .color-input {
+      width: 48px;
+      height: 48px;
+      padding: 2px;
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .color-hex {
+      font-size: 14px;
+      color: var(--text-light);
+      font-family: monospace;
+    }
+
+    .equipment-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 8px;
+    }
+
+    .equipment-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg-light);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 14px;
+    }
+
+    .equipment-item:hover {
+      background: #f1f5f9;
+    }
+
+    .equipment-item input[type="checkbox"] {
+      display: none;
+    }
+
+    .equipment-item i {
+      color: var(--border-color);
+      transition: color 0.3s ease;
+    }
+
+    .equipment-item i.checked {
+      color: var(--success-color);
+    }
+
+    @media (max-width: 1024px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .rooms-container {
+        padding: 12px;
+      }
+
+      .page-header {
+        padding: 16px 20px;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .header-content {
+        flex-direction: column;
+        gap: 16px;
+        align-items: stretch;
+      }
+
+      .title-section h1 {
+        font-size: 22px;
+      }
+
+      .btn-add {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .stat-card {
+        padding: 16px;
+      }
+
+      .stat-value {
+        font-size: 22px;
+      }
+
+      .filters-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .filters-group {
+        flex-direction: column;
+      }
+
+      .filter-item {
+        width: 100%;
+      }
+
+      .filter-item .form-control {
+        width: 100%;
+        min-width: unset;
+      }
+
+      .rooms-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      .dialog-box {
+        width: 98%;
+        max-height: 95vh;
+      }
+
+      .details-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .panel-actions {
+        flex-direction: column;
+      }
+
+      .panel-actions .btn {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .equipment-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .room-info-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .dialog-box::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .dialog-box::-webkit-scrollbar-track {
+      background: var(--bg-light);
+    }
+
+    .dialog-box::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 3px;
+    }
+
+    .dialog-box::-webkit-scrollbar-thumb:hover {
+      background: var(--text-light);
+    }
+  `]
 })
-export class RoomsManagementComponent implements OnInit, AfterViewInit {
-  @ViewChild('gameCanvas') gameCanvasRef!: ElementRef;
-  
-  // البيانات
+export class RoomsManagementComponent implements OnInit {
+  private apiUrl = environment.apiUrl;
+
   rooms: Classroom[] = [];
-  selectedRoom: Classroom | null = null;
-  schoolMap: SchoolMap | null = null;
   filteredRooms: Classroom[] = [];
-  
-  // حالة التطبيق
-  isAddingRoom = false;
-  isEditingRoom = false;
+  selectedRoom: Classroom | null = null;
   isLoading = true;
-  viewMode: 'list' | 'grid' | '3d' = '3d';
-  currentFloor = 1;
-  currentBuilding = 'Main';
-  zoomLevel = 1;
-  
-  // نموذج الغرفة الجديدة
-  newRoom: any = {
-    name: '',
-    capacity: 30,
-    floor: 1,
-    building: 'Main',
-    location: '',
-    color: '#3498db',
-    equipment: [],
-    status: 'available'
-  };
-  
-  // إحصائيات
+
   statistics = {
     totalRooms: 0,
     availableRooms: 0,
     occupiedRooms: 0,
-    maintenanceRooms: 0,
-    totalCapacity: 0
+    maintenanceRooms: 0
   };
-  
-  // Three.js المتغيرات
-  private scene!: THREE.Scene;
-  private camera!: THREE.PerspectiveCamera;
-  private renderer!: THREE.WebGLRenderer;
-  private controls!: OrbitControls;
-  private roomObjects: THREE.Group[] = [];
-  
-  // عوامل التصفية
-  filter = {
+
+  filters = {
     floor: '',
     building: '',
     status: '',
-    capacity: ''
+    minCapacity: null as number | null
   };
-  
-  // جدول زمني
-  scheduleData: any[] = [];
-  
-  constructor(private roomsService: RoomsService) {}
-  
+
+  availableFloors: number[] = [];
+  availableBuildings: string[] = [];
+
+  isDialogOpen = false;
+  editingRoom = false;
+  formData: any = {
+    name: '',
+    capacity: 30,
+    floor: 1,
+    building: '',
+    location: '',
+    color: '#4361ee',
+    equipment: [],
+    status: 'available'
+  };
+
+  equipmentOptions = ['بروجيكتور', 'سبورة ذكية', 'مكيف هواء', 'أجهزة كمبيوتر', 'نظام صوت', 'طابعة', 'شاشة تفاعلية'];
+
+  constructor(private http: HttpClient) {}
+
   ngOnInit(): void {
-    this.loadData();
-    this.setupKeyboardControls();
+    this.loadRooms();
   }
-  
-  ngAfterViewInit(): void {
-    if (this.viewMode === '3d') {
-      this.init3DView();
-    }
-  }
-  
-  // تحميل البيانات
-  loadData(): void {
+
+  loadRooms(): void {
     this.isLoading = true;
-    forkJoin({
-      rooms: this.roomsService.getRooms(),
-      map: this.roomsService.getSchoolMap(),
-      stats: this.roomsService.getRoomStatistics()
-    }).subscribe({
-      next: (results) => {
-        this.rooms = results.rooms;
-        this.filteredRooms = [...this.rooms];
-        this.schoolMap = results.map;
-        this.statistics = results.stats;
+    this.http.get<Classroom[]>(`${this.apiUrl}/classrooms`).subscribe({
+      next: (rooms) => {
+        this.rooms = rooms;
+        this.filteredRooms = [...rooms];
+        this.updateStatistics();
+        this.extractFilterOptions();
         this.isLoading = false;
-        
-        if (this.viewMode === '3d') {
-          this.create3DScene();
-        }
       },
       error: (error) => {
-        console.error('Error loading data:', error);
+        console.error('Error loading rooms:', error);
         this.isLoading = false;
+        this.rooms = [];
+        this.filteredRooms = [];
+        this.updateStatistics();
       }
     });
   }
-  
-  // تهيئة عرض 3D
-  init3DView(): void {
-    const canvas = this.gameCanvasRef.nativeElement;
-    
-    // إنشاء المشهد
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x87CEEB); // لون سماوي
-    
-    // إنشاء الكاميرا
-    this.camera = new THREE.PerspectiveCamera(
-      75,
-      canvas.clientWidth / canvas.clientHeight,
-      0.1,
-      1000
-    );
-    this.camera.position.set(50, 50, 50);
-    
-    // إنشاء المحرك
-    this.renderer = new THREE.WebGLRenderer({ 
-      canvas,
-      antialias: true 
-    });
-    this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    
-    // إضافة التحكم
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-    
-    // إضافة الإضاءة
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    this.scene.add(ambientLight);
-    
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(50, 100, 50);
-    this.scene.add(directionalLight);
-    
-    // إضافة الأرضية
-    this.createFloor();
-    
-    // إنشاء الغرف
-    this.create3DScene();
-    
-    // البدء بالتصيير
-    this.animate();
+
+  updateStatistics(): void {
+    this.statistics.totalRooms = this.rooms.length;
+    this.statistics.availableRooms = this.rooms.filter(r => r.status === 'available').length;
+    this.statistics.occupiedRooms = this.rooms.filter(r => r.status === 'occupied').length;
+    this.statistics.maintenanceRooms = this.rooms.filter(r => r.status === 'maintenance').length;
   }
-  
-  // إنشاء المشهد ثلاثي الأبعاد
-  create3DScene(): void {
-    if (!this.scene || !this.rooms.length) return;
+
+  extractFilterOptions(): void {
+    const floors = new Set<number>();
+    const buildings = new Set<string>();
     
-    // مسح الغرف السابقة
-    this.roomObjects.forEach(room => this.scene.remove(room));
-    this.roomObjects = [];
-    
-    // إنشاء مبنى متعدد الطوابق
-    const buildingWidth = 100;
-    const buildingDepth = 60;
-    const floorHeight = 15;
-    
-    // إنشاء المبنى الأساسي
-    const buildingGeometry = new THREE.BoxGeometry(buildingWidth, 5, buildingDepth);
-    const buildingMaterial = new THREE.MeshPhongMaterial({ 
-      color: 0x95a5a6,
-      transparent: true,
-      opacity: 0.8
-    });
-    const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
-    building.position.y = 2.5;
-    this.scene.add(building);
-    
-    // إنشاء الطوابق
-    const floors = this.schoolMap?.floors || [1, 2, 3];
-    floors.forEach(floorNum => {
-      // إنشاء أرضية الطابق
-      const floorGeometry = new THREE.PlaneGeometry(buildingWidth - 10, buildingDepth - 10);
-      const floorMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0xecf0f1,
-        side: THREE.DoubleSide
-      });
-      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-      floor.rotation.x = Math.PI / 2;
-      floor.position.y = floorNum * floorHeight;
-      this.scene.add(floor);
-      
-      // إضافة علامة الطابق
-      this.addFloorLabel(floorNum, buildingWidth);
-      
-      // إنشاء الغرف في هذا الطابق
-      const floorRooms = this.rooms.filter(room => room.floor === floorNum);
-      this.createFloorRooms(floorRooms, floorNum, floorHeight);
+    this.rooms.forEach(room => {
+      if (room.floor) floors.add(room.floor);
+      if (room.building) buildings.add(room.building);
     });
     
-    // إضافة السلالم
-    this.addStairs(buildingWidth, buildingDepth, floors.length, floorHeight);
-    
-    // إضافة الزينة الخارجية
-    this.addExteriorDecorations(buildingWidth, buildingDepth);
+    this.availableFloors = Array.from(floors).sort((a, b) => a - b);
+    this.availableBuildings = Array.from(buildings);
   }
-  
-  // إنشاء الغرف في الطابق
-  createFloorRooms(rooms: Classroom[], floorNum: number, floorHeight: number): void {
-    const roomsPerRow = 4;
-    const roomWidth = 18;
-    const roomDepth = 12;
-    const corridorWidth = 8;
-    
-    rooms.forEach((room, index) => {
-      const row = Math.floor(index / roomsPerRow);
-      const col = index % roomsPerRow;
-      
-      const x = (col - (roomsPerRow - 1) / 2) * (roomWidth + 5);
-      const z = row * (roomDepth + corridorWidth);
-      
-      // إنشاء الغرفة ثلاثية الأبعاد
-      const roomGroup = this.create3DRoom(room, x, floorNum * floorHeight, z);
-      this.roomObjects.push(roomGroup);
-      this.scene.add(roomGroup);
-      
-      // إضافة التفاعل
-      this.addRoomInteraction(roomGroup, room);
-    });
-  }
-  
-  // إنشاء غرفة ثلاثية الأبعاد
-  create3DRoom(room: Classroom, x: number, y: number, z: number): THREE.Group {
-    const group = new THREE.Group();
-    group.position.set(x, y + 2, z);
-    group.userData = { roomId: room._id, roomData: room };
-    
-    // إنشاء جدران الغرفة
-    const roomWidth = 18;
-    const roomHeight = 10;
-    const roomDepth = 12;
-    const wallThickness = 0.5;
-    
-    // تحديد لون الغرفة حسب حالتها
-    let wallColor: number;
-    switch(room.status) {
-      case 'available': wallColor = 0x2ecc71; break; // أخضر
-      case 'occupied': wallColor = 0xe74c3c; break; // أحمر
-      case 'maintenance': wallColor = 0xf39c12; break; // برتقالي
-      default: wallColor = 0x3498db; // أزرق
-    }
-    
-    // الجدار الأمامي
-    const frontWall = new THREE.Mesh(
-      new THREE.BoxGeometry(roomWidth, roomHeight, wallThickness),
-      new THREE.MeshPhongMaterial({ color: wallColor })
-    );
-    frontWall.position.z = -roomDepth / 2;
-    group.add(frontWall);
-    
-    // الجدار الخلفي
-    const backWall = frontWall.clone();
-    backWall.position.z = roomDepth / 2;
-    group.add(backWall);
-    
-    // الجدار الأيمن
-    const rightWall = new THREE.Mesh(
-      new THREE.BoxGeometry(wallThickness, roomHeight, roomDepth),
-      new THREE.MeshPhongMaterial({ color: wallColor })
-    );
-    rightWall.position.x = roomWidth / 2;
-    group.add(rightWall);
-    
-    // الجدار الأيسر
-    const leftWall = rightWall.clone();
-    leftWall.position.x = -roomWidth / 2;
-    group.add(leftWall);
-    
-    // السقف
-    const ceiling = new THREE.Mesh(
-      new THREE.BoxGeometry(roomWidth, wallThickness, roomDepth),
-      new THREE.MeshPhongMaterial({ color: 0x7f8c8d })
-    );
-    ceiling.position.y = roomHeight / 2;
-    group.add(ceiling);
-    
-    // الأرضية
-    const floor = new THREE.Mesh(
-      new THREE.BoxGeometry(roomWidth - 1, wallThickness, roomDepth - 1),
-      new THREE.MeshPhongMaterial({ color: 0x34495e })
-    );
-    floor.position.y = -roomHeight / 2;
-    group.add(floor);
-    
-    // الباب
-    const door = new THREE.Mesh(
-      new THREE.BoxGeometry(4, 6, 0.2),
-      new THREE.MeshPhongMaterial({ color: 0x8b4513 })
-    );
-    door.position.set(0, -2, -roomDepth / 2);
-    group.add(door);
-    
-    // النوافذ
-    for (let i = 0; i < 2; i++) {
-      const window = new THREE.Mesh(
-        new THREE.BoxGeometry(3, 3, 0.1),
-        new THREE.MeshPhongMaterial({ 
-          color: 0x87CEEB,
-          transparent: true,
-          opacity: 0.6 
-        })
-      );
-      window.position.set(i * 6 - 3, 2, -roomDepth / 2);
-      group.add(window);
-    }
-    
-    // إضافة اسم الغرفة فوق الباب
-    this.addRoomLabel(group, room.name, roomWidth);
-    
-    // إضافة المقاعد داخل الغرفة
-    this.addFurniture(group, room);
-    
-    return group;
-  }
-  
-  // إضافة أثاث الغرفة
-  addFurniture(group: THREE.Group, room: Classroom): void {
-    const seatCount = Math.min(room.capacity, 30);
-    const rows = 5;
-    const cols = Math.ceil(seatCount / rows);
-    
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (r * cols + c >= seatCount) break;
-        
-        const seat = new THREE.Mesh(
-          new THREE.BoxGeometry(1.5, 1, 1.5),
-          new THREE.MeshPhongMaterial({ color: 0x2c3e50 })
-        );
-        seat.position.set(
-          c * 2 - (cols - 1),
-          -4.5,
-          r * 2 - (rows - 1)
-        );
-        group.add(seat);
-        
-        // ظهر الكرسي
-        const back = new THREE.Mesh(
-          new THREE.BoxGeometry(1.5, 2, 0.2),
-          new THREE.MeshPhongMaterial({ color: 0x34495e })
-        );
-        back.position.set(
-          c * 2 - (cols - 1),
-          -3,
-          r * 2 - (rows - 1) - 0.8
-        );
-        group.add(back);
-      }
-    }
-    
-    // السبورة
-    const board = new THREE.Mesh(
-      new THREE.BoxGeometry(10, 4, 0.1),
-      new THREE.MeshPhongMaterial({ color: 0x000000 })
-    );
-    board.position.set(0, 0, 5);
-    group.add(board);
-    
-    // إطار السبورة
-    const boardFrame = new THREE.Mesh(
-      new THREE.BoxGeometry(10.2, 4.2, 0.2),
-      new THREE.MeshPhongMaterial({ color: 0xc0392b })
-    );
-    boardFrame.position.set(0, 0, 5.1);
-    group.add(boardFrame);
-  }
-  
-  // إضافة اسم الغرفة
-  addRoomLabel(group: THREE.Group, roomName: string, roomWidth: number): void {
-    // إنشاء نص SVG (يمكن استبداله بنص ثلاثي الأبعاد حقيقي)
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    if (!context) return;
-    
-    canvas.width = 512;
-    canvas.height = 256;
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = '#000000';
-    context.font = 'bold 60px Arial';
-    context.textAlign = 'center';
-    context.fillText(roomName, canvas.width / 2, canvas.height / 2 + 20);
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    const label = new THREE.Mesh(
-      new THREE.PlaneGeometry(roomWidth - 2, 2),
-      new THREE.MeshBasicMaterial({ map: texture, transparent: true })
-    );
-    label.position.set(0, 5, -7);
-    label.rotation.y = Math.PI;
-    group.add(label);
-  }
-  
-  // إضافة علامة الطابق
-  addFloorLabel(floorNum: number, buildingWidth: number): void {
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    if (!context) return;
-    
-    canvas.width = 256;
-    canvas.height = 128;
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = '#2c3e50';
-    context.font = 'bold 40px Arial';
-    context.textAlign = 'center';
-    context.fillText(`الطابق ${floorNum}`, canvas.width / 2, canvas.height / 2 + 20);
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    const label = new THREE.Mesh(
-      new THREE.PlaneGeometry(10, 5),
-      new THREE.MeshBasicMaterial({ map: texture, transparent: true })
-    );
-    label.position.set(-buildingWidth / 2 + 5, floorNum * 15, 0);
-    this.scene.add(label);
-  }
-  
-  // إضافة السلالم
-  addStairs(buildingWidth: number, buildingDepth: number, floors: number, floorHeight: number): void {
-    const stairWidth = 5;
-    const stairDepth = 10;
-    
-    for (let i = 0; i < floors - 1; i++) {
-      const stairs = new THREE.Group();
-      
-      for (let step = 0; step < 10; step++) {
-        const stair = new THREE.Mesh(
-          new THREE.BoxGeometry(stairWidth, floorHeight / 10, stairDepth),
-          new THREE.MeshPhongMaterial({ color: 0x7d3c98 })
-        );
-        stair.position.set(
-          buildingWidth / 2 + 2,
-          (i * floorHeight) + (step * floorHeight / 10),
-          step - 5
-        );
-        stairs.add(stair);
-      }
-      
-      this.scene.add(stairs);
-    }
-  }
-  
-  // إضافة زينة خارجية
-  addExteriorDecorations(buildingWidth: number, buildingDepth: number): void {
-    // الأشجار
-    for (let i = 0; i < 5; i++) {
-      const tree = this.createTree();
-      tree.position.set(
-        (Math.random() - 0.5) * (buildingWidth + 50),
-        0,
-        (Math.random() - 0.5) * (buildingDepth + 50)
-      );
-      this.scene.add(tree);
-    }
-    
-    // مواقف السيارات
-    const parkingSpots = 10;
-    for (let i = 0; i < parkingSpots; i++) {
-      const spot = new THREE.Mesh(
-        new THREE.BoxGeometry(4, 0.1, 8),
-        new THREE.MeshPhongMaterial({ color: 0x2c3e50 })
-      );
-      spot.position.set(
-        -buildingWidth / 2 - 10 + (i % 5) * 5,
-        0.05,
-        buildingDepth / 2 + 10 + Math.floor(i / 5) * 10
-      );
-      this.scene.add(spot);
-      
-      // سيارة
-      if (Math.random() > 0.5) {
-        const car = this.createCar();
-        car.position.copy(spot.position);
-        car.position.y = 1;
-        this.scene.add(car);
-      }
-    }
-  }
-  
-  // إنشاء شجرة
-  createTree(): THREE.Group {
-    const tree = new THREE.Group();
-    
-    // الجذع
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.5, 0.7, 5),
-      new THREE.MeshPhongMaterial({ color: 0x8B4513 })
-    );
-    tree.add(trunk);
-    
-    // الأوراق
-    const leaves = new THREE.Mesh(
-      new THREE.SphereGeometry(3, 8, 8),
-      new THREE.MeshPhongMaterial({ color: 0x27ae60 })
-    );
-    leaves.position.y = 4;
-    tree.add(leaves);
-    
-    return tree;
-  }
-  
-  // إنشاء سيارة
-  createCar(): THREE.Group {
-    const car = new THREE.Group();
-    
-    // هيكل السيارة
-    const body = new THREE.Mesh(
-      new THREE.BoxGeometry(3, 1, 6),
-      new THREE.MeshPhongMaterial({ color: 0xc0392b })
-    );
-    car.add(body);
-    
-    // النوافذ
-    const window = new THREE.Mesh(
-      new THREE.BoxGeometry(2.8, 0.8, 1),
-      new THREE.MeshPhongMaterial({ color: 0x3498db, transparent: true, opacity: 0.5 })
-    );
-    window.position.y = 0.6;
-    window.position.z = -1.5;
-    car.add(window);
-    
-    // العجلات
-    const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.3, 16);
-    const wheelMaterial = new THREE.MeshPhongMaterial({ color: 0x2c3e50 });
-    
-    for (let i = 0; i < 4; i++) {
-      const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-      wheel.rotation.z = Math.PI / 2;
-      wheel.position.set(
-        i < 2 ? -1.2 : 1.2,
-        -0.6,
-        i % 2 ? -2 : 2
-      );
-      car.add(wheel);
-    }
-    
-    return car;
-  }
-  
-  // إضافة التفاعل مع الغرف
-  addRoomInteraction(roomGroup: THREE.Group, room: Classroom): void {
-    // جعل الغرفة قابلة للنقر
-    roomGroup.userData = { ...roomGroup.userData, onClick: () => this.selectRoom(room) };
-  }
-  
-  // إنشاء الأرضية
-  createFloor(): void {
-    const floorGeometry = new THREE.PlaneGeometry(200, 200);
-    const floorTexture = new THREE.TextureLoader().load('assets/textures/floor.jpg');
-    floorTexture.wrapS = THREE.RepeatWrapping;
-    floorTexture.wrapT = THREE.RepeatWrapping;
-    floorTexture.repeat.set(8, 8);
-    
-    const floorMaterial = new THREE.MeshPhongMaterial({ 
-      map: floorTexture,
-      side: THREE.DoubleSide
-    });
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    floor.rotation.x = Math.PI / 2;
-    floor.receiveShadow = true;
-    this.scene.add(floor);
-    
-    // إضافة شبكة لتسهيل التوجيه
-    const gridHelper = new THREE.GridHelper(200, 50, 0x000000, 0x000000);
-    this.scene.add(gridHelper);
-  }
-  
-  // دورة التصيير
-  animate(): void {
-    requestAnimationFrame(() => this.animate());
-    
-    if (this.controls) {
-      this.controls.update();
-    }
-    
-    if (this.renderer && this.scene && this.camera) {
-      this.renderer.render(this.scene, this.camera);
-    }
-    
-    // تدوير الغرف قليلاً لتأثير حيوي
-    this.roomObjects.forEach(room => {
-      room.rotation.y += 0.001;
-    });
-  }
-  
-  // تغيير وضع العرض
-  changeViewMode(mode: 'list' | 'grid' | '3d'): void {
-    this.viewMode = mode;
-    if (mode === '3d' && !this.renderer) {
-      setTimeout(() => this.init3DView(), 100);
-    }
-  }
-  
-  // تغيير الطابق
-  changeFloor(direction: number): void {
-    const floors = this.schoolMap?.floors || [1, 2, 3];
-    const currentIndex = floors.indexOf(this.currentFloor);
-    const newIndex = (currentIndex + direction + floors.length) % floors.length;
-    this.currentFloor = floors[newIndex];
-    
-    if (this.viewMode === '3d') {
-      this.camera.position.y = this.currentFloor * 15 + 20;
-      this.controls.target.y = this.currentFloor * 15;
-    }
-    
-    this.filterRooms();
-  }
-  
-  // تصفية الغرف
-  filterRooms(): void {
+
+  applyFilters(): void {
     this.filteredRooms = this.rooms.filter(room => {
-      if (this.filter.floor && room.floor !== parseInt(this.filter.floor)) return false;
-      if (this.filter.building && room.building !== this.filter.building) return false;
-      if (this.filter.status && room.status !== this.filter.status) return false;
-      if (this.filter.capacity && room.capacity < parseInt(this.filter.capacity)) return false;
-      if (this.currentFloor && room.floor !== this.currentFloor) return false;
+      if (this.filters.floor && room.floor !== parseInt(this.filters.floor)) return false;
+      if (this.filters.building && room.building !== this.filters.building) return false;
+      if (this.filters.status && room.status !== this.filters.status) return false;
+      if (this.filters.minCapacity && room.capacity < this.filters.minCapacity) return false;
       return true;
     });
   }
-  
-  // إضافة غرفة جديدة
-  addRoom(): void {
-    this.isAddingRoom = true;
-    this.newRoom = {
+
+  clearFilters(): void {
+    this.filters = {
+      floor: '',
+      building: '',
+      status: '',
+      minCapacity: null
+    };
+    this.applyFilters();
+  }
+
+  openAddDialog(): void {
+    this.editingRoom = false;
+    this.formData = {
       name: '',
       capacity: 30,
-      floor: this.currentFloor,
-      building: this.currentBuilding,
+      floor: 1,
+      building: '',
       location: '',
-      color: '#3498db',
+      color: '#4361ee',
       equipment: [],
       status: 'available'
     };
+    this.isDialogOpen = true;
   }
-  
-  // حفظ الغرفة الجديدة
-  saveNewRoom(): void {
-    if (!this.newRoom.name) {
-      alert('الرجاء إدخال اسم الغرفة');
+
+  openEditDialog(room: Classroom): void {
+    this.editingRoom = true;
+    this.formData = { ...room };
+    this.isDialogOpen = true;
+  }
+
+  closeDialog(): void {
+    this.isDialogOpen = false;
+    this.editingRoom = false;
+  }
+
+  saveRoom(): void {
+    if (!this.formData.name || !this.formData.building || !this.formData.floor || !this.formData.capacity) {
+      alert('الرجاء ملء جميع الحقول المطلوبة');
       return;
     }
-    
-    this.roomsService.createRoom(this.newRoom).subscribe({
-      next: (room) => {
-        this.rooms.push(room);
-        this.filterRooms();
-        this.isAddingRoom = false;
-        
-        // إذا كنا في وضع 3D، نضيف الغرفة الجديدة
-        if (this.viewMode === '3d') {
-          this.create3DScene();
-        }
-      },
-      error: (error) => {
-        console.error('Error adding room:', error);
-        alert('حدث خطأ أثناء إضافة الغرفة');
-      }
-    });
-  }
-  
-  // تعديل غرفة
-  editRoom(room: Classroom): void {
-    this.selectedRoom = room;
-    this.isEditingRoom = true;
-    this.newRoom = { ...room };
-  }
-  
-  // حفظ التعديلات
-  saveRoomEdit(): void {
-    if (!this.selectedRoom) return;
-    
-    this.roomsService.updateRoom(this.selectedRoom._id, this.newRoom).subscribe({
-      next: (updatedRoom) => {
-        const index = this.rooms.findIndex(r => r._id === updatedRoom._id);
-        if (index !== -1) {
-          this.rooms[index] = updatedRoom;
-        }
-        this.selectedRoom = updatedRoom;
-        this.isEditingRoom = false;
-        
-        if (this.viewMode === '3d') {
-          this.create3DScene();
-        }
-      },
-      error: (error) => {
-        console.error('Error updating room:', error);
-        alert('حدث خطأ أثناء تعديل الغرفة');
-      }
-    });
-  }
-  
-  // حذف غرفة
-  deleteRoom(id: string): void {
-    if (confirm('هل أنت متأكد من حذف هذه الغرفة؟')) {
-      this.roomsService.deleteRoom(id).subscribe({
-        next: () => {
-          this.rooms = this.rooms.filter(room => room._id !== id);
-          this.filterRooms();
-          this.selectedRoom = null;
-          
-          if (this.viewMode === '3d') {
-            this.create3DScene();
+
+    if (this.editingRoom && this.formData._id) {
+      // Update existing room
+      this.http.put<Classroom>(`${this.apiUrl}/classrooms/${this.formData._id}`, this.formData).subscribe({
+        next: (updatedRoom) => {
+          const index = this.rooms.findIndex(r => r._id === updatedRoom._id);
+          if (index !== -1) {
+            this.rooms[index] = updatedRoom;
           }
+          this.filteredRooms = [...this.rooms];
+          this.updateStatistics();
+          this.extractFilterOptions();
+          this.closeDialog();
+          alert('تم تحديث الغرفة بنجاح');
+        },
+        error: (error) => {
+          console.error('Error updating room:', error);
+          alert('حدث خطأ أثناء تحديث الغرفة');
+        }
+      });
+    } else {
+      // Create new room
+      this.http.post<Classroom>(`${this.apiUrl}/classrooms`, this.formData).subscribe({
+        next: (newRoom) => {
+          this.rooms.push(newRoom);
+          this.filteredRooms = [...this.rooms];
+          this.updateStatistics();
+          this.extractFilterOptions();
+          this.closeDialog();
+          alert('تم إضافة الغرفة بنجاح');
+        },
+        error: (error) => {
+          console.error('Error creating room:', error);
+          alert('حدث خطأ أثناء إضافة الغرفة');
+        }
+      });
+    }
+  }
+
+  deleteRoom(id: string): void {
+    if (!id) return;
+    if (confirm('هل أنت متأكد من حذف هذه الغرفة؟')) {
+      this.http.delete(`${this.apiUrl}/classrooms/${id}`).subscribe({
+        next: () => {
+          this.rooms = this.rooms.filter(r => r._id !== id);
+          this.filteredRooms = [...this.rooms];
+          this.updateStatistics();
+          this.extractFilterOptions();
+          if (this.selectedRoom?._id === id) {
+            this.selectedRoom = null;
+          }
+          alert('تم حذف الغرفة بنجاح');
         },
         error: (error) => {
           console.error('Error deleting room:', error);
@@ -724,164 +1279,60 @@ export class RoomsManagementComponent implements OnInit, AfterViewInit {
       });
     }
   }
-  
-  // اختيار غرفة
+
   selectRoom(room: Classroom): void {
     this.selectedRoom = room;
-    
-    // تحميل جدول الغرفة
-    this.roomsService.getRoomSchedule(room._id).subscribe({
-      next: (schedule) => {
-        this.scheduleData = schedule;
-      },
-      error: (error) => {
-        console.error('Error loading schedule:', error);
-      }
-    });
-    
-    // إذا كنا في وضع 3D، نقرب الكاميرا إلى الغرفة
-    if (this.viewMode === '3d') {
-      const roomGroup = this.roomObjects.find(r => r.userData['roomId'] === room._id);      if (roomGroup) {
-        this.controls.target.copy(roomGroup.position);
-        this.camera.position.copy(roomGroup.position).add(new THREE.Vector3(20, 20, 20));
-      }
-    }
   }
-  
-  // تغيير حالة الغرفة
-  changeStatus(roomId: string, status: 'available' | 'occupied' | 'maintenance'): void {
-    this.roomsService.changeRoomStatus(roomId, status).subscribe({
-      next: (updatedRoom) => {
-        const index = this.rooms.findIndex(r => r._id === updatedRoom._id);
+
+  changeRoomStatus(room: Classroom, newStatus: 'available' | 'occupied' | 'maintenance'): void {
+    const updatedRoom = { ...room, status: newStatus };
+    this.http.put<Classroom>(`${this.apiUrl}/classrooms/${room._id}`, updatedRoom).subscribe({
+      next: (result) => {
+        const index = this.rooms.findIndex(r => r._id === result._id);
         if (index !== -1) {
-          this.rooms[index] = updatedRoom;
+          this.rooms[index] = result;
         }
-        
-        if (this.selectedRoom?._id === updatedRoom._id) {
-          this.selectedRoom = updatedRoom;
-        }
-        
-        if (this.viewMode === '3d') {
-          this.create3DScene();
+        this.filteredRooms = [...this.rooms];
+        this.updateStatistics();
+        if (this.selectedRoom?._id === result._id) {
+          this.selectedRoom = result;
         }
       },
       error: (error) => {
         console.error('Error changing room status:', error);
+        alert('حدث خطأ أثناء تغيير حالة الغرفة');
       }
     });
   }
-  
-  // التحكم بلوحة المفاتيح
-  setupKeyboardControls(): void {
-    // سيتم تنفيذها في الأحداث
-  }
-  
-  @HostListener('window:keydown', ['$event'])
-  handleKeyboardEvent(event: KeyboardEvent): void {
-    if (this.viewMode !== '3d') return;
-    
-    switch(event.key) {
-      case 'ArrowUp':
-        this.changeFloor(1);
-        break;
-      case 'ArrowDown':
-        this.changeFloor(-1);
-        break;
-      case '+':
-        this.zoomLevel = Math.min(this.zoomLevel + 0.1, 2);
-        this.camera.zoom = this.zoomLevel;
-        this.camera.updateProjectionMatrix();
-        break;
-      case '-':
-        this.zoomLevel = Math.max(this.zoomLevel - 0.1, 0.5);
-        this.camera.zoom = this.zoomLevel;
-        this.camera.updateProjectionMatrix();
-        break;
-      case 'r':
-      case 'R':
-        this.camera.position.set(50, 50, 50);
-        this.controls.target.set(0, 0, 0);
-        break;
-    }
-  }
-  
-  @HostListener('window:resize')
-  onWindowResize(): void {
-    if (this.camera && this.renderer) {
-      const canvas = this.gameCanvasRef.nativeElement;
-      this.camera.aspect = canvas.clientWidth / canvas.clientHeight;
-      this.camera.updateProjectionMatrix();
-      this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    }
-  }
-  
-  // التكبير والتصغير
-  zoomIn(): void {
-    this.zoomLevel = Math.min(this.zoomLevel + 0.1, 2);
-    if (this.camera) {
-      this.camera.zoom = this.zoomLevel;
-      this.camera.updateProjectionMatrix();
-    }
-  }
-  
-  zoomOut(): void {
-    this.zoomLevel = Math.max(this.zoomLevel - 0.1, 0.5);
-    if (this.camera) {
-      this.camera.zoom = this.zoomLevel;
-      this.camera.updateProjectionMatrix();
-    }
-  }
-  
-  // إعادة تعيين العرض
-  resetView(): void {
-    if (this.camera && this.controls) {
-      this.camera.position.set(50, 50, 50);
-      this.controls.target.set(0, 0, 0);
-      this.zoomLevel = 1;
-      this.camera.zoom = this.zoomLevel;
-      this.camera.updateProjectionMatrix();
+
+  getStatusText(status: string): string {
+    switch(status) {
+      case 'available': return 'متاحة';
+      case 'occupied': return 'مشغولة';
+      case 'maintenance': return 'قيد الصيانة';
+      default: return 'غير معروف';
     }
   }
 
-
-
-
-  // وظائف مساعدة للحالة
-// في RoomsManagementComponent class
-getStatusIcon(status: string): string {
-  switch(status) {
-    case 'available': return 'fas fa-check-circle';
-    case 'occupied': return 'fas fa-users';
-    case 'maintenance': return 'fas fa-tools';
-    default: return 'fas fa-question-circle';
+  getNextStatus(currentStatus: string): 'available' | 'occupied' | 'maintenance' {
+    switch(currentStatus) {
+      case 'available': return 'occupied';
+      case 'occupied': return 'maintenance';
+      case 'maintenance': return 'available';
+      default: return 'available';
+    }
   }
-}
 
-getStatusText(status: string): string {
-  switch(status) {
-    case 'available': return 'متاحة';
-    case 'occupied': return 'مشغولة';
-    case 'maintenance': return 'قيد الصيانة';
-    default: return 'غير معروف';
+  isEquipmentSelected(item: string): boolean {
+    return this.formData.equipment?.includes(item) || false;
   }
-}
 
-getNextStatus(currentStatus: string): 'available' | 'occupied' | 'maintenance' {
-  switch(currentStatus) {
-    case 'available': return 'occupied';
-    case 'occupied': return 'maintenance';
-    case 'maintenance': return 'available';
-    default: return 'available';
+  toggleEquipment(item: string): void {
+    const index = this.formData.equipment.indexOf(item);
+    if (index > -1) {
+      this.formData.equipment.splice(index, 1);
+    } else {
+      this.formData.equipment.push(item);
+    }
   }
-}
-
-toggleEquipment(item: string): void {
-  const index = this.newRoom.equipment.indexOf(item);
-  if (index > -1) {
-    this.newRoom.equipment.splice(index, 1);
-  } else {
-    this.newRoom.equipment.push(item);
-  }
-}
-
 }

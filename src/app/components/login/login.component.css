@@ -1,289 +1,384 @@
-/* Login Component Styles */
-.login-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+/* ============================================
+   Global Container
+   ============================================ */
+   .login-page-wrapper {
     min-height: 100vh;
-    width: 100vw;
-    padding: 20px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f0f4f8;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     position: relative;
+    overflow: hidden;
+    padding: 20px;
   }
   
-  /* Professional Background */
-  .bg-animation {
-    position: fixed;
-    top: 0;
-    left: 0;
+  /* ============================================
+     Background Decorations
+     ============================================ */
+  .bg-shape {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    z-index: 1;
+    opacity: 0.5;
+  }
+  .shape-1 {
+    width: 400px;
+    height: 400px;
+    background: #0a66c2;
+    top: -100px;
+    right: -100px;
+  }
+  .shape-2 {
+    width: 300px;
+    height: 300px;
+    background: #4cc9f0;
+    bottom: -50px;
+    left: -50px;
+  }
+  
+  /* ============================================
+     Main Card
+     ============================================ */
+  .login-card-container {
     width: 100%;
-    height: 100%;
-    z-index: -1;
-    background: linear-gradient(135deg, rgba(10, 102, 194, 0.95), rgba(0, 65, 130, 0.95)), 
-                url('https://images.unsplash.com/photo-1509062522246-3755977927d7?q=80&w=2000');
-    background-size: cover;
-    background-position: center;
+    max-width: 1000px;
+    display: flex;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 24px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    z-index: 10;
+    backdrop-filter: blur(10px);
   }
   
-  /* The Glass Card */
-  .glass-card {
-    background: rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(25px);
-    -webkit-backdrop-filter: blur(25px);
-    border: 1px solid var(--glass-border);
-    border-radius: 40px;
+  /* ============================================
+     Left Branding Side
+     ============================================ */
+  .login-visual {
+    flex: 1;
+    background: linear-gradient(135deg, #0a66c2 0%, #084d91 100%);
     padding: 40px;
-    color: var(--text-light);
-    width: 100%;
-    max-width: 420px;
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
     text-align: center;
   }
-  
-  /* Logo & Header */
-  .top-badge {
-    background: white;
-    color: var(--dark-blue);
-    display: inline-block;
-    padding: 8px 20px;
-    border-radius: 30px;
-    font-weight: 700;
-    font-size: 1.1rem;
-    margin-bottom: 25px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  .visual-content h1 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    font-weight: 800;
   }
-  
-  .card-header {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+  .visual-content p {
+    font-size: 1.1rem;
+    opacity: 0.9;
     margin-bottom: 30px;
   }
-  
-  .logo-circle {
-    width: 70px;
-    height: 70px;
-    background: white;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 2.2rem;
-    color: var(--main-blue);
-    margin: 0 auto 15px;
+  .greeting-tag {
+    display: inline-block;
+    padding: 6px 16px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+  }
+  .visual-icon {
+    font-size: 5rem;
+    opacity: 0.2;
   }
   
-  .title {
-    margin: 0;
+  /* ============================================
+     Right Form Side
+     ============================================ */
+  .login-form-area {
+    flex: 1.2;
+    padding: 50px;
+    background: white;
+    display: flex;
+    flex-direction: column;
+  }
+  .form-header {
+    margin-bottom: 35px;
+  }
+  .form-header h2 {
     font-size: 1.8rem;
+    color: #1a1a1a;
+    margin-bottom: 10px;
     font-weight: 700;
   }
+  .form-header p {
+    color: #666;
+    font-size: 0.95rem;
+  }
   
-  .subtitle {
-    margin: 5px 0 30px;
-    opacity: 0.8;
+  /* ============================================
+     Custom Inputs
+     ============================================ */
+  .input-group-custom {
+    margin-bottom: 25px;
+  }
+  .label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .input-group-custom label {
+    font-weight: 600;
+    color: #444;
     font-size: 0.9rem;
   }
-  
-  /* Fixed Width Inputs */
-  .login-form {
-    width: 100%;
+  .input-group-custom .required {
+    color: #dc3545;
+    font-weight: 700;
   }
-  
-  .input-group {
-    margin-bottom: 18px;
-    text-align: right;
-    width: 100%;
-  }
-  
-  .input-group label {
+  .input-group-custom .hint {
     display: block;
-    margin-bottom: 8px;
-    font-size: 0.85rem;
-    margin-right: 10px;
-    color: var(--text-light);
+    font-size: 0.75rem;
+    color: #999;
+    margin-top: 5px;
   }
   
   .input-wrapper {
     position: relative;
-    width: 100%;
-  }
-  
-  .input-wrapper input {
-    width: 100% !important;
-    padding: 14px 15px 14px 45px;
-    border-radius: 18px;
-    border: none;
-    font-size: 1rem;
-    color: var(--text-dark);
-    background: white;
-    outline: none;
-    direction: rtl;
-  }
-  
-  .input-wrapper i {
-    position: absolute;
-    left: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--main-blue);
-    font-size: 1.1rem;
-    z-index: 5;
-  }
-  
-  /* Options & Buttons */
-  .form-options {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    font-size: 0.85rem;
   }
-  
-  .forgot-link {
-    color: #90c4ff;
-    cursor: pointer;
-    text-decoration: none;
-    transition: all 0.3s ease;
-  }
-  
-  .forgot-link:hover {
-    color: #ffffff;
-    text-decoration: underline;
-  }
-  
-  .btn-login {
+  .input-wrapper input {
     width: 100%;
-    padding: 15px;
-    border-radius: 18px;
-    border: none;
+    padding: 14px 45px 14px 15px;
+    border: 2px solid #edf2f7;
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: all 0.3s;
+    outline: none;
+    background: #fafafa;
+  }
+  .input-wrapper input:focus {
+    border-color: #0a66c2;
+    box-shadow: 0 0 0 4px rgba(10, 102, 194, 0.1);
     background: white;
-    color: var(--dark-blue);
-    font-weight: bold;
-    font-size: 1.1rem;
-    cursor: pointer;
-    transition: 0.3s;
-    margin-top: 10px;
   }
-  
-  .btn-login:hover:not(:disabled) {
-    transform: scale(1.02);
-    background: #f0f0f0;
-  }
-  
-  .btn-login:disabled {
+  .input-wrapper input:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
   
-  .btn-new {
+  .icon-prefix {
+    position: absolute;
+    right: 15px;
+    color: #a0aec0;
+    font-size: 1.1rem;
+  }
+  .icon-suffix {
+    position: absolute;
+    left: 15px;
+    color: #a0aec0;
+    cursor: pointer;
+    padding: 5px;
+    transition: all 0.3s;
+  }
+  .icon-suffix:hover {
+    color: #0a66c2;
+  }
+  
+  /* ============================================
+     Error Message
+     ============================================ */
+  .error-message {
+    background: #fde8e8;
+    color: #dc3545;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+    border: 1px solid #f5c6cb;
+  }
+  .error-message i {
+    margin-left: 8px;
+  }
+  
+  /* ============================================
+     Checkbox Styles
+     ============================================ */
+  .form-options {
+    margin-bottom: 30px;
+  }
+  .checkbox-container {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #666;
+    user-select: none;
+  }
+  .checkbox-container input {
+    display: none;
+  }
+  .checkmark {
+    height: 20px;
+    width: 20px;
+    background-color: #eee;
+    border-radius: 6px;
+    margin-left: 10px;
+    position: relative;
+    transition: all 0.2s;
+  }
+  .checkbox-container:hover input ~ .checkmark {
+    background-color: #ccc;
+  }
+  .checkbox-container input:checked ~ .checkmark {
+    background-color: #0a66c2;
+  }
+  .checkmark:after {
+    content: "";
+    position: absolute;
+    display: none;
+    left: 7px;
+    top: 3px;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+  .checkbox-container input:checked ~ .checkmark:after {
+    display: block;
+  }
+  
+  /* ============================================
+     Buttons
+     ============================================ */
+  .action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+  .btn-primary {
+    width: 100%;
+    padding: 15px;
+    background: #0a66c2;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.3s;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #084d91;
+    transform: translateY(-2px);
+  }
+  .btn-primary:disabled {
+    background: #a0aec0;
+    cursor: not-allowed;
+    transform: none;
+  }
+  
+  .btn-outline {
     width: 100%;
     padding: 12px;
-    border-radius: 18px;
-    border: 1px solid white;
     background: transparent;
-    color: white;
+    color: #0a66c2;
+    border: 2px solid #0a66c2;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
     cursor: pointer;
-    margin-top: 10px;
-    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s;
+  }
+  .btn-outline:hover:not(:disabled) {
+    background: rgba(10, 102, 194, 0.05);
+    transform: translateY(-2px);
+  }
+  .btn-outline:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
   
-  .btn-new:hover {
-    background: rgba(255, 255, 255, 0.1);
+  .forgot-link {
+    color: #0a66c2;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .forgot-link:hover {
+    text-decoration: underline;
   }
   
-  /* Divider */
-  .divider-line {
-    margin: 25px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    position: relative;
+  /* ============================================
+     Footer
+     ============================================ */
+  .form-footer {
+    margin-top: auto;
+    padding-top: 30px;
+    text-align: center;
+    border-top: 1px solid #f0f0f0;
   }
-  
-  .divider-line span {
-    position: absolute;
-    top: -10px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--dark-blue);
-    padding: 0 15px;
+  .form-footer p {
     font-size: 0.8rem;
-    border-radius: 10px;
+    color: #999;
   }
   
-  /* Spinner */
-  .spinner {
-    width: 20px;
-    height: 20px;
-    border: 3px solid rgba(0, 0, 0, 0.1);
-    border-radius: 50%;
-    border-top-color: var(--main-blue);
-    animation: spin 0.8s linear infinite;
+  /* ============================================
+     Loader
+     ============================================ */
+  .loader-dots {
     display: inline-block;
   }
-  
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
+  .loader-dots::after {
+    content: '...';
+    animation: dots 1.5s steps(5, end) infinite;
+  }
+  @keyframes dots {
+    0%, 20% { content: '.'; }
+    40% { content: '..'; }
+    60% { content: '...'; }
   }
   
-  /* Entry Animation */
-  .animate-fade-up {
-    animation: floatIn 0.8s ease-out forwards;
-  }
-  
-  @keyframes floatIn {
-    from {
-      opacity: 0;
-      transform: translateY(30px);
+  /* ============================================
+     Responsive
+     ============================================ */
+  @media (max-width: 768px) {
+    .login-card-container {
+      flex-direction: column;
     }
-    to {
-      opacity: 1;
-      transform: translateY(0);
+    .login-visual {
+      padding: 30px;
     }
-  }
-  
-  /* Responsive */
-  @media (max-width: 480px) {
-    .glass-card {
-      padding: 30px 20px;
-      border-radius: 30px;
+    .login-form-area {
+      padding: 30px;
     }
-    
-    .logo-circle {
-      width: 60px;
-      height: 60px;
+    .visual-content h1 {
       font-size: 1.8rem;
     }
-    
-    .title {
-      font-size: 1.5rem;
+  }
+  
+  @media (max-width: 480px) {
+    .login-form-area {
+      padding: 20px;
     }
-    
+    .form-header h2 {
+      font-size: 1.4rem;
+    }
     .input-wrapper input {
-      padding: 12px 12px 12px 40px;
+      padding: 12px 40px 12px 12px;
+      font-size: 0.9rem;
     }
-    
-    .btn-login,
-    .btn-new {
+    .btn-primary {
+      font-size: 1rem;
       padding: 12px;
     }
-  }
-  .btn-accounting{
-    border: #90c4ff;
-    padding: 8px;
-    margin: 23px;
-    position: relative;
-    border: currentColor;
-    border-width: 0 0 2px;
-    border-style: solid;
-    background: transparent;
-    color: #90c4ff;
-    cursor: pointer;
-    transition: 0.3s;
-    font-size: 1.1rem;
-
-  }
-  .btn-accounting:hover{
-    transform: scale(1.02);
-    background: #f0f0f0;
-    transform: matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    .btn-outline {
+      font-size: 0.9rem;
+      padding: 10px;
+    }
   }

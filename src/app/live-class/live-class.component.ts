@@ -1,15 +1,82 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { environment } from '../../environments/environment';
+
+// Interfaces
+interface Student {
+  _id: string;
+  name: string;
+  studentId: string;
+  parentPhone: string;
+  parentEmail: string;
+  academicYear: string;
+  status: string;
+}
+
+interface Teacher {
+  _id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  subjects?: string[];
+}
+
+interface Classroom {
+  _id: string;
+  name: string;
+  capacity: number;
+  floor: number;
+  building: string;
+  location: string;
+  color: string;
+  equipment: string[];
+  status: 'available' | 'occupied' | 'maintenance';
+}
+
+interface Class {
+  _id: string;
+  name: string;
+  subject: string;
+  description?: string;
+  academicYear: string;
+  price: number;
+  paymentSystem: 'monthly' | 'rounds';
+  teacher?: Teacher;
+  schedule: Array<{ day: string; time: string; classroom?: { name: string; }; }>;
+  students: Student[];
+  createdAt: Date;
+}
+
+interface LiveClass {
+  _id: string;
+  class: Class | { _id: string; name: string; subject: string; };
+  date: Date;
+  month: string;
+  startTime: string;
+  endTime?: string;
+  teacher: Teacher | { _id: string; name: string; };
+  classroom?: Classroom | { _id: string; name: string; location: string; status: string; };
+  status: 'scheduled' | 'ongoing' | 'completed' | 'cancelled';
+  attendance: Array<{
+    student: Student | string;
+    status: 'present' | 'absent' | 'late';
+    joinedAt?: Date;
+    leftAt?: Date;
+    timestamp?: Date;
+  }>;
+  notes?: string;
+  createdBy?: string;
+  showDetails?: boolean;
+  studentsLoaded?: boolean;
+}
 
 @Component({
   selector: 'app-live-class',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, HttpClientModule],
   template: `
-    <!-- Modern Professional Template -->
     <div class="live-class-container" dir="rtl">
       <!-- Modern Header -->
       <div class="modern-header">
@@ -124,7 +191,7 @@ import { environment } from '../../environments/environment';
               <select class="modern-select" [(ngModel)]="newLiveClass.classroom" name="classroom">
                 <option value="">اختر القاعة</option>
                 <option *ngFor="let room of classrooms" [value]="room._id">
-                  {{room.name}}
+                  {{room.name}} ({{room.status === 'available' ? 'متاحة' : room.status === 'occupied' ? 'مشغولة' : 'صيانة'}})
                 </option>
               </select>
             </div>
@@ -143,7 +210,7 @@ import { environment } from '../../environments/environment';
                       placeholder="أدخل أي ملاحظات إضافية..."></textarea>
           </div>
           <div class="form-actions">
-            <button type="submit" class="btn-submit" [disabled]="!createForm.valid">
+            <button type="submit" class="btn-submit" [disabled]="!createForm.valid || loading">
               <i class="fas fa-save"></i> حفظ الحصة
             </button>
             <button type="button" class="btn-cancel" (click)="cancelCreate()">
@@ -183,8 +250,8 @@ import { environment } from '../../environments/environment';
               <i class="fas fa-video"></i>
             </div>
             <div class="class-info">
-              <h3>{{liveClass.class?.name || 'غير محدد'}}</h3>
-              <span class="subject-tag">{{liveClass.class?.subject || 'غير محدد'}}</span>
+              <h3>{{getClassName(liveClass)}}</h3>
+              <span class="subject-tag">{{getClassSubject(liveClass)}}</span>
             </div>
             <div class="card-actions">
               <button class="icon-btn" (click)="toggleClassDetails(liveClass)" [title]="liveClass.showDetails ? 'إخفاء التفاصيل' : 'عرض التفاصيل'">
@@ -204,8 +271,8 @@ import { environment } from '../../environments/environment';
           <div class="card-meta">
             <span class="meta-chip"><i class="fas fa-calendar-alt"></i> {{formatDate(liveClass.date)}}</span>
             <span class="meta-chip"><i class="fas fa-clock"></i> {{liveClass.startTime}} {{liveClass.endTime ? '- ' + liveClass.endTime : ''}}</span>
-            <span class="meta-chip"><i class="fas fa-chalkboard-user"></i> {{liveClass.teacher?.name || 'غير محدد'}}</span>
-            <span class="meta-chip"><i class="fas fa-door-open"></i> {{liveClass.classroom?.name || 'غير محدد'}}</span>
+            <span class="meta-chip"><i class="fas fa-chalkboard-user"></i> {{getTeacherName(liveClass)}}</span>
+            <span class="meta-chip"><i class="fas fa-door-open"></i> {{getClassroomName(liveClass) || 'غير محدد'}}</span>
           </div>
 
           <!-- Expanded Details -->
@@ -220,7 +287,7 @@ import { environment } from '../../environments/environment';
                 <div class="form-grid compact">
                   <div class="form-field">
                     <label>الحالة</label>
-                    <select class="modern-select" [(ngModel)]="liveClass.status" name="status">
+                    <select class="modern-select" [(ngModel)]="liveClass.status" name="editStatus">
                       <option value="scheduled">مجدولة</option>
                       <option value="ongoing">جارية</option>
                       <option value="completed">مكتملة</option>
@@ -229,15 +296,15 @@ import { environment } from '../../environments/environment';
                   </div>
                   <div class="form-field">
                     <label>وقت النهاية</label>
-                    <input type="time" class="modern-input" [(ngModel)]="liveClass.endTime" name="endTime">
+                    <input type="time" class="modern-input" [(ngModel)]="liveClass.endTime" name="editEndTime">
                   </div>
                 </div>
                 <div class="form-field">
                   <label>ملاحظات</label>
-                  <textarea class="modern-textarea" [(ngModel)]="liveClass.notes" name="notes" rows="2"></textarea>
+                  <textarea class="modern-textarea" [(ngModel)]="liveClass.notes" name="editNotes" rows="2"></textarea>
                 </div>
                 <div class="edit-actions">
-                  <button type="submit" class="btn-submit small">
+                  <button type="submit" class="btn-submit small" [disabled]="loading">
                     <i class="fas fa-check"></i> حفظ
                   </button>
                   <button type="button" class="btn-cancel small" (click)="cancelEdit()">
@@ -282,13 +349,19 @@ import { environment } from '../../environments/environment';
               <button class="action-btn success" (click)="exportMonthlyAttendance(liveClass.class?._id)">
                 <i class="fas fa-file-excel"></i> تصدير Excel
               </button>
+              <button class="action-btn primary" (click)="startLiveClass(liveClass._id)">
+                <i class="fas fa-play"></i> بدء الحصة
+              </button>
+              <button class="action-btn success" (click)="completeLiveClass(liveClass._id)">
+                <i class="fas fa-stop"></i> إنهاء الحصة
+              </button>
             </div>
 
             <!-- Students Table -->
             <div *ngIf="liveClass.studentsLoaded && liveClass.class?.students?.length > 0" class="students-table-modern">
               <div class="table-header">
                 <i class="fas fa-user-graduate"></i>
-                <h5>قائمة الطلاب</h5>
+                <h5>قائمة الطلاب ({{liveClass.class.students.length}})</h5>
               </div>
               <div class="table-responsive">
                 <table>
@@ -370,7 +443,7 @@ import { environment } from '../../environments/environment';
           <div class="modal-header-modern">
             <div>
               <i class="fas fa-clipboard-check"></i>
-              <h3>تسجيل حضور - {{selectedLiveClass.class?.name}}</h3>
+              <h3>تسجيل حضور - {{getClassName(selectedLiveClass)}}</h3>
             </div>
             <button class="modal-close-modern" (click)="closeAttendanceModal()">
               <i class="fas fa-times"></i>
@@ -399,14 +472,14 @@ import { environment } from '../../environments/environment';
                     </select>
                   </div>
                 </div>
-                <button type="submit" class="btn-submit full-width" [disabled]="!attendanceForm.valid">
+                <button type="submit" class="btn-submit full-width" [disabled]="!attendanceForm.valid || loading">
                   <i class="fas fa-check"></i> تسجيل الحضور
                 </button>
               </form>
             </div>
 
             <div *ngIf="selectedLiveClass.attendance?.length > 0" class="current-attendance-modern">
-              <h4><i class="fas fa-list"></i> الحضور المسجل</h4>
+              <h4><i class="fas fa-list"></i> الحضور المسجل ({{selectedLiveClass.attendance.length}})</h4>
               <div class="table-responsive">
                 <table class="attendance-table-modern">
                   <thead>
@@ -425,7 +498,7 @@ import { environment } from '../../environments/environment';
                           {{getAttendanceStatusText(record.status)}}
                         </span>
                       </td>
-                      <td>{{formatTime(record.timestamp)}}</td>
+                      <td>{{formatTime(record.timestamp || record.joinedAt)}}</td>
                       <td>
                         <button class="icon-btn small danger" (click)="removeAttendance(selectedLiveClass._id, record.student)">
                           <i class="fas fa-trash-alt"></i>
@@ -523,7 +596,7 @@ import { environment } from '../../environments/environment';
     </div>
   `,
   styles: [`
-    /* Modern CSS Variables */
+    /* === CSS Variables === */
     :host {
       --primary: #4361ee;
       --primary-dark: #3a56d4;
@@ -542,18 +615,21 @@ import { environment } from '../../environments/environment';
       --gray-700: #374151;
       --gray-800: #1f2937;
       --gray-900: #111827;
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
     }
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     .live-class-container {
       background: var(--gray-50);
       min-height: 100vh;
       padding: 24px;
+      font-family: 'Tajawal', 'Segoe UI', sans-serif;
+      direction: rtl;
     }
 
     /* Modern Header */
@@ -562,7 +638,7 @@ import { environment } from '../../environments/environment';
       border-radius: 20px;
       padding: 20px 28px;
       margin-bottom: 28px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+      box-shadow: var(--shadow-sm);
     }
 
     .header-content {
@@ -659,7 +735,7 @@ import { environment } from '../../environments/environment';
       border-radius: 20px;
       padding: 20px 24px;
       margin-bottom: 24px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      box-shadow: var(--shadow-sm);
     }
 
     .filters-header {
@@ -725,18 +801,13 @@ import { environment } from '../../environments/environment';
       border-radius: 20px;
       margin-bottom: 28px;
       overflow: hidden;
+      box-shadow: var(--shadow-md);
       animation: slideDown 0.3s ease;
     }
 
     @keyframes slideDown {
-      from {
-        opacity: 0;
-        transform: translateY(-20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     .form-header {
@@ -876,6 +947,11 @@ import { environment } from '../../environments/environment';
       font-size: 13px;
     }
 
+    .btn-submit.full-width {
+      width: 100%;
+      justify-content: center;
+    }
+
     .btn-cancel {
       background: var(--gray-100);
       border: 1px solid var(--gray-300);
@@ -942,9 +1018,7 @@ import { environment } from '../../environments/environment';
     }
 
     @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
+      to { transform: rotate(360deg); }
     }
 
     .loading-modern p {
@@ -958,6 +1032,7 @@ import { environment } from '../../environments/environment';
       padding: 60px 20px;
       background: white;
       border-radius: 20px;
+      box-shadow: var(--shadow-sm);
     }
 
     .empty-icon {
@@ -1001,29 +1076,18 @@ import { environment } from '../../environments/environment';
       overflow: hidden;
       transition: all 0.3s ease;
       position: relative;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      box-shadow: var(--shadow-sm);
     }
 
     .class-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 12px 24px -12px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow-md);
     }
 
-    .class-card.scheduled {
-      border-right: 4px solid var(--warning);
-    }
-
-    .class-card.ongoing {
-      border-right: 4px solid var(--info);
-    }
-
-    .class-card.completed {
-      border-right: 4px solid var(--success);
-    }
-
-    .class-card.cancelled {
-      border-right: 4px solid var(--danger);
-    }
+    .class-card.scheduled { border-right: 4px solid var(--warning); }
+    .class-card.ongoing { border-right: 4px solid var(--info); }
+    .class-card.completed { border-right: 4px solid var(--success); }
+    .class-card.cancelled { border-right: 4px solid var(--danger); }
 
     .card-status-badge {
       position: absolute;
@@ -1033,27 +1097,13 @@ import { environment } from '../../environments/environment';
       border-radius: 20px;
       font-size: 12px;
       font-weight: 500;
+      z-index: 1;
     }
 
-    .card-status-badge.scheduled {
-      background: #fef3c7;
-      color: #d97706;
-    }
-
-    .card-status-badge.ongoing {
-      background: #dbeafe;
-      color: var(--primary);
-    }
-
-    .card-status-badge.completed {
-      background: #d1fae5;
-      color: var(--success);
-    }
-
-    .card-status-badge.cancelled {
-      background: #fee2e2;
-      color: var(--danger);
-    }
+    .card-status-badge.scheduled { background: #fef3c7; color: #d97706; }
+    .card-status-badge.ongoing { background: #dbeafe; color: var(--primary); }
+    .card-status-badge.completed { background: #d1fae5; color: var(--success); }
+    .card-status-badge.cancelled { background: #fee2e2; color: var(--danger); }
 
     .card-header {
       padding: 20px 24px;
@@ -1071,6 +1121,7 @@ import { environment } from '../../environments/environment';
       display: flex;
       align-items: center;
       justify-content: center;
+      flex-shrink: 0;
     }
 
     .class-icon i {
@@ -1080,6 +1131,7 @@ import { environment } from '../../environments/environment';
 
     .class-info {
       flex: 1;
+      min-width: 120px;
     }
 
     .class-info h3 {
@@ -1100,6 +1152,7 @@ import { environment } from '../../environments/environment';
     .card-actions {
       display: flex;
       gap: 8px;
+      flex-wrap: wrap;
     }
 
     .icon-btn {
@@ -1163,14 +1216,8 @@ import { environment } from '../../environments/environment';
     }
 
     @keyframes fadeIn {
-      from {
-        opacity: 0;
-        transform: translateY(-10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     .edit-section {
@@ -1278,32 +1325,17 @@ import { environment } from '../../environments/environment';
       transition: all 0.2s;
     }
 
-    .action-btn.warning {
-      background: #fef3c7;
-      color: #d97706;
-    }
+    .action-btn.warning { background: #fef3c7; color: #d97706; }
+    .action-btn.warning:hover { background: #fde68a; }
 
-    .action-btn.warning:hover {
-      background: #fde68a;
-    }
+    .action-btn.info { background: #dbeafe; color: var(--primary); }
+    .action-btn.info:hover { background: #bfdbfe; }
 
-    .action-btn.info {
-      background: #dbeafe;
-      color: var(--primary);
-    }
+    .action-btn.success { background: #d1fae5; color: var(--success); }
+    .action-btn.success:hover { background: #a7f3d0; }
 
-    .action-btn.info:hover {
-      background: #bfdbfe;
-    }
-
-    .action-btn.success {
-      background: #d1fae5;
-      color: var(--success);
-    }
-
-    .action-btn.success:hover {
-      background: #a7f3d0;
-    }
+    .action-btn.primary { background: var(--primary); color: white; }
+    .action-btn.primary:hover { background: var(--primary-dark); }
 
     /* Students Table */
     .students-table-modern {
@@ -1370,20 +1402,9 @@ import { environment } from '../../environments/environment';
       font-weight: 500;
     }
 
-    .status-badge-modern.present {
-      background: #d1fae5;
-      color: var(--success);
-    }
-
-    .status-badge-modern.absent {
-      background: #fee2e2;
-      color: var(--danger);
-    }
-
-    .status-badge-modern.late {
-      background: #fef3c7;
-      color: var(--warning);
-    }
+    .status-badge-modern.present { background: #d1fae5; color: var(--success); }
+    .status-badge-modern.absent { background: #fee2e2; color: var(--danger); }
+    .status-badge-modern.late { background: #fef3c7; color: var(--warning); }
 
     .action-buttons-modern {
       display: flex;
@@ -1402,35 +1423,14 @@ import { environment } from '../../environments/environment';
       transition: all 0.2s;
     }
 
-    .tiny-btn.success {
-      background: #d1fae5;
-      color: var(--success);
-    }
+    .tiny-btn.success { background: #d1fae5; color: var(--success); }
+    .tiny-btn.success:hover { background: var(--success); color: white; }
 
-    .tiny-btn.success:hover {
-      background: var(--success);
-      color: white;
-    }
+    .tiny-btn.danger { background: #fee2e2; color: var(--danger); }
+    .tiny-btn.danger:hover { background: var(--danger); color: white; }
 
-    .tiny-btn.danger {
-      background: #fee2e2;
-      color: var(--danger);
-    }
-
-    .tiny-btn.danger:hover {
-      background: var(--danger);
-      color: white;
-    }
-
-    .tiny-btn.warning {
-      background: #fef3c7;
-      color: var(--warning);
-    }
-
-    .tiny-btn.warning:hover {
-      background: var(--warning);
-      color: white;
-    }
+    .tiny-btn.warning { background: #fef3c7; color: var(--warning); }
+    .tiny-btn.warning:hover { background: var(--warning); color: white; }
 
     .load-students-btn {
       text-align: center;
@@ -1576,14 +1576,8 @@ import { environment } from '../../environments/environment';
     }
 
     @keyframes slideUp {
-      from {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     .modal-header-modern {
@@ -1676,7 +1670,7 @@ import { environment } from '../../environments/environment';
       box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
     }
 
-    /* Quick Attendance Form */
+    /* Quick Attendance */
     .quick-attendance {
       background: var(--gray-50);
       border-radius: 16px;
@@ -1703,10 +1697,6 @@ import { environment } from '../../environments/environment';
       grid-template-columns: 1fr 1fr;
       gap: 16px;
       margin-bottom: 20px;
-    }
-
-    .full-width {
-      width: 100%;
     }
 
     /* Attendance Table */
@@ -1808,83 +1798,46 @@ import { environment } from '../../environments/environment';
       transition: width 0.3s ease;
     }
 
-    .progress-fill.good {
-      background: linear-gradient(90deg, var(--success) 0%, #059669 100%);
-    }
-
-    .progress-fill.warning {
-      background: linear-gradient(90deg, var(--warning) 0%, #d97706 100%);
-    }
-
-    .progress-fill.poor {
-      background: linear-gradient(90deg, var(--danger) 0%, #dc2626 100%);
-    }
+    .progress-fill.good { background: linear-gradient(90deg, var(--success) 0%, #059669 100%); }
+    .progress-fill.warning { background: linear-gradient(90deg, var(--warning) 0%, #d97706 100%); }
+    .progress-fill.poor { background: linear-gradient(90deg, var(--danger) 0%, #dc2626 100%); }
 
     /* Responsive */
     @media (max-width: 768px) {
-      .live-class-container {
-        padding: 16px;
-      }
+      .live-class-container { padding: 16px; }
+      .header-content { flex-direction: column; align-items: flex-start; }
+      .header-actions { width: 100%; }
+      .btn-glass, .btn-primary-modern { flex: 1; justify-content: center; }
+      .filters-grid { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .quick-actions-modern { flex-direction: column; }
+      .action-btn { justify-content: center; }
+      .report-summary-modern { grid-template-columns: 1fr; }
+      .form-row-modern { grid-template-columns: 1fr; }
+      .modal-modern { width: 95%; margin: 16px; }
+    }
 
-      .header-content {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .header-actions {
-        width: 100%;
-      }
-
-      .btn-glass, .btn-primary-modern {
-        flex: 1;
-        justify-content: center;
-      }
-
-      .filters-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .form-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-
-      .quick-actions-modern {
-        flex-direction: column;
-      }
-
-      .action-btn {
-        justify-content: center;
-      }
-
-      .report-summary-modern {
-        grid-template-columns: 1fr;
-      }
-
-      .form-row-modern {
-        grid-template-columns: 1fr;
-      }
-
-      .modal-modern {
-        width: 95%;
-        margin: 16px;
-      }
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .card-header { flex-direction: column; align-items: stretch; }
+      .card-actions { justify-content: center; }
+      .card-meta { flex-direction: column; align-items: center; }
+      .action-buttons-modern { flex-wrap: wrap; justify-content: center; }
     }
   `]
 })
 export class LiveClassComponent implements OnInit, OnDestroy {
   private apiUrl = environment.apiUrl || '/api';
+  private http = inject(HttpClient);
   
   // Data
-  liveClasses: any[] = [];
-  allClasses: any[] = [];
-  teachers: any[] = [];
-  students: any[] = [];
-  allStudents: any[] = [];
-  classrooms: any[] = [];
+  liveClasses: LiveClass[] = [];
+  allClasses: Class[] = [];
+  teachers: Teacher[] = [];
+  students: Student[] = [];
+  allStudents: Student[] = [];
+  classrooms: Classroom[] = [];
   
   // Control variables
   loading = false;
@@ -1892,7 +1845,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   showAttendanceModal = false;
   showReportModal = false;
   editingClassId: string | null = null;
-  selectedLiveClass: any = null;
+  selectedLiveClass: LiveClass | null = null;
   attendanceReport: any = null;
   reportLoading = false;
   
@@ -1900,8 +1853,8 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   newLiveClass: any = {
     class: '',
     date: '',
-    startTime: '',
-    endTime: '',
+    startTime: '08:00',
+    endTime: '10:00',
     teacher: '',
     classroom: '',
     status: 'scheduled',
@@ -1927,8 +1880,6 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   itemsPerPage = 10;
   
   private refreshInterval: any;
-
-  constructor(private http: HttpClient) {}
 
   ngOnInit(): void {
     this.loadInitialData();
@@ -1986,42 +1937,58 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   }
 
   loadAllClasses(): void {
-    this.http.get<any[]>(`${this.apiUrl}/classes`).subscribe({
+    this.http.get<Class[]>(`${this.apiUrl}/classes`).subscribe({
       next: (data) => this.allClasses = data,
       error: (err) => console.error('Error loading classes:', err)
     });
   }
 
   loadTeachers(): void {
-    this.http.get<any[]>(`${this.apiUrl}/teachers`).subscribe({
+    this.http.get<Teacher[]>(`${this.apiUrl}/teachers`).subscribe({
       next: (data) => this.teachers = data,
       error: (err) => console.error('Error loading teachers:', err)
     });
   }
 
   loadAllStudents(): void {
-    this.http.get<any[]>(`${this.apiUrl}/students`).subscribe({
+    this.http.get<Student[]>(`${this.apiUrl}/students`).subscribe({
       next: (data) => this.allStudents = data,
       error: (err) => console.error('Error loading students:', err)
     });
   }
 
   loadClassrooms(): void {
-    this.http.get<any[]>(`${this.apiUrl}/classrooms`).subscribe({
+    this.http.get<Classroom[]>(`${this.apiUrl}/classrooms`).subscribe({
       next: (data) => this.classrooms = data,
       error: (err) => console.error('Error loading classrooms:', err)
     });
   }
 
-  loadClassStudents(liveClass: any): void {
-    if (!liveClass.class?._id) return;
+  loadClassStudents(liveClass: LiveClass): void {
+    if (!liveClass.class || !liveClass.class._id) {
+      this.showError('معرف الحصة غير موجود');
+      return;
+    }
     
-    this.http.get<any[]>(`${this.apiUrl}/classes/${liveClass.class._id}/students`).subscribe({
-      next: (students) => {
-        liveClass.class.students = students;
+    this.http.get<any>(`${this.apiUrl}/classes/${liveClass.class._id}`).subscribe({
+      next: (response) => {
+        let students: Student[] = [];
+        if (response && response.data && response.data.students) {
+          students = response.data.students;
+        } else if (response && response.students) {
+          students = response.students;
+        }
+        
+        if (liveClass.class && typeof liveClass.class === 'object') {
+          // Narrow the union to Class to safely assign the students array
+          (liveClass.class as Class).students = students;
+        }
         liveClass.studentsLoaded = true;
       },
-      error: (err) => console.error('Error loading class students:', err)
+      error: (err) => {
+        console.error('Error loading class students:', err);
+        this.showError('فشل في تحميل قائمة الطلاب');
+      }
     });
   }
 
@@ -2041,41 +2008,78 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   createLiveClass(): void {
     if (!this.validateLiveClassForm()) return;
     
+    // Prepare data for backend
+    const selectedDate = new Date(this.newLiveClass.date);
+    if (isNaN(selectedDate.getTime())) {
+      this.showError('⚠️ تاريخ غير صالح');
+      return;
+    }
+    
     const liveClassData = {
-      ...this.newLiveClass,
-      month: new Date(this.newLiveClass.date).toISOString().slice(0, 7)
+      classId: this.newLiveClass.class,
+      date: selectedDate.toISOString(),
+      startTime: this.newLiveClass.startTime,
+      endTime: this.newLiveClass.endTime || this.calculateEndTime(this.newLiveClass.startTime),
+      teacherId: this.newLiveClass.teacher,
+      classroomId: this.newLiveClass.classroom || undefined,
+      status: this.newLiveClass.status || 'scheduled',
+      notes: this.newLiveClass.notes || ''
     };
     
+    console.log('📤 إرسال بيانات الحصة:', liveClassData);
+    
+    this.loading = true;
+    
     this.http.post(`${this.apiUrl}/live-classes`, liveClassData).subscribe({
-      next: () => {
-        this.showSuccess('تم إنشاء الحصة الحية بنجاح');
+      next: (response: any) => {
+        console.log('✅ تم إنشاء الحصة بنجاح:', response);
+        this.showSuccess('تم إنشاء الحصة الحية بنجاح ✅');
         this.loadLiveClasses();
         this.resetNewLiveClass();
         this.showCreateForm = false;
+        this.loading = false;
       },
       error: (err) => {
-        console.error('Error creating live class:', err);
-        this.showError('حدث خطأ أثناء إنشاء الحصة');
+        console.error('❌ Error creating live class:', err);
+        console.error('❌ Error details:', err.error);
+        
+        let errorMessage = 'حدث خطأ أثناء إنشاء الحصة';
+        if (err.error?.error) {
+          errorMessage = err.error.error;
+        } else if (err.error?.message) {
+          errorMessage = err.error.message;
+        }
+        
+        if (errorMessage.includes('الغرفة') || errorMessage.includes('قاعة')) {
+          errorMessage += '\n\n💡 تأكد من أن الغرفة غير مشغولة وليست في حالة صيانة';
+        }
+        
+        this.showError('❌ ' + errorMessage);
+        this.loading = false;
       }
     });
   }
 
-  updateLiveClass(liveClass: any): void {
+  updateLiveClass(liveClass: LiveClass): void {
     const updateData = {
       status: liveClass.status,
       endTime: liveClass.endTime,
       notes: liveClass.notes
     };
     
+    this.loading = true;
+    
     this.http.put(`${this.apiUrl}/live-classes/${liveClass._id}`, updateData).subscribe({
       next: () => {
         this.showSuccess('تم تحديث الحصة بنجاح');
         this.editingClassId = null;
         this.loadLiveClasses();
+        this.loading = false;
       },
       error: (err) => {
         console.error('Error updating live class:', err);
         this.showError('حدث خطأ أثناء تحديث الحصة');
+        this.loading = false;
       }
     });
   }
@@ -2087,37 +2091,100 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   }
 
   deleteLiveClass(liveClassId: string): void {
+    this.loading = true;
+    
     this.http.delete(`${this.apiUrl}/live-classes/${liveClassId}`).subscribe({
       next: () => {
         this.showSuccess('تم حذف الحصة بنجاح');
         this.loadLiveClasses();
+        this.loading = false;
       },
       error: (err) => {
         console.error('Error deleting live class:', err);
         this.showError('حدث خطأ أثناء حذف الحصة');
+        this.loading = false;
+      }
+    });
+  }
+
+  // ==================== Live Class Actions ====================
+  startLiveClass(liveClassId: string): void {
+    if (!confirm('هل تريد بدء هذه الحصة؟')) return;
+    
+    this.loading = true;
+    
+    this.http.put(`${this.apiUrl}/live-classes/${liveClassId}/start`, {}).subscribe({
+      next: (response: any) => {
+        this.showSuccess('✅ تم بدء الحصة بنجاح');
+        if (response.classroomUpdated) {
+          this.showSuccess(`✅ تم تحديث حالة الغرفة إلى "مشغولة"`);
+        }
+        this.loadLiveClasses();
+        this.loading = false;
+      },
+      error: (err) => {
+        console.error('Error starting live class:', err);
+        this.showError('❌ فشل في بدء الحصة: ' + (err.error?.error || err.message));
+        this.loading = false;
+      }
+    });
+  }
+
+  completeLiveClass(liveClassId: string): void {
+    if (!confirm('هل تريد إنهاء هذه الحصة؟')) return;
+    
+    this.loading = true;
+    
+    this.http.put(`${this.apiUrl}/live-classes/${liveClassId}/complete`, {}).subscribe({
+      next: (response: any) => {
+        this.showSuccess('✅ تم إنهاء الحصة بنجاح');
+        if (response.classroomUpdated) {
+          this.showSuccess(`✅ تم تحديث حالة الغرفة إلى "متاحة"`);
+        }
+        if (response.autoMarkResult) {
+          this.showSuccess(`✅ تم تسجيل ${response.autoMarkResult.markedAbsent || 0} طالب كغائبين`);
+        }
+        this.loadLiveClasses();
+        this.loading = false;
+      },
+      error: (err) => {
+        console.error('Error completing live class:', err);
+        this.showError('❌ فشل في إنهاء الحصة: ' + (err.error?.error || err.message));
+        this.loading = false;
       }
     });
   }
 
   // ==================== Attendance Operations ====================
   markStudentAttendance(liveClassId: string, studentId: string, status: string): void {
-    const data = { studentId, status, method: 'manual' };
+    const data = { 
+      studentId, 
+      status, 
+      method: 'manual',
+      sendSMS: status === 'absent'
+    };
+    
+    this.loading = true;
     
     this.http.post(`${this.apiUrl}/live-classes/${liveClassId}/attendance`, data).subscribe({
       next: (response: any) => {
         const liveClass = this.liveClasses.find(lc => lc._id === liveClassId);
         if (liveClass) {
           const existingIndex = liveClass.attendance?.findIndex(
-            (a: any) => a.student?._id === studentId || a.student === studentId
+            (a: any) => {
+              const studentIdFromAtt = typeof a.student === 'object' ? a.student?._id : a.student;
+              return studentIdFromAtt === studentId;
+            }
           );
           
           const attendanceRecord = {
             student: studentId,
-            status,
-            timestamp: new Date()
+            status: status as 'present' | 'absent' | 'late',
+            timestamp: new Date(),
+            joinedAt: status === 'present' || status === 'late' ? new Date() : undefined
           };
           
-          if (existingIndex >= 0 && liveClass.attendance) {
+          if (existingIndex !== undefined && existingIndex >= 0 && liveClass.attendance) {
             liveClass.attendance[existingIndex] = attendanceRecord;
           } else {
             if (!liveClass.attendance) liveClass.attendance = [];
@@ -2125,16 +2192,21 @@ export class LiveClassComponent implements OnInit, OnDestroy {
           }
         }
         this.showSuccess('تم تسجيل الحضور بنجاح');
+        this.loading = false;
       },
       error: (err) => {
         console.error('Error marking attendance:', err);
         this.showError('حدث خطأ أثناء تسجيل الحضور');
+        this.loading = false;
       }
     });
   }
 
   submitQuickAttendance(): void {
-    if (!this.selectedLiveClass || !this.quickAttendance.studentId) return;
+    if (!this.selectedLiveClass || !this.quickAttendance.studentId) {
+      this.showError('يرجى اختيار طالب');
+      return;
+    }
     
     this.markStudentAttendance(
       this.selectedLiveClass._id,
@@ -2148,28 +2220,37 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   removeAttendance(liveClassId: string, studentId: any): void {
     const liveClass = this.liveClasses.find(lc => lc._id === liveClassId);
     if (liveClass && liveClass.attendance) {
-      liveClass.attendance = liveClass.attendance.filter(
-        (a: any) => a.student?._id !== studentId && a.student !== studentId
-      );
+      liveClass.attendance = liveClass.attendance.filter((a: any) => {
+        const studentIdFromAtt = typeof a.student === 'object' ? a.student?._id : a.student;
+        return studentIdFromAtt !== studentId;
+      });
+      this.showSuccess('تم حذف سجل الحضور');
     }
   }
 
   autoMarkAbsent(liveClassId: string): void {
     if (confirm('⚠️ سيتم تسجيل جميع الطلاب غير المسجل حضورهم كغائبين وإرسال رسائل لأولياء أمورهم. هل تريد المتابعة؟')) {
-      const data = { autoSendSMS: true, customMessage: '' };
+      this.loading = true;
       
-      this.http.post(`${this.apiUrl}/live-classes/${liveClassId}/auto-mark-absent`, data).subscribe({
+      this.http.post(`${this.apiUrl}/live-classes/${liveClassId}/auto-mark-absent`, {
+        sendSMS: true
+      }).subscribe({
         next: (response: any) => {
           if (response.success) {
-            this.showSuccess(`✅ ${response.message}\n\nتم تسجيل ${response.data?.absentCount || 0} طالب كغائبين`);
+            this.showSuccess(`✅ تم تسجيل ${response.data?.absentCount || 0} طالب كغائبين`);
+            if (response.data?.smsResults?.sent > 0) {
+              this.showSuccess(`✅ تم إرسال ${response.data.smsResults.sent} رسالة إشعار`);
+            }
             this.loadLiveClasses();
           } else {
             this.showError(response.error);
           }
+          this.loading = false;
         },
         error: (err) => {
           console.error('Error auto marking absent:', err);
           this.showError('حدث خطأ أثناء تسجيل الغائبين');
+          this.loading = false;
         }
       });
     }
@@ -2233,7 +2314,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   }
 
   // ==================== Modal Controls ====================
-  openAttendanceModal(liveClass: any): void {
+  openAttendanceModal(liveClass: LiveClass): void {
     this.selectedLiveClass = liveClass;
     this.showAttendanceModal = true;
     this.loadLiveClassAttendance(liveClass._id);
@@ -2251,7 +2332,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   }
 
   // ==================== UI Helpers ====================
-  toggleClassDetails(liveClass: any): void {
+  toggleClassDetails(liveClass: LiveClass): void {
     liveClass.showDetails = !liveClass.showDetails;
     
     if (liveClass.showDetails && !liveClass.studentsLoaded) {
@@ -2259,7 +2340,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     }
   }
 
-  editLiveClass(liveClass: any): void {
+  editLiveClass(liveClass: LiveClass): void {
     this.editingClassId = liveClass._id;
     liveClass.showDetails = true;
   }
@@ -2311,12 +2392,41 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     return status;
   }
 
-  getAttendanceStatus(liveClass: any, studentId: string): string {
+  getClassName(liveClass: LiveClass): string {
+    if (typeof liveClass.class === 'object' && liveClass.class) {
+      return liveClass.class.name || 'غير محدد';
+    }
+    return 'غير محدد';
+  }
+
+  getClassSubject(liveClass: LiveClass): string {
+    if (typeof liveClass.class === 'object' && liveClass.class) {
+      return liveClass.class.subject || 'غير محدد';
+    }
+    return 'غير محدد';
+  }
+
+  getTeacherName(liveClass: LiveClass): string {
+    if (typeof liveClass.teacher === 'object' && liveClass.teacher) {
+      return liveClass.teacher.name || 'غير محدد';
+    }
+    return 'غير محدد';
+  }
+
+  getClassroomName(liveClass: LiveClass): string {
+    if (typeof liveClass.classroom === 'object' && liveClass.classroom) {
+      return liveClass.classroom.name || '';
+    }
+    return '';
+  }
+
+  getAttendanceStatus(liveClass: LiveClass, studentId: string): string {
     if (!liveClass.attendance) return 'لم يسجل';
     
-    const attendance = liveClass.attendance.find((a: any) => 
-      a.student?._id === studentId || a.student === studentId
-    );
+    const attendance = liveClass.attendance.find((a: any) => {
+      const studentIdFromAtt = typeof a.student === 'object' ? a.student?._id : a.student;
+      return studentIdFromAtt === studentId;
+    });
     
     if (!attendance) return 'لم يسجل';
     
@@ -2328,12 +2438,13 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     return statusMap[attendance.status] || attendance.status;
   }
 
-  getAttendanceStatusClass(liveClass: any, studentId: string): string {
+  getAttendanceStatusClass(liveClass: LiveClass, studentId: string): string {
     if (!liveClass.attendance) return '';
     
-    const attendance = liveClass.attendance.find((a: any) => 
-      a.student?._id === studentId || a.student === studentId
-    );
+    const attendance = liveClass.attendance.find((a: any) => {
+      const studentIdFromAtt = typeof a.student === 'object' ? a.student?._id : a.student;
+      return studentIdFromAtt === studentId;
+    });
     
     if (!attendance) return '';
     return attendance.status;
@@ -2348,19 +2459,23 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     return statusMap[status] || status;
   }
 
-  countAttendance(liveClass: any, status: string): number {
+  countAttendance(liveClass: LiveClass, status: string): number {
     if (!liveClass.attendance) return 0;
     return liveClass.attendance.filter((a: any) => a.status === status).length;
   }
 
-  getTotalStudents(liveClass: any): number {
-    return liveClass.class?.students?.length || 0;
+  getTotalStudents(liveClass: LiveClass): number {
+    // Ensure the union member actually has a 'students' property before accessing it
+    if (typeof liveClass.class === 'object' && liveClass.class && 'students' in liveClass.class) {
+      return (liveClass.class as Class).students?.length || 0;
+    }
+    return 0;
   }
 
   getStudentName(studentId: any): string {
     if (!studentId) return 'غير معروف';
     
-    if (typeof studentId === 'object') {
+    if (typeof studentId === 'object' && studentId !== null) {
       return studentId.name || 'غير معروف';
     }
     
@@ -2368,7 +2483,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     return student?.name || 'غير معروف';
   }
 
-  formatDate(dateString: string): string {
+  formatDate(dateString: string | Date): string {
     if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('ar-EG', {
@@ -2379,9 +2494,10 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     });
   }
 
-  formatTime(dateString: string): string {
+  formatTime(dateString: string | Date | undefined): string {
     if (!dateString) return '';
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
     return date.toLocaleTimeString('ar-EG', { 
       hour: '2-digit', 
       minute: '2-digit'
@@ -2394,6 +2510,13 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     return 'poor';
   }
 
+  calculateEndTime(startTime: string): string {
+    if (!startTime) return '10:00';
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const endHours = hours + 2;
+    return `${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  }
+
   validateLiveClassForm(): boolean {
     if (!this.newLiveClass.class) {
       this.showError('⚠️ يجب اختيار الحصة');
@@ -2402,6 +2525,14 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     
     if (!this.newLiveClass.date) {
       this.showError('⚠️ يجب تحديد التاريخ');
+      return false;
+    }
+    
+    const selectedDate = new Date(this.newLiveClass.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selectedDate < today) {
+      this.showError('⚠️ لا يمكن إنشاء حصة في تاريخ سابق');
       return false;
     }
     
@@ -2421,9 +2552,9 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   resetNewLiveClass(): void {
     this.newLiveClass = {
       class: '',
-      date: '',
-      startTime: '',
-      endTime: '',
+      date: new Date().toISOString().split('T')[0],
+      startTime: '08:00',
+      endTime: '10:00',
       teacher: '',
       classroom: '',
       status: 'scheduled',
@@ -2433,14 +2564,12 @@ export class LiveClassComponent implements OnInit, OnDestroy {
 
   // ==================== Notifications ====================
   private showSuccess(message: string): void {
-    // You can implement a toast notification service here
+    alert('✅ ' + message);
     console.log('✅ Success:', message);
-    alert(message);
   }
 
   private showError(message: string): void {
-    // You can implement a toast notification service here
+    alert('❌ ' + message);
     console.error('❌ Error:', message);
-    alert(message);
   }
 }

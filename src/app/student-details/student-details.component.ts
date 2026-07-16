@@ -2,7 +2,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import Swal from 'sweetalert2';
 import { environment } from '../../environments/environment.development';
@@ -119,7 +119,7 @@ interface RoundPayment {
 @Component({
   selector: 'app-student-details',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <!-- Modern Container -->
     <div class="modern-container">
@@ -139,7 +139,9 @@ interface RoundPayment {
             <span class="back-text">رجوع</span>
           </button>
           <h1 class="page-title" *ngIf="student">
-            <span class="title-icon">👨‍🎓</span>
+            <span class="title-avatar" [style.background]="getAvatarColor(student.name)">
+              {{ getInitials(student.name) }}
+            </span>
             {{ student.name }}
           </h1>
           <div class="header-actions">
@@ -203,32 +205,61 @@ interface RoundPayment {
         <div class="info-grid" *ngIf="student">
           <div class="card profile-card">
             <div class="profile-header">
-              <div class="profile-avatar">
-                <span class="avatar-text">{{ student.name.charAt(0) }}</span>
+              <div class="profile-avatar" [style.background]="getAvatarColor(student.name)">
+                <span class="avatar-text">{{ getInitials(student.name) }}</span>
               </div>
               <div class="profile-status">
                 <span class="status-badge" [class.active]="student.active" [class.inactive]="!student.active">
+                  <span class="status-dot"></span>
                   {{ student.active ? 'نشط' : 'غير نشط' }}
                 </span>
                 <span class="status-badge registration" [class.paid]="student.hasPaidRegistration">
+                  <span class="status-dot"></span>
                   {{ student.hasPaidRegistration ? 'مسدد التسجيل' : 'غير مسدد' }}
                 </span>
               </div>
             </div>
             <h2 class="profile-name">{{ student.name }}</h2>
-            <p class="profile-id">رقم الطالب: {{ student.studentId }}</p>
+            <p class="profile-id">
+              <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="3" y1="15" x2="21" y2="15"/>
+                <line x1="9" y1="21" x2="9" y2="9"/>
+              </svg>
+              رقم الطالب: {{ student.studentId }}
+            </p>
             
             <div class="info-details">
               <div class="info-row">
-                <span class="info-label">المستوى الدراسي:</span>
+                <span class="info-label">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                  </svg>
+                  المستوى الدراسي:
+                </span>
                 <span class="info-value">{{ getAcademicYearName(student.academicYear) }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">ولي الأمر:</span>
+                <span class="info-label">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                  ولي الأمر:
+                </span>
                 <span class="info-value">{{ student.parentName }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">رقم الهاتف:</span>
+                <span class="info-label">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="5" y="2" width="14" height="20" rx="2"/>
+                    <line x1="12" y1="18" x2="12.01" y2="18"/>
+                  </svg>
+                  رقم الهاتف:
+                </span>
                 <span class="info-value">{{ student.parentPhone }}</span>
                 <button class="call-btn" (click)="makeCall(student.parentPhone)" title="اتصال">
                   <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -242,7 +273,13 @@ interface RoundPayment {
                 </button>
               </div>
               <div class="info-row" *ngIf="student.parentEmail">
-                <span class="info-label">البريد الإلكتروني:</span>
+                <span class="info-label">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                    <path d="m22 7-10 7L2 7"/>
+                  </svg>
+                  البريد الإلكتروني:
+                </span>
                 <span class="info-value">{{ student.parentEmail }}</span>
                 <button class="email-btn" (click)="sendEmail(student.parentEmail)" title="بريد">
                   <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -252,25 +289,48 @@ interface RoundPayment {
                 </button>
               </div>
               <div class="info-row" *ngIf="student.birthDate">
-                <span class="info-label">تاريخ الميلاد:</span>
+                <span class="info-label">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  تاريخ الميلاد:
+                </span>
                 <span class="info-value">{{ student.birthDate | date:'dd/MM/yyyy' }} (العمر: {{ calculateAge(student.birthDate) }} سنة)</span>
               </div>
               <div class="info-row">
-                <span class="info-label">تاريخ التسجيل:</span>
+                <span class="info-label">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  تاريخ التسجيل:
+                </span>
                 <span class="info-value">{{ student.registrationDate | date:'dd/MM/yyyy' }}</span>
               </div>
             </div>
           </div>
 
           <div class="card financial-card">
-            <h3 class="card-title">الملخص المالي</h3>
+            <h3 class="card-title">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="6" width="20" height="14" rx="2"/>
+                <line x1="2" y1="10" x2="22" y2="10"/>
+                <circle cx="16" cy="14" r="1"/>
+              </svg>
+              الملخص المالي
+            </h3>
             <div class="financial-stats">
               <div class="stat-item">
-                <div class="stat-value">{{ getTotalPaid() | number:'1.0-0' }} د.ج</div>
+                <div class="stat-value paid">{{ getTotalPaid() | number:'1.0-0' }} د.ج</div>
                 <div class="stat-label">المدفوع</div>
               </div>
               <div class="stat-item">
-                <div class="stat-value">{{ getTotalPending() | number:'1.0-0' }} د.ج</div>
+                <div class="stat-value pending">{{ getTotalPending() | number:'1.0-0' }} د.ج</div>
                 <div class="stat-label">المتبقي</div>
               </div>
               <div class="stat-item">
@@ -292,7 +352,7 @@ interface RoundPayment {
           <div class="card absence-summary-card" *ngIf="absenceSummary?.monthly">
             <div class="card-header">
               <h3 class="card-title">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="10"/>
                   <line x1="12" y1="8" x2="12" y2="12"/>
                   <line x1="12" y1="16" x2="12.01" y2="16"/>
@@ -360,8 +420,8 @@ interface RoundPayment {
             </button>
           </div>
 
-          <div class="classes-grid" *ngIf="studentClasses.length > 0; else noClasses">
-            <div class="class-card" *ngFor="let classItem of studentClasses">
+          <div class="classes-grid" *ngIf="studentClasses.length > 0; else noClasses" >
+            <div class="class-card" *ngFor="let classItem of studentClasses" style='cursor: pointer;' routerLink="/lesson-detail/{{ classItem._id }}">
               <div class="class-header">
                 <h4 class="class-name">{{ classItem.name }}</h4>
                 <span class="payment-badge" [class.monthly]="classItem.paymentSystem === 'monthly'" [class.rounds]="classItem.paymentSystem === 'rounds'">
@@ -369,11 +429,45 @@ interface RoundPayment {
                 </span>
               </div>
               <div class="class-details">
-                <p><span class="detail-label">المادة:</span> {{ classItem.subject }}</p>
-                <p><span class="detail-label">السعر الشهري:</span> {{ classItem.price | number:'1.0-0' }} د.ج</p>
-                <p *ngIf="classItem.teacher"><span class="detail-label">الأستاذ:</span> {{ classItem.teacher.name }}</p>
+                <p>
+                  <span class="detail-label">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                    </svg>
+                    المادة:
+                  </span>
+                  {{ classItem.subject }}
+                </p>
+                <p>
+                  <span class="detail-label">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="2" y="6" width="20" height="14" rx="2"/>
+                      <line x1="2" y1="10" x2="22" y2="10"/>
+                      <circle cx="16" cy="14" r="1"/>
+                    </svg>
+                    السعر الشهري:
+                  </span>
+                  {{ classItem.price | number:'1.0-0' }} د.ج
+                </p>
+                <p *ngIf="classItem.teacher">
+                  <span class="detail-label">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                      <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    الأستاذ:
+                  </span>
+                  {{ classItem.teacher.name }}
+                </p>
                 <p *ngIf="classItem.schedule?.length">
-                  <span class="detail-label">المواعيد:</span>
+                  <span class="detail-label">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    المواعيد:
+                  </span>
                   <span class="schedule-list">
                     <span *ngFor="let s of classItem.schedule" class="schedule-badge">
                       {{ s.day }} {{ s.time }}
@@ -385,7 +479,12 @@ interface RoundPayment {
           </div>
           <ng-template #noClasses>
             <div class="empty-state">
-              <div class="empty-icon">📚</div>
+              <div class="empty-icon">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                </svg>
+              </div>
               <p>لا توجد حصص مسجلة</p>
               <button class="add-btn-outline" (click)="openAddToLessonsModal()">تسجيل في حصة</button>
             </div>
@@ -418,12 +517,14 @@ interface RoundPayment {
           <!-- Filter Controls -->
           <div class="filter-section">
             <div class="filter-group">
+              <label>الشهر</label>
               <select [(ngModel)]="selectedMonthForGroupPay" (change)="selectPaymentsByMonth(selectedMonthForGroupPay)" class="filter-select">
                 <option value="">جميع الأشهر</option>
                 <option *ngFor="let m of getUniqueMonths()" [value]="m">{{ m }}</option>
               </select>
             </div>
             <div class="filter-group">
+              <label>الحصة</label>
               <select [(ngModel)]="selectedClassForGroupPay" (change)="selectPaymentsByClass(selectedClassForGroupPay)" class="filter-select">
                 <option value="all">جميع الحصص</option>
                 <option *ngFor="let group of classPaymentGroups" [value]="group.classId">{{ group.className }}</option>
@@ -439,7 +540,7 @@ interface RoundPayment {
                 <div class="group-info">
                   <h4 class="group-name">{{ group.className }}</h4>
                   <div class="group-stats">
-                    <span class="stat">المجموع: {{ group.totalAmount | number:'1.0-0' }} د.ج</span>
+                    <span class="stat total">المجموع: {{ group.totalAmount | number:'1.0-0' }} د.ج</span>
                     <span class="stat paid">مدفوع: {{ group.paidAmount | number:'1.0-0' }} د.ج</span>
                     <span class="stat pending">متبقي: {{ group.pendingAmount | number:'1.0-0' }} د.ج</span>
                   </div>
@@ -953,7 +1054,13 @@ interface RoundPayment {
           
           <!-- Empty State -->
           <div *ngIf="!loadingAbsences && studentAbsences.length === 0" class="empty-state">
-            <div class="empty-icon">📋</div>
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
             <p>لا توجد سجلات غياب لهذا الطالب</p>
             <p class="text-muted small">جميع الحصص مسجلة كحضور</p>
           </div>
@@ -968,28 +1075,32 @@ interface RoundPayment {
   styles: [`
     /* Modern CSS Variables */
     :host {
-      --primary: #4361ee;
-      --primary-dark: #3a56d4;
-      --secondary: #2a9d8f;
-      --danger: #e63946;
-      --warning: #f4a261;
-      --success: #2a9d8f;
-      --gray-100: #f8f9fa;
-      --gray-200: #e9ecef;
-      --gray-300: #dee2e6;
-      --gray-400: #ced4da;
-      --gray-500: #adb5bd;
-      --gray-600: #6c757d;
-      --gray-700: #495057;
-      --gray-800: #343a40;
-      --gray-900: #212529;
-      --shadow-sm: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
-      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
-      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
-      --radius-sm: 8px;
-      --radius-md: 12px;
-      --radius-lg: 16px;
-      --transition: all 0.2s ease;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --primary-light: #60a5fa;
+      --secondary: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+      --gray-50: #f8fafc;
+      --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0;
+      --gray-300: #cbd5e1;
+      --gray-400: #94a3b8;
+      --gray-500: #64748b;
+      --gray-600: #475569;
+      --gray-700: #334155;
+      --gray-800: #1e293b;
+      --gray-900: #0f172a;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+      --radius: 16px;
+      --radius-sm: 10px;
+      --radius-xs: 6px;
+      --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     /* Base Styles */
@@ -1034,7 +1145,7 @@ interface RoundPayment {
     /* Header */
     .header-section {
       background: white;
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius);
       padding: 1rem 1.5rem;
       margin-bottom: 1.5rem;
       box-shadow: var(--shadow-sm);
@@ -1069,11 +1180,19 @@ interface RoundPayment {
       margin: 0;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.75rem;
       color: var(--gray-800);
     }
-    .title-icon {
-      font-size: 1.8rem;
+    .title-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      font-weight: 700;
+      color: white;
     }
     .header-actions {
       display: flex;
@@ -1109,7 +1228,7 @@ interface RoundPayment {
     /* Tabs */
     .tabs-container {
       background: white;
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius);
       margin-bottom: 1.5rem;
       box-shadow: var(--shadow-sm);
       overflow-x: auto;
@@ -1126,7 +1245,7 @@ interface RoundPayment {
       padding: 0.75rem 1.25rem;
       background: none;
       border: none;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       cursor: pointer;
       font-size: 0.9rem;
       font-weight: 500;
@@ -1163,7 +1282,7 @@ interface RoundPayment {
     }
     .card {
       background: white;
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius);
       padding: 1.5rem;
       box-shadow: var(--shadow-sm);
     }
@@ -1179,15 +1298,15 @@ interface RoundPayment {
     .profile-avatar {
       width: 80px;
       height: 80px;
-      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
+      box-shadow: var(--shadow-md);
     }
     .avatar-text {
       font-size: 2.5rem;
-      font-weight: 600;
+      font-weight: 700;
       color: white;
     }
     .profile-status {
@@ -1195,22 +1314,47 @@ interface RoundPayment {
       gap: 0.5rem;
     }
     .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
       padding: 0.25rem 0.75rem;
       border-radius: 20px;
       font-size: 0.75rem;
       font-weight: 500;
     }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
     .status-badge.active {
-      background: #d4edda;
-      color: #155724;
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status-badge.active .status-dot {
+      background: #065f46;
     }
     .status-badge.inactive {
-      background: #f8d7da;
-      color: #721c24;
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .status-badge.inactive .status-dot {
+      background: #991b1b;
     }
     .status-badge.registration.paid {
-      background: #d1ecf1;
-      color: #0c5460;
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .status-badge.registration.paid .status-dot {
+      background: #1e40af;
+    }
+    .status-badge.registration {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .status-badge.registration .status-dot {
+      background: #92400e;
     }
     .profile-name {
       font-size: 1.5rem;
@@ -1218,6 +1362,10 @@ interface RoundPayment {
       margin: 0.5rem 0;
     }
     .profile-id {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
       color: var(--gray-500);
       margin-bottom: 1.5rem;
     }
@@ -1227,17 +1375,22 @@ interface RoundPayment {
     .info-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
       padding: 0.75rem 0;
       border-bottom: 1px solid var(--gray-200);
+      gap: 0.5rem;
     }
-    .info-label {
+    .info-row .info-label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
       color: var(--gray-600);
       font-size: 0.85rem;
+      min-width: 120px;
     }
-    .info-value {
+    .info-row .info-value {
       font-weight: 500;
       color: var(--gray-800);
+      flex: 1;
     }
     .call-btn, .msg-btn, .email-btn {
       background: none;
@@ -1246,20 +1399,24 @@ interface RoundPayment {
       padding: 0.25rem;
       border-radius: var(--radius-sm);
       transition: var(--transition);
+      color: var(--gray-500);
     }
-    .call-btn:hover { background: #d4edda; color: #155724; }
-    .msg-btn:hover { background: #d4edda; color: #25D366; }
-    .email-btn:hover { background: #d1ecf1; color: #0c5460; }
+    .call-btn:hover { background: #d1fae5; color: #065f46; }
+    .msg-btn:hover { background: #d1fae5; color: #25D366; }
+    .email-btn:hover { background: #dbeafe; color: #1e40af; }
 
     /* Financial Card */
     .financial-card .card-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
       font-size: 1.1rem;
       margin-bottom: 1rem;
       color: var(--gray-700);
     }
     .financial-stats {
       display: flex;
-      justify-content: space-between;
+      justify-content: space-around;
       margin-bottom: 1.5rem;
     }
     .stat-item {
@@ -1268,7 +1425,12 @@ interface RoundPayment {
     .stat-value {
       font-size: 1.5rem;
       font-weight: 700;
-      color: var(--primary);
+    }
+    .stat-value.paid {
+      color: var(--success);
+    }
+    .stat-value.pending {
+      color: var(--warning);
     }
     .stat-label {
       font-size: 0.75rem;
@@ -1293,6 +1455,7 @@ interface RoundPayment {
       height: 100%;
       border-radius: 4px;
       transition: width 0.3s ease;
+      background: var(--primary);
     }
     .progress-fill.bg-success { background: var(--success); }
     .progress-fill.bg-warning { background: var(--warning); }
@@ -1330,7 +1493,7 @@ interface RoundPayment {
       text-align: center;
       padding: 0.75rem;
       background: var(--gray-50);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
     }
     .absence-stat .stat-value {
       font-size: 1.5rem;
@@ -1356,8 +1519,8 @@ interface RoundPayment {
       font-size: 0.75rem;
     }
     .action-btn-sm.info {
-      background: #e3f2fd;
-      color: #1976d2;
+      background: #dbeafe;
+      color: #1e40af;
     }
     .action-btn-sm.success {
       background: var(--success);
@@ -1396,13 +1559,20 @@ interface RoundPayment {
     .add-btn.primary { background: var(--primary); }
     .add-btn.secondary { background: var(--secondary); }
     .add-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .add-btn-outline {
       background: none;
-      border: 1px solid var(--primary);
+      border: 2px solid var(--primary);
       color: var(--primary);
       padding: 0.5rem 1rem;
       border-radius: var(--radius-sm);
       cursor: pointer;
+      font-weight: 500;
+      transition: var(--transition);
+    }
+    .add-btn-outline:hover {
+      background: var(--primary);
+      color: white;
     }
     .classes-grid {
       display: grid;
@@ -1411,10 +1581,11 @@ interface RoundPayment {
     }
     .class-card {
       background: white;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       padding: 1rem;
       box-shadow: var(--shadow-sm);
       transition: var(--transition);
+      border: 1px solid var(--gray-200);
     }
     .class-card:hover {
       transform: translateY(-2px);
@@ -1432,27 +1603,34 @@ interface RoundPayment {
       margin: 0;
     }
     .payment-badge {
-      padding: 0.25rem 0.5rem;
+      padding: 0.25rem 0.75rem;
       border-radius: 20px;
       font-size: 0.7rem;
       font-weight: 500;
     }
     .payment-badge.monthly {
-      background: #e3f2fd;
-      color: #1976d2;
+      background: #dbeafe;
+      color: #1e40af;
     }
     .payment-badge.rounds {
-      background: #fff3e0;
-      color: #e65100;
+      background: #fef3c7;
+      color: #92400e;
     }
     .class-details p {
       margin: 0.5rem 0;
       font-size: 0.85rem;
       color: var(--gray-600);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
     }
     .detail-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
       font-weight: 500;
       color: var(--gray-700);
+      min-width: 80px;
     }
     .schedule-list {
       display: inline-flex;
@@ -1474,18 +1652,29 @@ interface RoundPayment {
       margin-bottom: 1.5rem;
       padding: 1rem;
       background: white;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-sm);
     }
     .filter-group {
       flex: 1;
       min-width: 150px;
     }
+    .filter-group label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--gray-500);
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
     .filter-select {
       width: 100%;
       padding: 0.6rem;
-      border: 1px solid var(--gray-300);
+      border: 1.5px solid var(--gray-200);
       border-radius: var(--radius-sm);
       background: white;
+      font-family: inherit;
     }
     .filter-clear {
       padding: 0.6rem 1rem;
@@ -1493,13 +1682,16 @@ interface RoundPayment {
       border: none;
       border-radius: var(--radius-sm);
       cursor: pointer;
+      font-weight: 500;
+      align-self: flex-end;
     }
     .group-card {
       background: white;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       margin-bottom: 1rem;
       overflow: hidden;
       box-shadow: var(--shadow-sm);
+      border: 1px solid var(--gray-200);
     }
     .group-header {
       display: flex;
@@ -1526,6 +1718,7 @@ interface RoundPayment {
       gap: 1rem;
       font-size: 0.8rem;
     }
+    .stat.total { color: var(--gray-600); }
     .stat.paid { color: var(--success); }
     .stat.pending { color: var(--warning); }
     .group-actions {
@@ -1547,7 +1740,7 @@ interface RoundPayment {
     .payment-item {
       display: flex;
       align-items: center;
-      padding: 1rem;
+      padding: 0.75rem 1rem;
       border-bottom: 1px solid var(--gray-100);
       transition: var(--transition);
     }
@@ -1555,8 +1748,15 @@ interface RoundPayment {
       background: var(--gray-50);
     }
     .payment-item.paid {
-      background: #f8f9fa;
-      opacity: 0.8;
+      background: #f8fafc;
+      opacity: 0.7;
+    }
+    .payment-item.pending {
+      border-right: 3px solid var(--warning);
+    }
+    .payment-item.late {
+      border-right: 3px solid var(--danger);
+      background: #fef2f2;
     }
     .payment-checkbox {
       margin-left: 1rem;
@@ -1572,15 +1772,16 @@ interface RoundPayment {
       display: flex;
       gap: 1rem;
       font-size: 0.85rem;
+      flex-wrap: wrap;
     }
     .payment-status {
-      padding: 0.2rem 0.5rem;
+      padding: 0.2rem 0.6rem;
       border-radius: 12px;
       font-size: 0.7rem;
     }
-    .payment-status.bg-success { background: #d4edda; color: #155724; }
-    .payment-status.bg-warning { background: #fff3cd; color: #856404; }
-    .payment-status.bg-danger { background: #f8d7da; color: #721c24; }
+    .payment-status.bg-success { background: #d1fae5; color: #065f46; }
+    .payment-status.bg-warning { background: #fef3c7; color: #92400e; }
+    .payment-status.bg-danger { background: #fee2e2; color: #991b1b; }
     .payment-meta {
       font-size: 0.7rem;
       color: var(--gray-500);
@@ -1588,52 +1789,36 @@ interface RoundPayment {
     }
     .payment-actions {
       display: flex;
-      gap: 0.5rem;
+      gap: 0.25rem;
     }
     .icon-btn {
       background: none;
       border: none;
       cursor: pointer;
-      padding: 0.5rem;
-      border-radius: var(--radius-sm);
+      padding: 0.4rem;
+      border-radius: var(--radius-xs);
       transition: var(--transition);
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      color: var(--gray-500);
     }
-    .icon-btn.print {
-      color: var(--primary);
+    .icon-btn:hover {
+      background: var(--gray-100);
     }
-    .icon-btn.print:hover {
-      background: #e3f2fd;
-      color: #1976d2;
-    }
-    .icon-btn.pay {
-      color: var(--success);
-    }
-    .icon-btn.pay:hover {
-      background: #d4edda;
-      color: #155724;
-    }
-    .icon-btn.cancel {
-      color: var(--warning);
-    }
-    .icon-btn.cancel:hover {
-      background: #fff3cd;
-      color: #856404;
-    }
-    .icon-btn.delete {
-      color: var(--danger);
-    }
-    .icon-btn.delete:hover {
-      background: #f8d7da;
-      color: #721c24;
-    }
+    .icon-btn.print { color: var(--primary); }
+    .icon-btn.print:hover { background: #dbeafe; }
+    .icon-btn.pay { color: var(--success); }
+    .icon-btn.pay:hover { background: #d1fae5; }
+    .icon-btn.cancel { color: var(--warning); }
+    .icon-btn.cancel:hover { background: #fef3c7; }
+    .icon-btn.delete { color: var(--danger); }
+    .icon-btn.delete:hover { background: #fee2e2; }
     .payments-summary {
       background: var(--primary);
       color: white;
       padding: 1rem;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -1649,17 +1834,22 @@ interface RoundPayment {
       background: var(--success);
       color: white;
       border: none;
-      padding: 0.5rem 1rem;
+      padding: 0.5rem 1.2rem;
       border-radius: var(--radius-sm);
       cursor: pointer;
+      font-weight: 500;
     }
     .btn-secondary {
       background: rgba(255,255,255,0.2);
       color: white;
       border: none;
-      padding: 0.5rem 1rem;
+      padding: 0.5rem 1.2rem;
       border-radius: var(--radius-sm);
       cursor: pointer;
+      font-weight: 500;
+    }
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.3);
     }
 
     /* Payment Systems Tab */
@@ -1670,7 +1860,7 @@ interface RoundPayment {
     }
     .system-section {
       background: white;
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius);
       padding: 1.5rem;
       box-shadow: var(--shadow-sm);
     }
@@ -1685,8 +1875,12 @@ interface RoundPayment {
       border-bottom: 1px solid var(--gray-200);
     }
     .modern-table th {
-      background: var(--gray-100);
+      background: var(--gray-50);
       font-weight: 600;
+      color: var(--gray-600);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
     }
     .rounds-grid {
       display: grid;
@@ -1695,8 +1889,9 @@ interface RoundPayment {
     }
     .round-card {
       background: var(--gray-50);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       padding: 1rem;
+      border: 1px solid var(--gray-200);
     }
     .round-header {
       display: flex;
@@ -1725,8 +1920,8 @@ interface RoundPayment {
       color: var(--gray-500);
     }
     .empty-icon {
-      font-size: 3rem;
       margin-bottom: 1rem;
+      color: var(--gray-300);
     }
     .empty-state.small {
       padding: 1.5rem;
@@ -1739,7 +1934,8 @@ interface RoundPayment {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0,0,0,0.5);
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1748,14 +1944,15 @@ interface RoundPayment {
     }
     .modal-content {
       background: white;
-      border-radius: var(--radius-lg);
+      border-radius: var(--radius);
       width: 100%;
       max-width: 500px;
       max-height: 90vh;
       overflow-y: auto;
+      box-shadow: var(--shadow-xl);
     }
     .modal-content.large {
-      max-width: 1000px;
+      max-width: 900px;
     }
     .modal-header {
       display: flex;
@@ -1769,6 +1966,7 @@ interface RoundPayment {
       display: flex;
       align-items: center;
       gap: 0.5rem;
+      font-size: 1.1rem;
     }
     .close-btn {
       background: none;
@@ -1776,6 +1974,12 @@ interface RoundPayment {
       font-size: 1.5rem;
       cursor: pointer;
       color: var(--gray-500);
+      padding: 0.25rem 0.5rem;
+      border-radius: var(--radius-xs);
+      transition: var(--transition);
+    }
+    .close-btn:hover {
+      background: var(--gray-100);
     }
     .modal-body {
       padding: 1.5rem;
@@ -1794,42 +1998,63 @@ interface RoundPayment {
       display: block;
       margin-bottom: 0.5rem;
       font-weight: 500;
+      color: var(--gray-700);
     }
     .form-control {
       width: 100%;
-      padding: 0.6rem;
-      border: 1px solid var(--gray-300);
+      padding: 0.6rem 0.8rem;
+      border: 1.5px solid var(--gray-200);
       border-radius: var(--radius-sm);
+      font-family: inherit;
+      transition: var(--transition);
+    }
+    .form-control:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
     .radio-group {
       display: flex;
       gap: 1rem;
+      flex-wrap: wrap;
     }
     .radio-label {
       display: flex;
       align-items: center;
       gap: 0.5rem;
+      cursor: pointer;
     }
     .btn-primary {
       background: var(--primary);
       color: white;
       border: none;
-      padding: 0.6rem 1.2rem;
+      padding: 0.6rem 1.5rem;
       border-radius: var(--radius-sm);
       cursor: pointer;
+      font-weight: 500;
+      transition: var(--transition);
+    }
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
     .btn-danger {
       background: var(--danger);
       color: white;
       border: none;
-      padding: 0.6rem 1.2rem;
+      padding: 0.6rem 1.5rem;
       border-radius: var(--radius-sm);
       cursor: pointer;
+      font-weight: 500;
     }
     .confirmation-summary {
-      background: var(--gray-100);
+      background: var(--gray-50);
       padding: 1rem;
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
       margin-bottom: 1rem;
     }
     .summary-item {
@@ -1841,6 +2066,7 @@ interface RoundPayment {
       display: flex;
       gap: 1rem;
       margin-bottom: 1rem;
+      flex-wrap: wrap;
     }
     .available-classes {
       max-height: 400px;
@@ -1848,7 +2074,7 @@ interface RoundPayment {
     }
     .class-checkbox-item {
       padding: 0.75rem;
-      border-bottom: 1px solid var(--gray-200);
+      border-bottom: 1px solid var(--gray-100);
     }
     .item-content {
       display: flex;
@@ -1869,11 +2095,19 @@ interface RoundPayment {
       border-radius: 12px;
       font-size: 0.7rem;
     }
+    .payment-badge-sm.monthly {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .payment-badge-sm.rounds {
+      background: #fef3c7;
+      color: #92400e;
+    }
     .selected-summary {
       margin-top: 1rem;
       padding: 1rem;
-      background: var(--gray-100);
-      border-radius: var(--radius-md);
+      background: var(--gray-50);
+      border-radius: var(--radius-sm);
     }
     .selected-list {
       display: flex;
@@ -1898,12 +2132,15 @@ interface RoundPayment {
     .total-info {
       margin-top: 1rem;
       padding: 0.75rem;
-      background: var(--gray-100);
-      border-radius: var(--radius-md);
+      background: var(--gray-50);
+      border-radius: var(--radius-sm);
       text-align: center;
     }
     .text-danger {
       color: var(--danger);
+    }
+    .text-muted {
+      color: var(--gray-500);
     }
 
     /* Absences Modal Styles */
@@ -1917,7 +2154,7 @@ interface RoundPayment {
       text-align: center;
       padding: 0.75rem;
       background: var(--gray-50);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
     }
     .summary-stats .stat-card .stat-value {
       font-size: 1.25rem;
@@ -1930,7 +2167,7 @@ interface RoundPayment {
       margin-bottom: 1.5rem;
       padding: 1rem;
       background: var(--gray-50);
-      border-radius: var(--radius-md);
+      border-radius: var(--radius-sm);
     }
     .filter-row .filter-group {
       flex: 1;
@@ -1963,25 +2200,59 @@ interface RoundPayment {
       font-weight: 500;
     }
     .status-badge-sm.bg-success {
-      background: #d4edda;
-      color: #155724;
+      background: #d1fae5;
+      color: #065f46;
     }
     .status-badge-sm.bg-warning {
-      background: #fff3cd;
-      color: #856404;
+      background: #fef3c7;
+      color: #92400e;
     }
     .status-badge-sm.bg-danger {
-      background: #f8d7da;
-      color: #721c24;
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .status-badge-sm.paid {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status-badge-sm.pending {
+      background: #fef3c7;
+      color: #92400e;
     }
     .auto-badge {
       display: inline-block;
-      background: #e3f2fd;
-      color: #1976d2;
-      font-size: 0.65rem;
+      background: #dbeafe;
+      color: #1e40af;
+      font-size: 0.6rem;
       padding: 0.15rem 0.4rem;
       border-radius: 10px;
       margin-right: 0.5rem;
+    }
+    .round-status {
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 500;
+    }
+    .round-status.badge-success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .round-status.badge-danger {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .round-status.badge-warning {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .round-status.badge-info {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    .round-status.badge-secondary {
+      background: var(--gray-200);
+      color: var(--gray-600);
     }
 
     /* Icons */
@@ -2001,11 +2272,13 @@ interface RoundPayment {
       width: 18px;
       height: 18px;
       cursor: pointer;
+      accent-color: var(--primary);
     }
     .group-checkbox {
       width: 20px;
       height: 20px;
       cursor: pointer;
+      accent-color: var(--primary);
     }
 
     /* Table Responsive */
@@ -2016,18 +2289,32 @@ interface RoundPayment {
     /* Responsive */
     @media (max-width: 768px) {
       .modern-container {
-        padding: 0.75rem;
+        padding: 0.5rem;
       }
       .header-content {
         flex-direction: column;
         align-items: flex-start;
       }
+      .header-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
       .tabs {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
       }
       .tab-btn {
-        flex: 1;
-        justify-content: center;
+        flex: 0 0 auto;
+        font-size: 0.8rem;
+        padding: 0.5rem 0.75rem;
+      }
+      .tab-btn span {
+        display: none;
+      }
+      .tab-btn .tab-icon {
+        width: 1.4rem;
+        height: 1.4rem;
       }
       .info-grid {
         grid-template-columns: 1fr;
@@ -2051,7 +2338,11 @@ interface RoundPayment {
         flex-direction: column;
       }
       .modal-content {
-        margin: 1rem;
+        margin: 0.5rem;
+        max-height: 95vh;
+      }
+      .modal-content.large {
+        max-width: 100%;
       }
       .summary-stats {
         grid-template-columns: repeat(2, 1fr);
@@ -2061,6 +2352,71 @@ interface RoundPayment {
       }
       .filter-row {
         flex-direction: column;
+      }
+      .financial-stats {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .profile-header {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .profile-status {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .info-row {
+        flex-wrap: wrap;
+      }
+      .info-row .info-label {
+        min-width: 100%;
+      }
+      .payments-summary {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+      }
+      .summary-info {
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+      .rounds-grid {
+        grid-template-columns: 1fr;
+      }
+      .filter-section {
+        flex-direction: column;
+      }
+      .filter-group {
+        min-width: 100%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .page-title {
+        font-size: 1.2rem;
+      }
+      .title-avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 0.8rem;
+      }
+      .profile-avatar {
+        width: 60px;
+        height: 60px;
+      }
+      .avatar-text {
+        font-size: 1.8rem;
+      }
+      .modal-footer {
+        flex-direction: column;
+      }
+      .modal-footer button {
+        width: 100%;
+        justify-content: center;
+      }
+      .payment-details {
+        flex-direction: column;
+        gap: 0.25rem;
       }
     }
   `]
@@ -2179,6 +2535,13 @@ export class StudentDetailsComponent implements OnInit {
   bulkPaymentProgress: number = 0;
   bulkPaymentResults: any[] = [];
 
+  private avatarColors: string[] = [
+    '#2563eb', '#7c3aed', '#0891b2', '#059669',
+    '#dc2626', '#d97706', '#9333ea', '#0d9488',
+    '#e11d48', '#4f46e5', '#0284c7', '#16a34a',
+    '#8b5cf6', '#0ea5e9', '#14b8a6', '#f59e0b'
+  ];
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -2200,6 +2563,16 @@ export class StudentDetailsComponent implements OnInit {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     });
+  }
+
+  // ==================== AVATAR HELPER ====================
+  getAvatarColor(name: string): string {
+    const index = name.length % this.avatarColors.length;
+    return this.avatarColors[index];
+  }
+
+  getInitials(name: string): string {
+    return name.charAt(0).toUpperCase();
   }
 
   // ==================== LOAD DATA METHODS ====================
@@ -2563,19 +2936,19 @@ export class StudentDetailsComponent implements OnInit {
       const startDate = new Date(round.startDate);
       if (round.status === 'paid') {
         round.statusText = 'مدفوعة';
-        round.statusClass = 'badge bg-success';
+        round.statusClass = 'badge-success';
       } else if (now > endDate && round.status !== 'paid') {
         round.statusText = 'منتهية';
-        round.statusClass = 'badge bg-danger';
+        round.statusClass = 'badge-danger';
       } else if (now >= startDate && now <= endDate && round.status !== 'paid') {
         round.statusText = 'متأخرة';
-        round.statusClass = 'badge bg-warning';
+        round.statusClass = 'badge-warning';
       } else if (now < startDate) {
         round.statusText = 'قادمة';
-        round.statusClass = 'badge bg-info';
+        round.statusClass = 'badge-info';
       } else {
         round.statusText = 'معلقة';
-        round.statusClass = 'badge bg-secondary';
+        round.statusClass = 'badge-secondary';
       }
     });
   }
@@ -3260,349 +3633,292 @@ export class StudentDetailsComponent implements OnInit {
   }
 
   // ==================== PRINTING METHODS ====================
-// استبدل دالة printPaymentReceipt بهذا الكود
-
-async printPaymentReceipt(payment: Payment): Promise<void> {
-  // التحقق أولاً من الاتصال بالطابعة
-  if (!this.printerService.checkConnectionStatus()) {
-    // عرض خيار للمستخدم للاتصال بالطابعة
-    const result = await Swal.fire({
-      title: 'الاتصال بالطابعة',
-      html: `
-        <div class="text-start">
-          <p>⚠️ لم يتم الاتصال بالطابعة الحرارية بعد.</p>
-          <p>يرجى النقر على "اتصال" واختيار الطابعة من القائمة.</p>
-          <div class="alert alert-info mt-3">
-            <small>📌 ملاحظة: تأكد من أن الطابعة متصلة بالجهاز ومشغلة.</small>
+  async printPaymentReceipt(payment: Payment): Promise<void> {
+    if (!this.printerService.checkConnectionStatus()) {
+      const result = await Swal.fire({
+        title: 'الاتصال بالطابعة',
+        html: `
+          <div class="text-start">
+            <p>⚠️ لم يتم الاتصال بالطابعة الحرارية بعد.</p>
+            <p>يرجى النقر على "اتصال" واختيار الطابعة من القائمة.</p>
+            <div class="alert alert-info mt-3">
+              <small>📌 ملاحظة: تأكد من أن الطابعة متصلة بالجهاز ومشغلة.</small>
+            </div>
           </div>
-        </div>
-      `,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: '🖨️ اتصال بالطابعة',
-      cancelButtonText: 'إلغاء',
-      showDenyButton: true,
-      denyButtonText: '📄 طباعة عادية (بدون طابعة)'
-    });
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '🖨️ اتصال بالطابعة',
+        cancelButtonText: 'إلغاء',
+        showDenyButton: true,
+        denyButtonText: '📄 طباعة عادية (بدون طابعة)'
+      });
 
-    if (result.isConfirmed) {
-      // محاولة الاتصال بالطابعة
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: 'جاري الاتصال...',
+          text: 'الرجاء اختيار الطابعة من النافذة المنبثقة',
+          allowOutsideClick: false,
+          didOpen: () => Swal.showLoading()
+        });
+
+        const connected = await this.printerService.connectToThermalPrinter();
+        Swal.close();
+
+        if (!connected) {
+          Swal.fire({
+            icon: 'error',
+            title: 'فشل الاتصال',
+            text: 'لم يتم الاتصال بالطابعة. تأكد من أن الطابعة متصلة ومشغلة.',
+            confirmButtonText: 'حسناً'
+          });
+          return;
+        }
+      } else if (result.isDenied) {
+        await this.printRegularReceipt(payment);
+        return;
+      } else {
+        return;
+      }
+    }
+
+    const receiptData: ReceiptData = {
+      receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
+      date: new Date().toLocaleDateString('en-US'),
+      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+      studentName: payment.studentName || this.student?.name || '',
+      studentId: payment.studentId || this.student?.studentId || '',
+      className: payment.className || 'عام',
+      month: payment.month,
+      amount: payment.amount,
+      paymentMethod: payment.paymentMethod || 'cash',
+      academicYear: this.student?.academicYear,
+      parentPhone: this.student?.parentPhone,
+      notes: payment.notes || 'دفعة فردية'
+    };
+
+    try {
       Swal.fire({
-        title: 'جاري الاتصال...',
-        text: 'الرجاء اختيار الطابعة من النافذة المنبثقة',
+        title: 'جاري الطباعة...',
+        text: 'يرجى الانتظار، يتم إرسال البيانات إلى الطابعة الحرارية.',
         allowOutsideClick: false,
         didOpen: () => Swal.showLoading()
       });
 
-      const connected = await this.printerService.connectToThermalPrinter();
+      const success = await this.printerService.printProfessionalReceipt(receiptData);
+      
       Swal.close();
 
-      if (!connected) {
+      if (success) {
         Swal.fire({
-          icon: 'error',
-          title: 'فشل الاتصال',
-          text: 'لم يتم الاتصال بالطابعة. تأكد من أن الطابعة متصلة ومشغلة.',
-          confirmButtonText: 'حسناً'
+          icon: 'success',
+          title: 'تمت الطباعة',
+          text: 'تم طباعة الإيصال على الطابعة الحرارية بنجاح',
+          timer: 2000,
+          showConfirmButton: false
         });
-        return;
+      } else {
+        throw new Error('فشلت الطباعة');
       }
-    } else if (result.isDenied) {
-      // طباعة عادية بدون طابعة حرارية
-      await this.printRegularReceipt(payment);
-      return;
-    } else {
-      return;
+
+    } catch (error) {
+      console.error('خطأ في طباعة الإيصال:', error);
+      Swal.close();
+      
+      const fallbackResult = await Swal.fire({
+        title: 'فشل الطباعة على الطابعة الحرارية',
+        html: `
+          <div class="text-start">
+            <p>❌ حدث خطأ أثناء محاولة الطباعة على الطابعة الحرارية.</p>
+            <p>الأسباب المحتملة:</p>
+            <ul>
+              <li>الطابعة غير متصلة</li>
+              <li>الطابعة غير مشغلة</li>
+              <li>مشكلة في الاتصال</li>
+            </ul>
+          </div>
+        `,
+        icon: 'error',
+        showCancelButton: true,
+        confirmButtonText: '🔄 محاولة إعادة الاتصال',
+        cancelButtonText: '📄 طباعة عادية',
+        denyButtonText: 'إلغاء'
+      });
+
+      if (fallbackResult.isConfirmed) {
+        await this.printerService.connectToThermalPrinter();
+        await this.printPaymentReceipt(payment);
+      } else if (fallbackResult.isDenied) {
+        await this.printRegularReceipt(payment);
+      }
     }
   }
 
-  // إعداد بيانات الإيصال
-  const receiptData: ReceiptData = {
-    receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
-    date: new Date().toLocaleDateString('en-US'),
-    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-    studentName: payment.studentName || this.student?.name || '',
-    studentId: payment.studentId || this.student?.studentId || '',
-    className: payment.className || 'عام',
-    month: payment.month,
-    amount: payment.amount,
-    paymentMethod: payment.paymentMethod || 'cash',
-    academicYear: this.student?.academicYear,
-    parentPhone: this.student?.parentPhone,
-    notes: payment.notes || 'دفعة فردية'
-  };
+  private async printRegularReceipt(payment: Payment): Promise<void> {
+    const receiptData = {
+      receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
+      date: new Date().toLocaleDateString('ar-EG'),
+      time: new Date().toLocaleTimeString('ar-EG'),
+      studentName: payment.studentName || this.student?.name || '',
+      studentId: payment.studentId || this.student?.studentId || '',
+      className: payment.className || 'عام',
+      month: payment.month,
+      amount: payment.amount,
+      paymentMethod: payment.paymentMethod || 'cash',
+      notes: payment.notes || 'دفعة فردية'
+    };
 
-  try {
-    Swal.fire({
-      title: 'جاري الطباعة...',
-      text: 'يرجى الانتظار، يتم إرسال البيانات إلى الطابعة الحرارية.',
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
-    });
-
-    // محاولة الطباعة على الطابعة الحرارية
-    const success = await this.printerService.printProfessionalReceipt(receiptData);
+    const htmlContent = this.generateSimpleReceiptHTML(receiptData);
     
-    Swal.close();
-
-    if (success) {
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      
       Swal.fire({
         icon: 'success',
-        title: 'تمت الطباعة',
-        text: 'تم طباعة الإيصال على الطابعة الحرارية بنجاح',
+        title: 'تم الطباعة',
+        text: 'تم فتح نافذة الطباعة، يرجى اختيار الطابعة المناسبة',
         timer: 2000,
         showConfirmButton: false
       });
     } else {
-      throw new Error('فشلت الطباعة');
-    }
-
-  } catch (error) {
-    console.error('خطأ في طباعة الإيصال:', error);
-    Swal.close();
-    
-    // عرض خيار بديل للمستخدم
-    const fallbackResult = await Swal.fire({
-      title: 'فشل الطباعة على الطابعة الحرارية',
-      html: `
-        <div class="text-start">
-          <p>❌ حدث خطأ أثناء محاولة الطباعة على الطابعة الحرارية.</p>
-          <p>الأسباب المحتملة:</p>
-          <ul>
-            <li>الطابعة غير متصلة</li>
-            <li>الطابعة غير مشغلة</li>
-            <li>مشكلة في الاتصال</li>
-          </ul>
-        </div>
-      `,
-      icon: 'error',
-      showCancelButton: true,
-      confirmButtonText: '🔄 محاولة إعادة الاتصال',
-      cancelButtonText: '📄 طباعة عادية',
-      denyButtonText: 'إلغاء'
-    });
-
-    if (fallbackResult.isConfirmed) {
-      // محاولة إعادة الاتصال
-      await this.printerService.connectToThermalPrinter();
-      // إعادة محاولة الطباعة
-      await this.printPaymentReceipt(payment);
-    } else if (fallbackResult.isDenied) {
-      // طباعة عادية
-      await this.printRegularReceipt(payment);
-    }
-  }
-}
-// أضف هذه الدالة في الـ Component
-
-/**
- * محاولة الاتصال بالطابعة عند تحميل الصفحة (اختياري)
- */
-async connectToPrinter(): Promise<void> {
-  // يمكنك استدعاء هذه الدالة عند الحاجة، أو ترك المستخدم يختار وقت الاتصال
-  const shouldConnect = await Swal.fire({
-    title: 'الاتصال بالطابعة الحرارية',
-    text: 'هل تريد الاتصال بالطابعة الحرارية الآن؟',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'نعم، اتصال',
-    cancelButtonText: 'لاحقاً'
-  });
-
-  if (shouldConnect.isConfirmed) {
-    Swal.fire({
-      title: 'جاري الاتصال...',
-      text: 'الرجاء اختيار الطابعة من النافذة المنبثقة',
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
-    });
-
-    const connected = await this.printerService.connectToThermalPrinter();
-    Swal.close();
-
-    if (connected) {
       Swal.fire({
-        icon: 'success',
-        title: 'تم الاتصال',
-        text: 'الطابعة الحرارية جاهزة للطباعة',
-        timer: 2000,
-        showConfirmButton: false
+        icon: 'error',
+        title: 'خطأ',
+        text: 'لا يمكن فتح نافذة الطباعة. يرجى السماح بالنوافذ المنبثقة.',
+        confirmButtonText: 'حسناً'
       });
     }
   }
-}
 
-/**
- * طباعة إيصال عادي (بدون طابعة حرارية)
- * هذه دالة احتياطية في حالة فشل الطابعة الحرارية
- */
-private async printRegularReceipt(payment: Payment): Promise<void> {
-  const receiptData = {
-    receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
-    date: new Date().toLocaleDateString('ar-EG'),
-    time: new Date().toLocaleTimeString('ar-EG'),
-    studentName: payment.studentName || this.student?.name || '',
-    studentId: payment.studentId || this.student?.studentId || '',
-    className: payment.className || 'عام',
-    month: payment.month,
-    amount: payment.amount,
-    paymentMethod: payment.paymentMethod || 'cash',
-    notes: payment.notes || 'دفعة فردية'
-  };
-
-  const htmlContent = this.generateSimpleReceiptHTML(receiptData);
-  
-  const printWindow = window.open('', '_blank', 'width=400,height=600');
-  if (printWindow) {
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    
-    Swal.fire({
-      icon: 'success',
-      title: 'تم الطباعة',
-      text: 'تم فتح نافذة الطباعة، يرجى اختيار الطابعة المناسبة',
-      timer: 2000,
-      showConfirmButton: false
-    });
-  } else {
-    Swal.fire({
-      icon: 'error',
-      title: 'خطأ',
-      text: 'لا يمكن فتح نافذة الطباعة. يرجى السماح بالنوافذ المنبثقة.',
-      confirmButtonText: 'حسناً'
-    });
+  private generateSimpleReceiptHTML(data: any): string {
+    return `
+      <!DOCTYPE html>
+      <html dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <title>إيصال دفع - ${data.receiptNumber}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: 'Cairo', 'Tahoma', 'Arial', sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+          }
+          .receipt {
+            max-width: 350px;
+            width: 100%;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            direction: rtl;
+          }
+          .receipt-header {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            text-align: center;
+            padding: 20px;
+          }
+          .receipt-header h1 { font-size: 20px; margin-bottom: 5px; }
+          .receipt-header p { font-size: 12px; opacity: 0.9; }
+          .receipt-body { padding: 20px; }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed #e0e0e0;
+          }
+          .info-label { font-weight: bold; color: #555; font-size: 13px; }
+          .info-value { color: #333; font-size: 13px; }
+          .amount-row {
+            background: #e8f5e9;
+            margin: 15px -20px -20px -20px;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .amount-label { font-weight: bold; font-size: 16px; color: #2e7d32; }
+          .amount-value { font-size: 22px; font-weight: bold; color: #2e7d32; }
+          .receipt-footer {
+            background: #f9f9f9;
+            padding: 15px 20px;
+            text-align: center;
+            font-size: 11px;
+            color: #888;
+            border-top: 1px solid #e0e0e0;
+          }
+          @media print {
+            body { background: white; padding: 0; }
+            .receipt { box-shadow: none; border: 1px solid #ddd; }
+            .receipt-header { background: #1e3c72; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .amount-row { background: #e8f5e9; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="receipt-header">
+            <h1>أكاديمية الرواد للتعليم والمعارف</h1>
+            <p>إيصال دفع رسمي</p>
+          </div>
+          <div class="receipt-body">
+            <div class="info-row">
+              <span class="info-label">رقم الإيصال:</span>
+              <span class="info-value">${data.receiptNumber}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">التاريخ:</span>
+              <span class="info-value">${data.date}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">الوقت:</span>
+              <span class="info-value">${data.time}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">الطالب:</span>
+              <span class="info-value">${data.studentName} (${data.studentId})</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">الحصة:</span>
+              <span class="info-value">${data.className}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">الشهر:</span>
+              <span class="info-value">${data.month}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">طريقة الدفع:</span>
+              <span class="info-value">${this.getPaymentMethodLabel(data.paymentMethod)}</span>
+            </div>
+            ${data.notes ? `
+            <div class="info-row">
+              <span class="info-label">ملاحظات:</span>
+              <span class="info-value">${data.notes}</span>
+            </div>
+            ` : ''}
+            <div class="amount-row">
+              <span class="amount-label">المبلغ المدفوع:</span>
+              <span class="amount-value">${data.amount.toLocaleString()} د.ج</span>
+            </div>
+          </div>
+          <div class="receipt-footer">
+            <p>شكراً لثقتكم</p>
+            <p>نظام إدارة التعليم - ريدوكس</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
   }
-}
-
-/**
- * إنشاء HTML بسيط للإيصال (للطباعة العادية)
- */
-private generateSimpleReceiptHTML(data: any): string {
-  return `
-    <!DOCTYPE html>
-    <html dir="rtl">
-    <head>
-      <meta charset="UTF-8">
-      <title>إيصال دفع - ${data.receiptNumber}</title>
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-          font-family: 'Cairo', 'Tahoma', 'Arial', sans-serif;
-          background: #f5f5f5;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          min-height: 100vh;
-          padding: 20px;
-        }
-        .receipt {
-          max-width: 350px;
-          width: 100%;
-          background: white;
-          border-radius: 16px;
-          box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-          overflow: hidden;
-          direction: rtl;
-        }
-        .receipt-header {
-          background: linear-gradient(135deg, #1e3c72, #2a5298);
-          color: white;
-          text-align: center;
-          padding: 20px;
-        }
-        .receipt-header h1 { font-size: 20px; margin-bottom: 5px; }
-        .receipt-header p { font-size: 12px; opacity: 0.9; }
-        .receipt-body { padding: 20px; }
-        .info-row {
-          display: flex;
-          justify-content: space-between;
-          padding: 8px 0;
-          border-bottom: 1px dashed #e0e0e0;
-        }
-        .info-label { font-weight: bold; color: #555; font-size: 13px; }
-        .info-value { color: #333; font-size: 13px; }
-        .amount-row {
-          background: #e8f5e9;
-          margin: 15px -20px -20px -20px;
-          padding: 15px 20px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        .amount-label { font-weight: bold; font-size: 16px; color: #2e7d32; }
-        .amount-value { font-size: 22px; font-weight: bold; color: #2e7d32; }
-        .receipt-footer {
-          background: #f9f9f9;
-          padding: 15px 20px;
-          text-align: center;
-          font-size: 11px;
-          color: #888;
-          border-top: 1px solid #e0e0e0;
-        }
-        @media print {
-          body { background: white; padding: 0; }
-          .receipt { box-shadow: none; border: 1px solid #ddd; }
-          .receipt-header { background: #1e3c72; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .amount-row { background: #e8f5e9; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="receipt">
-        <div class="receipt-header">
-          <h1>أكاديمية الرواد للتعليم والمعارف</h1>
-          <p>إيصال دفع رسمي</p>
-        </div>
-        <div class="receipt-body">
-          <div class="info-row">
-            <span class="info-label">رقم الإيصال:</span>
-            <span class="info-value">${data.receiptNumber}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">التاريخ:</span>
-            <span class="info-value">${data.date}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">الوقت:</span>
-            <span class="info-value">${data.time}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">الطالب:</span>
-            <span class="info-value">${data.studentName} (${data.studentId})</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">الحصة:</span>
-            <span class="info-value">${data.className}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">الشهر:</span>
-            <span class="info-value">${data.month}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">طريقة الدفع:</span>
-            <span class="info-value">${this.getPaymentMethodLabel(data.paymentMethod)}</span>
-          </div>
-          ${data.notes ? `
-          <div class="info-row">
-            <span class="info-label">ملاحظات:</span>
-            <span class="info-value">${data.notes}</span>
-          </div>
-          ` : ''}
-          <div class="amount-row">
-            <span class="amount-label">المبلغ المدفوع:</span>
-            <span class="amount-value">${data.amount.toLocaleString()} د.ج</span>
-          </div>
-        </div>
-        <div class="receipt-footer">
-          <p>شكراً لثقتكم</p>
-          <p>نظام إدارة التعليم - ريدوكس</p>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-}
 
   private async printMultipleReceipts(payments: Payment[]): Promise<void> {
     if (!payments?.length) {
@@ -3709,7 +4025,7 @@ private generateSimpleReceiptHTML(data: any): string {
     <div class="student-info"><div class="info-grid"><div><strong>اسم الطالب:</strong> ${data.student.name}</div><div><strong>رقم الطالب:</strong> ${data.student.studentId}</div>
     <div><strong>المستوى الدراسي:</strong> ${this.getAcademicYearName(data.student.academicYear)}</div><div><strong>ولي الأمر:</strong> ${data.student.parentName}</div>
     <div><strong>هاتف ولي الأمر:</strong> ${data.student.parentPhone}</div></div></div>
-    <div class="section"><h2>الحصص المسجلة</h2><tr><thead><tr><th>اسم الحصة</th><th>المادة</th><th>المعلم</th><th>السعر الشهري</th></tr></thead><tbody>
+    <div class="section"><h2>الحصص المسجلة</h2><table><thead><tr><th>اسم الحصة</th><th>المادة</th><th>المعلم</th><th>السعر الشهري</th></tr></thead><tbody>
     ${data.classes.map((cls: any) => `<tr><td>${cls.name}</td><td>${cls.subject}</td><td>${cls.teacher?.name || 'غير محدد'}</td><td>${cls.price ? cls.price.toLocaleString() + ' د.ج' : 'غير محدد'}</td></tr>`).join('')}
     </tbody></table></div><div class="section"><h2>سجل المدفوعات</h2><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الشهر</th><th>طريقة الدفع</th><th>الحالة</th></tr></thead><tbody>
     ${data.payments.map((payment: any) => `<tr><td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : 'لم يتم الدفع'}</td>

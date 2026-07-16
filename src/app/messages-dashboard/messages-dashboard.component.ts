@@ -1,3 +1,4 @@
+// messages-dashboard-enhanced.component.ts
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
@@ -72,7 +73,12 @@ interface SearchFilters {
       <!-- Header -->
       <div class="dashboard-header">
         <div class="header-left">
-          <h1>نظام الرسائل</h1>
+          <h1>
+            <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            نظام الرسائل
+          </h1>
           <p class="subtitle">إدارة وإرسال الرسائل لأولياء الأمور</p>
         </div>
         <div class="header-right">
@@ -82,7 +88,11 @@ interface SearchFilters {
             <span class="phone-number" *ngIf="whatsappNumber">({{ whatsappNumber }})</span>
           </div>
           <button class="refresh-btn" (click)="refreshData()">
-            <span class="refresh-icon"></span>
+            <svg class="refresh-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6"/>
+              <path d="M1 20v-6h6"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
             تحديث
           </button>
         </div>
@@ -91,28 +101,50 @@ interface SearchFilters {
       <!-- Statistics Cards -->
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-icon income"></div>
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
           <div class="stat-content">
             <div class="stat-value">{{ totalStudents }}</div>
             <div class="stat-label">إجمالي الطلاب</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon messages"></div>
+          <div class="stat-icon messages">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </div>
           <div class="stat-content">
             <div class="stat-value">{{ totalMessages }}</div>
             <div class="stat-label">الرسائل المرسلة</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon success"></div>
+          <div class="stat-icon success">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
           <div class="stat-content">
             <div class="stat-value">{{ successRate }}%</div>
             <div class="stat-label">نسبة النجاح</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon warning"></div>
+          <div class="stat-icon warning">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
           <div class="stat-content">
             <div class="stat-value">{{ latePaymentsCount }}</div>
             <div class="stat-label">دفعات متأخرة</div>
@@ -127,7 +159,15 @@ interface SearchFilters {
           class="tab-button" 
           [class.active]="activeTab === tab.id"
           (click)="activeTab = tab.id">
-          <span class="tab-icon">{{ tab.icon }}</span>
+          <span class="tab-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path *ngIf="tab.id === 'send'" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              <path *ngIf="tab.id === 'class-message'" d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+              <path *ngIf="tab.id === 'reminders'" d="M12 2v4M12 22v-4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M22 12h-4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+              <path *ngIf="tab.id === 'history'" d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/>
+              <path *ngIf="tab.id === 'sessions'" d="M12 2v4M12 22v-4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M22 12h-4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+            </svg>
+          </span>
           <span class="tab-label">{{ tab.label }}</span>
         </button>
       </div>
@@ -198,12 +238,36 @@ interface SearchFilters {
                   (change)="toggleStudent(student._id)">
                 <label [for]="'student-' + student._id"></label>
               </div>
+              <div class="student-avatar" [style.background]="getAvatarColor(student.name)">
+                {{ getInitials(student.name) }}
+              </div>
               <div class="student-info">
                 <div class="student-name">{{ student.name }}</div>
                 <div class="student-details">
-                  <span class="student-id">رقم: {{ student.studentId || 'غير محدد' }}</span>
-                  <span class="student-phone">هاتف: {{ student.parentPhone }}</span>
-                  <span class="student-year">المستوى: {{ student.academicYear }}</span>
+                  <span class="student-id">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <line x1="3" y1="9" x2="21" y2="9"/>
+                      <line x1="3" y1="15" x2="21" y2="15"/>
+                      <line x1="9" y1="21" x2="9" y2="9"/>
+                    </svg>
+                    رقم: {{ student.studentId || 'غير محدد' }}
+                  </span>
+                  <span class="student-phone">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="5" y="2" width="14" height="20" rx="2"/>
+                      <line x1="12" y1="18" x2="12.01" y2="18"/>
+                    </svg>
+                    هاتف: {{ student.parentPhone }}
+                  </span>
+                  <span class="student-year">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                      <path d="M2 17l10 5 10-5"/>
+                      <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    المستوى: {{ student.academicYear }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -227,9 +291,27 @@ interface SearchFilters {
             <div class="message-footer">
               <span class="char-counter">{{ messageContent.length }}/500</span>
               <div class="template-buttons">
-                <button class="btn-outline" (click)="insertTemplate('absence')">قالب غياب</button>
-                <button class="btn-outline" (click)="insertTemplate('payment')">قالب دفع</button>
-                <button class="btn-outline" (click)="insertTemplate('announcement')">قالب إعلان</button>
+                <button class="btn-outline" (click)="insertTemplate('absence')">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  قالب غياب
+                </button>
+                <button class="btn-outline" (click)="insertTemplate('payment')">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="6" width="20" height="14" rx="2"/>
+                    <line x1="2" y1="10" x2="22" y2="10"/>
+                  </svg>
+                  قالب دفع
+                </button>
+                <button class="btn-outline" (click)="insertTemplate('announcement')">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                  </svg>
+                  قالب إعلان
+                </button>
               </div>
             </div>
           </div>
@@ -241,11 +323,24 @@ interface SearchFilters {
           <div class="delivery-options">
             <label class="checkbox-label">
               <input type="checkbox" [(ngModel)]="sendWhatsApp">
-              <span>إرسال عبر واتساب</span>
+              <span>
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21z"/>
+                  <path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1z"/>
+                  <path d="M14 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1z"/>
+                </svg>
+                إرسال عبر واتساب
+              </span>
             </label>
             <label class="checkbox-label">
               <input type="checkbox" [(ngModel)]="sendEmail">
-              <span>إرسال عبر البريد الإلكتروني</span>
+              <span>
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="4" width="20" height="16" rx="2"/>
+                  <path d="m22 7-10 7L2 7"/>
+                </svg>
+                إرسال عبر البريد الإلكتروني
+              </span>
             </label>
           </div>
         </div>
@@ -267,7 +362,9 @@ interface SearchFilters {
         <!-- Action Buttons -->
         <div class="action-buttons">
           <button class="btn-primary" (click)="sendMessage()" [disabled]="!canSend()">
-            <span class="btn-icon"></span>
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
             {{ sending ? 'جاري الإرسال...' : 'إرسال الرسالة' }}
           </button>
           <button class="btn-secondary" (click)="clearForm()">مسح</button>
@@ -359,12 +456,35 @@ interface SearchFilters {
                   (change)="toggleClassStudent(student._id)">
                 <label [for]="'class-student-' + student._id"></label>
               </div>
+              <div class="student-avatar" [style.background]="getAvatarColor(student.name)">
+                {{ getInitials(student.name) }}
+              </div>
               <div class="student-info">
                 <div class="student-name">{{ student.name }}</div>
                 <div class="student-details">
-                  <span class="student-id">رقم: {{ student.studentId || 'غير محدد' }}</span>
-                  <span class="student-phone">هاتف: {{ student.parentPhone || 'غير متوفر' }}</span>
-                  <span class="student-email">بريد: {{ student.parentEmail || 'غير متوفر' }}</span>
+                  <span class="student-id">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <line x1="3" y1="9" x2="21" y2="9"/>
+                      <line x1="3" y1="15" x2="21" y2="15"/>
+                      <line x1="9" y1="21" x2="9" y2="9"/>
+                    </svg>
+                    رقم: {{ student.studentId || 'غير محدد' }}
+                  </span>
+                  <span class="student-phone">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="5" y="2" width="14" height="20" rx="2"/>
+                      <line x1="12" y1="18" x2="12.01" y2="18"/>
+                    </svg>
+                    هاتف: {{ student.parentPhone || 'غير متوفر' }}
+                  </span>
+                  <span class="student-email">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="2" y="4" width="20" height="16" rx="2"/>
+                      <path d="m22 7-10 7L2 7"/>
+                    </svg>
+                    بريد: {{ student.parentEmail || 'غير متوفر' }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -405,10 +525,34 @@ interface SearchFilters {
             <div class="message-footer">
               <span class="char-counter">{{ classMessageContent.length }}/500</span>
               <div class="template-buttons">
-                <button class="btn-outline" (click)="insertClassTemplate('absence')">قالب غياب</button>
-                <button class="btn-outline" (click)="insertClassTemplate('payment')">قالب دفع</button>
-                <button class="btn-outline" (click)="insertClassTemplate('announcement')">قالب إعلان</button>
-                <button class="btn-outline" (click)="insertClassTemplate('class')">قالب حصة</button>
+                <button class="btn-outline" (click)="insertClassTemplate('absence')">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  قالب غياب
+                </button>
+                <button class="btn-outline" (click)="insertClassTemplate('payment')">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="6" width="20" height="14" rx="2"/>
+                    <line x1="2" y1="10" x2="22" y2="10"/>
+                  </svg>
+                  قالب دفع
+                </button>
+                <button class="btn-outline" (click)="insertClassTemplate('announcement')">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                  </svg>
+                  قالب إعلان
+                </button>
+                <button class="btn-outline" (click)="insertClassTemplate('class')">
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                  </svg>
+                  قالب حصة
+                </button>
               </div>
             </div>
           </div>
@@ -432,7 +576,9 @@ interface SearchFilters {
         <!-- Action Buttons -->
         <div class="action-buttons">
           <button class="btn-primary" (click)="sendToClass()" [disabled]="!canSendToClass()">
-            <span class="btn-icon"></span>
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
             {{ sending ? 'جاري الإرسال...' : 'إرسال الرسالة للحصة' }}
           </button>
           <button class="btn-secondary" (click)="clearClassForm()">مسح</button>
@@ -457,13 +603,21 @@ interface SearchFilters {
           </div>
 
           <div *ngFor="let student of lateStudents" class="list-item">
-            <div class="student-name">{{ student.name }}</div>
+            <div class="student-name">
+              <div class="student-avatar-sm" [style.background]="getAvatarColor(student.name)">
+                {{ getInitials(student.name) }}
+              </div>
+              {{ student.name }}
+            </div>
             <div class="student-id">{{ student.studentId }}</div>
             <div class="student-year">{{ student.academicYear }}</div>
             <div class="amount">{{ student.totalAmountDue?.toLocaleString() || 0 }} د.ج</div>
             <div class="months">{{ student.monthsLateCount || 0 }} شهر</div>
             <div class="actions">
               <button class="btn-warning" (click)="sendPaymentReminder(student)" [disabled]="sending">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
                 إرسال تذكير
               </button>
             </div>
@@ -507,6 +661,12 @@ interface SearchFilters {
             <div class="message-content">{{ message.content }}</div>
             <div class="message-footer">
               <span class="recipients-count">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
                 المستلمين: {{ message.recipientsCount || 1 }}
               </span>
               <span class="status-badge" [class.success]="message.success" [class.failed]="!message.success">
@@ -587,7 +747,7 @@ interface SearchFilters {
       max-width: 1400px;
       margin: 0 auto;
       padding: 24px;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       direction: rtl;
       background: #f5f7fa;
       min-height: 100vh;
@@ -634,6 +794,15 @@ interface SearchFilters {
       font-size: 28px;
       color: #1a2c3e;
       font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-icon {
+      width: 32px;
+      height: 32px;
+      color: #2c7da0;
     }
 
     .subtitle {
@@ -652,7 +821,7 @@ interface SearchFilters {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 12px;
+      padding: 6px 14px;
       background: #f1f5f9;
       border-radius: 24px;
       font-size: 13px;
@@ -663,13 +832,18 @@ interface SearchFilters {
       height: 10px;
       border-radius: 50%;
       background: #ef4444;
+      transition: all 0.3s;
     }
 
     .whatsapp-status.connected .status-indicator {
       background: #22c55e;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
     }
 
     .refresh-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       padding: 8px 16px;
       background: white;
       border: 1px solid #e2e8f0;
@@ -682,6 +856,11 @@ interface SearchFilters {
     .refresh-btn:hover {
       background: #f8fafc;
       border-color: #cbd5e1;
+    }
+
+    .refresh-icon {
+      width: 18px;
+      height: 18px;
     }
 
     .stats-grid {
@@ -699,18 +878,34 @@ interface SearchFilters {
       align-items: center;
       gap: 16px;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      transition: all 0.2s;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
     .stat-icon {
       width: 56px;
       height: 56px;
       border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      background: #2c7da0;
     }
 
-    .stat-icon.income { background: #e0f2fe; }
-    .stat-icon.messages { background: #fae8ff; }
-    .stat-icon.success { background: #dcfce7; }
-    .stat-icon.warning { background: #fff3e3; }
+    .stat-icon.messages { background: #8b5cf6; }
+    .stat-icon.success { background: #22c55e; }
+    .stat-icon.warning { background: #f59e0b; }
+
+    .stat-icon svg {
+      width: 28px;
+      height: 28px;
+      stroke: white;
+    }
 
     .stat-value {
       font-size: 28px;
@@ -725,37 +920,51 @@ interface SearchFilters {
 
     .tabs-container {
       display: flex;
-      gap: 8px;
+      gap: 4px;
       margin-bottom: 24px;
       border-bottom: 1px solid #e2e8f0;
       padding-bottom: 0;
       flex-wrap: wrap;
+      background: white;
+      border-radius: 12px 12px 0 0;
+      padding: 8px 12px 0;
     }
 
     .tab-button {
-      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
       border: none;
       background: transparent;
       cursor: pointer;
       font-size: 14px;
       font-weight: 500;
       color: #64748b;
-      border-bottom: 2px solid transparent;
+      border-bottom: 3px solid transparent;
       transition: all 0.2s;
+      border-radius: 8px 8px 0 0;
     }
 
     .tab-button:hover {
       color: #2c7da0;
+      background: #f8fafc;
     }
 
     .tab-button.active {
       color: #2c7da0;
       border-bottom-color: #2c7da0;
+      background: #f0f7ff;
+    }
+
+    .tab-icon svg {
+      width: 20px;
+      height: 20px;
     }
 
     .tab-panel {
       background: white;
-      border-radius: 16px;
+      border-radius: 0 0 16px 16px;
       padding: 24px;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
@@ -797,7 +1006,7 @@ interface SearchFilters {
 
     .filter-group {
       flex: 1;
-      min-width: 200px;
+      min-width: 180px;
     }
 
     .form-control {
@@ -807,11 +1016,13 @@ interface SearchFilters {
       border-radius: 8px;
       font-size: 14px;
       transition: border-color 0.2s;
+      font-family: inherit;
     }
 
     .form-control:focus {
       outline: none;
       border-color: #2c7da0;
+      box-shadow: 0 0 0 3px rgba(44, 125, 160, 0.1);
     }
 
     .radio-group {
@@ -825,6 +1036,13 @@ interface SearchFilters {
       align-items: center;
       gap: 8px;
       cursor: pointer;
+      font-size: 14px;
+    }
+
+    .radio-label input[type="radio"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #2c7da0;
     }
 
     .btn-primary, .btn-secondary, .btn-text, .btn-outline, .btn-warning {
@@ -834,6 +1052,10 @@ interface SearchFilters {
       font-size: 14px;
       font-weight: 500;
       transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: inherit;
     }
 
     .btn-primary {
@@ -844,6 +1066,8 @@ interface SearchFilters {
 
     .btn-primary:hover:not(:disabled) {
       background: #1f5e7a;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(44, 125, 160, 0.3);
     }
 
     .btn-primary:disabled {
@@ -879,6 +1103,7 @@ interface SearchFilters {
 
     .btn-outline:hover {
       background: #f8fafc;
+      border-color: #2c7da0;
     }
 
     .btn-warning {
@@ -887,8 +1112,18 @@ interface SearchFilters {
       color: white;
     }
 
-    .btn-warning:hover {
+    .btn-warning:hover:not(:disabled) {
       background: #ea580c;
+    }
+
+    .btn-warning:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-icon {
+      width: 18px;
+      height: 18px;
     }
 
     .selection-section {
@@ -900,6 +1135,8 @@ interface SearchFilters {
       justify-content: space-between;
       align-items: center;
       margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
     }
 
     .selection-header h3 {
@@ -913,21 +1150,22 @@ interface SearchFilters {
       display: flex;
       gap: 16px;
       align-items: center;
+      flex-wrap: wrap;
     }
 
     .selected-count {
       font-size: 13px;
       color: #64748b;
       background: #f1f5f9;
-      padding: 4px 12px;
+      padding: 4px 14px;
       border-radius: 16px;
     }
 
     .students-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
       gap: 12px;
-      max-height: 400px;
+      max-height: 420px;
       overflow-y: auto;
       border: 1px solid #e2e8f0;
       border-radius: 12px;
@@ -936,7 +1174,7 @@ interface SearchFilters {
 
     .student-card {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 12px;
       padding: 12px;
       border: 1px solid #e2e8f0;
@@ -947,27 +1185,58 @@ interface SearchFilters {
 
     .student-card:hover {
       background: #f8fafc;
+      border-color: #cbd5e1;
     }
 
     .student-card.selected {
-      background: #eef2ff;
+      background: #f0f7ff;
       border-color: #2c7da0;
+      box-shadow: 0 0 0 2px rgba(44, 125, 160, 0.15);
     }
 
     .student-checkbox input {
       width: 18px;
       height: 18px;
       cursor: pointer;
+      accent-color: #2c7da0;
+    }
+
+    .student-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .student-avatar-sm {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
     }
 
     .student-info {
       flex: 1;
+      min-width: 0;
     }
 
     .student-name {
       font-weight: 600;
       color: #1e293b;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
+      font-size: 14px;
     }
 
     .student-details {
@@ -976,6 +1245,21 @@ interface SearchFilters {
       flex-wrap: wrap;
       font-size: 12px;
       color: #64748b;
+    }
+
+    .student-details span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .icon-xs {
+      width: 14px;
+      height: 14px;
+      stroke-width: 2;
+      stroke: currentColor;
+      fill: none;
+      flex-shrink: 0;
     }
 
     .class-info, .students-summary {
@@ -1026,6 +1310,7 @@ interface SearchFilters {
       padding: 8px 16px;
       border-radius: 8px;
       text-align: center;
+      border: 1px solid #e2e8f0;
     }
 
     .stat-number {
@@ -1053,17 +1338,19 @@ interface SearchFilters {
 
     .message-textarea {
       width: 100%;
-      padding: 12px;
+      padding: 12px 16px;
       border: 1px solid #e2e8f0;
       border-radius: 12px;
       font-size: 14px;
       font-family: inherit;
       resize: vertical;
+      transition: border-color 0.2s;
     }
 
     .message-textarea:focus {
       outline: none;
       border-color: #2c7da0;
+      box-shadow: 0 0 0 3px rgba(44, 125, 160, 0.1);
     }
 
     .message-footer {
@@ -1071,6 +1358,8 @@ interface SearchFilters {
       justify-content: space-between;
       align-items: center;
       margin-top: 8px;
+      flex-wrap: wrap;
+      gap: 8px;
     }
 
     .char-counter {
@@ -1081,6 +1370,7 @@ interface SearchFilters {
     .template-buttons {
       display: flex;
       gap: 8px;
+      flex-wrap: wrap;
     }
 
     .delivery-section {
@@ -1097,6 +1387,7 @@ interface SearchFilters {
     .delivery-options {
       display: flex;
       gap: 24px;
+      flex-wrap: wrap;
     }
 
     .checkbox-label {
@@ -1104,6 +1395,13 @@ interface SearchFilters {
       align-items: center;
       gap: 8px;
       cursor: pointer;
+      font-size: 14px;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #2c7da0;
     }
 
     .preview-section {
@@ -1137,7 +1435,8 @@ interface SearchFilters {
     .preview-content {
       padding: 16px;
       white-space: pre-line;
-      line-height: 1.6;
+      line-height: 1.8;
+      font-size: 14px;
     }
 
     .preview-footer {
@@ -1156,6 +1455,7 @@ interface SearchFilters {
       margin-top: 24px;
       padding-top: 24px;
       border-top: 1px solid #e2e8f0;
+      flex-wrap: wrap;
     }
 
     .late-students-list {
@@ -1166,7 +1466,7 @@ interface SearchFilters {
 
     .list-header {
       display: grid;
-      grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1.2fr;
       background: #f8fafc;
       padding: 14px 16px;
       font-weight: 600;
@@ -1177,20 +1477,31 @@ interface SearchFilters {
 
     .list-item {
       display: grid;
-      grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
-      padding: 14px 16px;
+      grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1.2fr;
+      padding: 12px 16px;
       border-bottom: 1px solid #e2e8f0;
       align-items: center;
       font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .list-item:hover {
+      background: #fafbfc;
     }
 
     .list-item:last-child {
       border-bottom: none;
     }
 
+    .list-item .student-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
     .amount {
       font-weight: 600;
-      color: #e53e3e;
+      color: #dc2626;
     }
 
     .months {
@@ -1204,6 +1515,11 @@ interface SearchFilters {
       flex-wrap: wrap;
     }
 
+    .history-filters .form-control {
+      min-width: 150px;
+      flex: 1;
+    }
+
     .messages-list {
       display: flex;
       flex-direction: column;
@@ -1214,16 +1530,23 @@ interface SearchFilters {
       border: 1px solid #e2e8f0;
       border-radius: 12px;
       padding: 16px;
+      transition: all 0.2s;
+    }
+
+    .message-item:hover {
+      border-color: #cbd5e1;
+      background: #fafbfc;
     }
 
     .message-header {
       display: flex;
       justify-content: space-between;
       margin-bottom: 12px;
+      align-items: center;
     }
 
     .message-type {
-      padding: 4px 12px;
+      padding: 4px 14px;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 500;
@@ -1242,23 +1565,35 @@ interface SearchFilters {
 
     .message-content {
       margin-bottom: 12px;
-      padding: 12px;
+      padding: 12px 16px;
       background: #f8fafc;
       border-radius: 8px;
       white-space: pre-line;
       font-size: 14px;
+      line-height: 1.6;
     }
 
     .message-footer {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .recipients-count {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #64748b;
     }
 
     .status-badge {
-      padding: 4px 12px;
+      padding: 4px 14px;
       border-radius: 20px;
       font-size: 12px;
+      font-weight: 500;
     }
 
     .status-badge.success {
@@ -1300,18 +1635,45 @@ interface SearchFilters {
       color: #64748b;
     }
 
+    .no-results p {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    @media (max-width: 992px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
     @media (max-width: 768px) {
       .messages-dashboard {
         padding: 16px;
       }
 
+      .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .header-right {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
       .stats-grid {
         grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
       }
 
       .list-header, .list-item {
         grid-template-columns: 1fr;
-        gap: 8px;
+        gap: 6px;
+      }
+
+      .list-item .student-name {
+        font-weight: 600;
       }
 
       .search-filters {
@@ -1320,6 +1682,7 @@ interface SearchFilters {
 
       .students-grid {
         grid-template-columns: 1fr;
+        max-height: 300px;
       }
 
       .info-grid {
@@ -1327,12 +1690,89 @@ interface SearchFilters {
       }
 
       .tabs-container {
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
       }
 
       .tab-button {
-        flex: 1;
-        text-align: center;
+        flex: 0 0 auto;
+        padding: 10px 14px;
+        font-size: 13px;
+        white-space: nowrap;
+      }
+
+      .tab-button .tab-label {
+        display: none;
+      }
+
+      .tab-button .tab-icon svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      .tab-panel {
+        padding: 16px;
+      }
+
+      .message-footer {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .template-buttons {
+        justify-content: center;
+      }
+
+      .action-buttons {
+        flex-direction: column;
+      }
+
+      .action-buttons button {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .history-filters {
+        flex-direction: column;
+      }
+
+      .delivery-options {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .selection-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .selection-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stat-card {
+        padding: 14px;
+      }
+
+      .stat-value {
+        font-size: 22px;
+      }
+
+      .radio-group {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .message-textarea {
+        font-size: 13px;
       }
     }
   `]
@@ -1341,11 +1781,11 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
   // Tab state
   activeTab = 'send';
   tabs = [
-    { id: 'send', label: 'إرسال رسالة', icon: '📨' },
-    { id: 'class-message', label: 'رسالة لحصة', icon: '🏫' },
-    { id: 'reminders', label: 'تذكيرات الدفع', icon: '💰' },
-    { id: 'history', label: 'سجل الرسائل', icon: '📜' },
-    { id: 'sessions', label: 'دفع حصة محددة', icon: '🎯' }
+    { id: 'send', label: 'إرسال رسالة', icon: 'send' },
+    { id: 'class-message', label: 'رسالة لحصة', icon: 'class' },
+    { id: 'reminders', label: 'تذكيرات الدفع', icon: 'reminders' },
+    { id: 'history', label: 'سجل الرسائل', icon: 'history' },
+    { id: 'sessions', label: 'دفع حصة محددة', icon: 'sessions' }
   ];
 
   // Data
@@ -1418,6 +1858,12 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
   paying = false;
 
   private searchSubject = new Subject<string>();
+  private avatarColors: string[] = [
+    '#2563eb', '#7c3aed', '#0891b2', '#059669',
+    '#dc2626', '#d97706', '#9333ea', '#0d9488',
+    '#e11d48', '#4f46e5', '#0284c7', '#16a34a',
+    '#8b5cf6', '#0ea5e9', '#14b8a6', '#f59e0b'
+  ];
 
   constructor(private http: HttpClient) {}
 
@@ -1436,6 +1882,15 @@ export class MessagesDashboardEnhancedComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.searchSubject.complete();
+  }
+
+  getAvatarColor(name: string): string {
+    const index = name.length % this.avatarColors.length;
+    return this.avatarColors[index];
+  }
+
+  getInitials(name: string): string {
+    return name.charAt(0).toUpperCase();
   }
 
   loadInitialData(): void {

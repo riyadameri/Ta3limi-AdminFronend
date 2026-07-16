@@ -1,98 +1,218 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { BehaviorSubject, Observable, tap } from 'rxjs';
+import { Observable, BehaviorSubject, throwError } from 'rxjs';
+import { catchError, tap } from 'rxjs/operators';
 import { Router } from '@angular/router';
-import Swal from 'sweetalert2';
 import { environment } from '../../environments/environment';
 
 export interface User {
   _id: string;
   username: string;
-  fullName?: string;
   role: string;
-  token: string;
+  fullName: string;
+  email?: string;
+  phone?: string;
+  permissions?: any;
+}
+
+export interface School {
+  _id: string;
+  name: string;
+  schoolKey: string;
+  subscription?: any;
+}
+
+export interface LoginResponse {
+  success: boolean;
+  message: string;
+  data: {
+    token: string;
+    user: User;
+    school: School;
+  };
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
-  private apiUrl = environment.apiUrl || '/api';
+  private apiUrl = environment.apiUrl || 'http://localhost:5090';
+  private tokenKey = 'token';
+  private userKey = 'user';
+  private schoolKey = 'school';
+  private permissionsKey = 'permissions';
+
   private currentUserSubject = new BehaviorSubject<User | null>(null);
   public currentUser$ = this.currentUserSubject.asObservable();
 
-  constructor(private http: HttpClient, private router: Router) {
-    this.loadUserFromStorage();
+  private isLoggedInSubject = new BehaviorSubject<boolean>(false);
+  public isLoggedIn$ = this.isLoggedInSubject.asObservable();
+
+  constructor(
+    private http: HttpClient,
+    private router: Router
+  ) {
+    this.loadStoredUser();
   }
 
-  private loadUserFromStorage(): void {
-    const token = localStorage.getItem('token');
-    const user = localStorage.getItem('user');
-    if (token && user) {
-      this.currentUserSubject.next(JSON.parse(user));
+  private loadStoredUser(): void {
+    const user = localStorage.getItem(this.userKey);
+    if (user) {
+      try {
+        const userData = JSON.parse(user);
+        this.currentUserSubject.next(userData);
+        this.isLoggedInSubject.next(true);
+      } catch (e) {
+        this.clearSession();
+      }
     }
   }
 
-  login(username: string, password: string): Observable<any> {
-    return this.http.post(`${this.apiUrl}/auth/login`, { username, password }).pipe(
-      tap((response: any) => {
-        if (response.token) {
-          localStorage.setItem('token', response.token);
-          localStorage.setItem('user', JSON.stringify(response.user));
-          this.currentUserSubject.next(response.user);
-        }
-      })
-    );
+  getToken(): string | null {
+    return localStorage.getItem(this.tokenKey);
   }
+
+  getUser(): User | null {
+    const user = localStorage.getItem(this.userKey);
+    return user ? JSON.parse(user) : null;
+  }
+
+  getSchool(): School | null {
+    const school = localStorage.getItem(this.schoolKey);
+    return school ? JSON.parse(school) : null;
+  }
+
+  getPermissions(): any {
+    const permissions = localStorage.getItem(this.permissionsKey);
+    return permissions ? JSON.parse(permissions) : {};
+  }
+
   isLoggedIn(): boolean {
-    return this.getToken() !== null;
+    return !!this.getToken() && !!this.getUser();
   }
-  redirectToLogin(): void {
-    Swal.fire({
-      icon: 'warning',
-      title: 'Session Expired',
-      text: 'Please log in again to continue.',
-      confirmButtonText: 'OK'
-    }).then(() => {
-      this.router.navigate(['/login']);
-    });
+
+  login(username: string, password: string, schoolKey: string): Observable<LoginResponse> {
+    const loginData = { username, password, schoolKey };
+    
+    return this.http.post<LoginResponse>(`${this.apiUrl}/api/auth/login`, loginData)
+      .pipe(
+        tap(response => {
+          if (response.success && response.data) {
+            this.saveSession(response.data);
+            this.currentUserSubject.next(response.data.user);
+            this.isLoggedInSubject.next(true);
+          }
+        }),
+        catchError(this.handleError)
+      );
+  }
+
+  private saveSession(data: any): void {
+    localStorage.setItem(this.tokenKey, data.token);
+    localStorage.setItem(this.userKey, JSON.stringify(data.user));
+    localStorage.setItem(this.schoolKey, JSON.stringify(data.school));
+    
+    if (data.user.permissions) {
+      localStorage.setItem(this.permissionsKey, JSON.stringify(data.user.permissions));
+    }
+    
+    if (data.school.subscription) {
+      localStorage.setItem('subscription', JSON.stringify(data.school.subscription));
+    }
+    
+    localStorage.setItem('loginTime', new Date().toISOString());
   }
 
   logout(): void {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    this.clearSession();
     this.currentUserSubject.next(null);
+    this.isLoggedInSubject.next(false);
     this.router.navigate(['/login']);
   }
 
-  getToken(): string | null {
-    return localStorage.getItem('token');
-  }
-  getCurrentUser(): any {
-    const userStr = localStorage.getItem('user');
-    return userStr ? JSON.parse(userStr) : null;
-  }
-  isAuthenticated(): boolean {
-    return !!this.getToken();
+  private clearSession(): void {
+    localStorage.removeItem(this.tokenKey);
+    localStorage.removeItem(this.userKey);
+    localStorage.removeItem(this.schoolKey);
+    localStorage.removeItem(this.permissionsKey);
+    localStorage.removeItem('subscription');
+    localStorage.removeItem('loginTime');
+    localStorage.removeItem('rememberedUser');
   }
 
-// في AuthService
-getAuthHeaders(): HttpHeaders {
-  const token = this.getToken();
-  if (token) {
+  verifyToken(): Observable<any> {
+    const token = this.getToken();
+    if (!token) {
+      return throwError(() => new Error('No token found'));
+    }
+
+    const headers = this.getAuthHeaders();
+    return this.http.get(`${this.apiUrl}/api/auth/verify`, { headers })
+      .pipe(catchError(this.handleError));
+  }
+
+  changePassword(currentPassword: string, newPassword: string): Observable<any> {
+    const headers = this.getAuthHeaders();
+    return this.http.post(`${this.apiUrl}/api/auth/change-password`, 
+      { currentPassword, newPassword },
+      { headers }
+    ).pipe(catchError(this.handleError));
+  }
+
+  getAuthHeaders(): HttpHeaders {
+    const token = this.getToken();
     return new HttpHeaders({
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : ''
     });
   }
-  return new HttpHeaders({
-    'Content-Type': 'application/json'
-  });
-}
 
+  getAuthHeadersWithSchool(): HttpHeaders {
+    const token = this.getToken();
+    const school = this.getSchool();
+    let headers = new HttpHeaders({
+      'Content-Type': 'application/json'
+    });
+    
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+    
+    if (school && school.schoolKey) {
+      headers = headers.set('x-auth-key', school.schoolKey);
+    }
+    
+    return headers;
+  }
 
-}
+  private handleError(error: any): Observable<never> {
+    console.error('API Error:', error);
+    
+    if (error.status === 401) {
+      this.logout();
+    }
+    
+    return throwError(() => error);
+  }
 
-function jwt_decode(token: string): any {
-  throw new Error('Function not implemented.');
+  hasPermission(permission: string): boolean {
+    const permissions = this.getPermissions();
+    return permissions[permission] === true;
+  }
+
+  hasRole(role: string | string[]): boolean {
+    const user = this.getUser();
+    if (!user) return false;
+    
+    if (Array.isArray(role)) {
+      return role.includes(user.role);
+    }
+    
+    return user.role === role;
+  }
+
+  updateUser(user: User): void {
+    localStorage.setItem(this.userKey, JSON.stringify(user));
+    this.currentUserSubject.next(user);
+  }
 }

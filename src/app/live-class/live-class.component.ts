@@ -831,7 +831,7 @@ interface LiveClass {
   `]
 })
 export class LiveClassComponent implements OnInit, OnDestroy {
-  private apiUrl = 'http://localhost:5090';
+  private apiUrl = '';
   private http = inject(HttpClient);
   
   liveClasses: LiveClass[] = [];

@@ -1,384 +1,573 @@
-/* ============================================
-   Global Container
-   ============================================ */
-   .login-page-wrapper {
-    min-height: 100vh;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #f0f4f8;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    position: relative;
-    overflow: hidden;
-    padding: 20px;
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
+
+:host {
+  display: block;
+  font-family: 'Tajawal', sans-serif;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-light: #e0e7ff;
+  --secondary: #0f172a;
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --bg-input: #f8fafc;
+  --border-color: #e2e8f0;
+  --error: #ef4444;
+  --success: #10b981;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* الحاوية الأساسية */
+.login-container {
+  min-height: 100vh;
+  width: 100%;
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 1.5rem;
+}
+
+/* الأشكال الخلفية المتحركة */
+.bg-shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  z-index: 1;
+  animation: float 20s infinite alternate ease-in-out;
+}
+
+.shape-1 {
+  width: 400px;
+  height: 400px;
+  background: rgba(79, 70, 229, 0.25);
+  top: -100px;
+  right: -100px;
+}
+
+.shape-2 {
+  width: 500px;
+  height: 500px;
+  background: rgba(14, 165, 233, 0.2);
+  bottom: -150px;
+  left: -150px;
+  animation-delay: -5s;
+}
+
+.shape-3 {
+  width: 300px;
+  height: 300px;
+  background: rgba(236, 72, 153, 0.15);
+  top: 40%;
+  left: 30%;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(40px, 30px) rotate(180deg); }
+  100% { transform: translate(-20px, 50px) rotate(360deg); }
+}
+
+/* شبكة التخطيط */
+.login-wrapper {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  max-width: 1100px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+  overflow: hidden;
+  animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(30px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* الجانب الأيمن (التعريفي) */
+.login-info-section {
+  padding: 3.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: #ffffff;
+}
+
+.brand-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.logo-icon {
+  background: linear-gradient(135deg, var(--primary), #818cf8);
+  padding: 0.75rem;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+}
+
+.brand-header h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  color: #cbd5e1;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  margin-bottom: 2.5rem;
+}
+
+/* بطاقات الإحصائيات */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.stat-card {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1rem;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: transform 0.3s ease, background 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.stat-icon {
+  color: #818cf8;
+  margin-bottom: 0.5rem;
+}
+
+.stat-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.stat-label {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+/* الجانب الأيسر (بطاقة الدخول) */
+.login-card-section {
+  background: #ffffff;
+  padding: 3.5rem 3rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.card-header {
+  margin-bottom: 2rem;
+}
+
+.greeting-badge {
+  display: inline-block;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.35rem 0.85rem;
+  border-radius: 50px;
+  margin-bottom: 0.75rem;
+}
+
+.card-header h2 {
+  font-size: 1.75rem;
+  color: var(--text-main);
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+}
+
+.card-header p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+/* التنبيه بالأخطاء */
+.error-alert {
+  background: #fef2f2;
+  border: 1px solid #f87171;
+  color: #b91c1c;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 1.5rem;
+  animation: shake 0.4s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+/* النماذج والحقول */
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 0.5rem;
+}
+
+.input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-icon {
+  position: absolute;
+  right: 1rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  transition: color 0.3s ease;
+}
+
+.input-container input {
+  width: 100%;
+  padding: 0.85rem 1rem 0.85rem 2.75rem;
+  padding-right: 2.75rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  background: var(--bg-input);
+  border: 1.5px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--text-main);
+  transition: all 0.3s ease;
+}
+
+.input-container input:focus {
+  outline: none;
+  background: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+}
+
+.input-container input:focus ~ .input-icon {
+  color: var(--primary);
+}
+
+.password-toggle {
+  position: absolute;
+  left: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  transition: color 0.3s ease;
+}
+
+.password-toggle:hover {
+  color: var(--text-main);
+}
+
+/* بطاقة المدرسة المحفوظة في اللوكال ستورج */
+.saved-school-card {
+  background: #f1f5f9;
+  border: 1.5px solid #cbd5e1;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.3s ease;
+}
+
+.school-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.school-icon {
+  background: #e2e8f0;
+  color: var(--primary);
+  padding: 0.5rem;
+  border-radius: 10px;
+  display: flex;
+}
+
+.school-code {
+  display: block;
+  font-weight: 800;
+  color: var(--text-main);
+  font-size: 1rem;
+}
+
+.school-status {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--success);
+  font-weight: 700;
+}
+
+.change-school-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: var(--text-main);
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.2s ease;
+}
+
+.change-school-btn:hover {
+  background: #f8fafc;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* الروابط وخيارات التذكر */
+.form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 1.5rem 0;
+  font-size: 0.88rem;
+}
+
+.custom-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.custom-checkbox input {
+  display: none;
+}
+
+.checkmark {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--border-color);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  background: var(--bg-input);
+}
+
+.custom-checkbox input:checked + .checkmark {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.custom-checkbox input:checked + .checkmark::after {
+  content: "";
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-bottom: 2px;
+}
+
+.forgot-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 700;
+  transition: color 0.2s;
+}
+
+.forgot-link:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
+}
+
+/* الأزرار الأساسية */
+.buttons-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.btn {
+  width: 100%;
+  padding: 0.9rem 1.5rem;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border: none;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), #6366f1);
+  color: #ffffff;
+  box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.4);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 25px -5px rgba(79, 70, 229, 0.5);
+  background: linear-gradient(135deg, var(--primary-hover), #4f46e5);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: var(--bg-input);
+  color: var(--text-main);
+  border: 1.5px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+/* مؤشر التحميل (Spinner) */
+.loader {
+  width: 22px;
+  height: 22px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #ffffff;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* تذييل الكارت */
+.card-footer {
+  margin-top: 2.5rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ==================================================
+   التوافق مع شاشات الهاتف والأجهزة المحمولة (Responsive)
+================================================== */
+@media (max-width: 992px) {
+  .login-wrapper {
+    grid-template-columns: 1fr;
+    max-width: 500px;
   }
-  
-  /* ============================================
-     Background Decorations
-     ============================================ */
-  .bg-shape {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    z-index: 1;
-    opacity: 0.5;
+
+  .login-info-section {
+    display: none; /* إخفاء القسم التعريفي الافتراضي على الشاشات المتوسطة والصغيرة لتركيز الاهتمام على الدخول */
   }
-  .shape-1 {
-    width: 400px;
-    height: 400px;
-    background: #0a66c2;
-    top: -100px;
-    right: -100px;
+
+  .login-card-section {
+    padding: 2.5rem 2rem;
   }
-  .shape-2 {
-    width: 300px;
-    height: 300px;
-    background: #4cc9f0;
-    bottom: -50px;
-    left: -50px;
+}
+
+@media (max-width: 480px) {
+  .login-container {
+    padding: 0.75rem;
   }
-  
-  /* ============================================
-     Main Card
-     ============================================ */
-  .login-card-container {
-    width: 100%;
-    max-width: 1000px;
-    display: flex;
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 24px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    z-index: 10;
-    backdrop-filter: blur(10px);
-  }
-  
-  /* ============================================
-     Left Branding Side
-     ============================================ */
-  .login-visual {
-    flex: 1;
-    background: linear-gradient(135deg, #0a66c2 0%, #084d91 100%);
-    padding: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    text-align: center;
-  }
-  .visual-content h1 {
-    font-size: 2.5rem;
-    margin-bottom: 10px;
-    font-weight: 800;
-  }
-  .visual-content p {
-    font-size: 1.1rem;
-    opacity: 0.9;
-    margin-bottom: 30px;
-  }
-  .greeting-tag {
-    display: inline-block;
-    padding: 6px 16px;
-    background: rgba(255, 255, 255, 0.2);
+
+  .login-wrapper {
     border-radius: 20px;
-    font-size: 0.9rem;
-    margin-bottom: 20px;
+    border: none;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
   }
-  .visual-icon {
-    font-size: 5rem;
-    opacity: 0.2;
+
+  .login-card-section {
+    padding: 2rem 1.25rem;
   }
-  
-  /* ============================================
-     Right Form Side
-     ============================================ */
-  .login-form-area {
-    flex: 1.2;
-    padding: 50px;
-    background: white;
-    display: flex;
-    flex-direction: column;
+
+  .card-header h2 {
+    font-size: 1.5rem;
   }
-  .form-header {
-    margin-bottom: 35px;
+
+  .card-header p {
+    font-size: 0.85rem;
   }
-  .form-header h2 {
-    font-size: 1.8rem;
-    color: #1a1a1a;
-    margin-bottom: 10px;
-    font-weight: 700;
-  }
-  .form-header p {
-    color: #666;
+
+  .btn {
+    padding: 0.85rem 1rem;
     font-size: 0.95rem;
   }
-  
-  /* ============================================
-     Custom Inputs
-     ============================================ */
-  .input-group-custom {
-    margin-bottom: 25px;
-  }
-  .label-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  .input-group-custom label {
-    font-weight: 600;
-    color: #444;
-    font-size: 0.9rem;
-  }
-  .input-group-custom .required {
-    color: #dc3545;
-    font-weight: 700;
-  }
-  .input-group-custom .hint {
-    display: block;
-    font-size: 0.75rem;
-    color: #999;
-    margin-top: 5px;
-  }
-  
-  .input-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-  .input-wrapper input {
-    width: 100%;
-    padding: 14px 45px 14px 15px;
-    border: 2px solid #edf2f7;
-    border-radius: 12px;
-    font-size: 1rem;
-    transition: all 0.3s;
-    outline: none;
-    background: #fafafa;
-  }
-  .input-wrapper input:focus {
-    border-color: #0a66c2;
-    box-shadow: 0 0 0 4px rgba(10, 102, 194, 0.1);
-    background: white;
-  }
-  .input-wrapper input:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  
-  .icon-prefix {
-    position: absolute;
-    right: 15px;
-    color: #a0aec0;
-    font-size: 1.1rem;
-  }
-  .icon-suffix {
-    position: absolute;
-    left: 15px;
-    color: #a0aec0;
-    cursor: pointer;
-    padding: 5px;
-    transition: all 0.3s;
-  }
-  .icon-suffix:hover {
-    color: #0a66c2;
-  }
-  
-  /* ============================================
-     Error Message
-     ============================================ */
-  .error-message {
-    background: #fde8e8;
-    color: #dc3545;
-    padding: 12px 16px;
-    border-radius: 10px;
-    font-size: 0.9rem;
-    margin-bottom: 20px;
-    border: 1px solid #f5c6cb;
-  }
-  .error-message i {
-    margin-left: 8px;
-  }
-  
-  /* ============================================
-     Checkbox Styles
-     ============================================ */
-  .form-options {
-    margin-bottom: 30px;
-  }
-  .checkbox-container {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    font-size: 0.9rem;
-    color: #666;
-    user-select: none;
-  }
-  .checkbox-container input {
-    display: none;
-  }
-  .checkmark {
-    height: 20px;
-    width: 20px;
-    background-color: #eee;
-    border-radius: 6px;
-    margin-left: 10px;
-    position: relative;
-    transition: all 0.2s;
-  }
-  .checkbox-container:hover input ~ .checkmark {
-    background-color: #ccc;
-  }
-  .checkbox-container input:checked ~ .checkmark {
-    background-color: #0a66c2;
-  }
-  .checkmark:after {
-    content: "";
-    position: absolute;
-    display: none;
-    left: 7px;
-    top: 3px;
-    width: 5px;
-    height: 10px;
-    border: solid white;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-  }
-  .checkbox-container input:checked ~ .checkmark:after {
-    display: block;
-  }
-  
-  /* ============================================
-     Buttons
-     ============================================ */
-  .action-buttons {
-    display: flex;
+
+  .saved-school-card {
     flex-direction: column;
-    gap: 15px;
+    align-items: flex-start;
+    gap: 0.75rem;
   }
-  .btn-primary {
+
+  .change-school-btn {
     width: 100%;
-    padding: 15px;
-    background: #0a66c2;
-    color: white;
-    border: none;
-    border-radius: 12px;
-    font-size: 1.1rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: transform 0.2s, background 0.3s;
-  }
-  .btn-primary:hover:not(:disabled) {
-    background: #084d91;
-    transform: translateY(-2px);
-  }
-  .btn-primary:disabled {
-    background: #a0aec0;
-    cursor: not-allowed;
-    transform: none;
-  }
-  
-  .btn-outline {
-    width: 100%;
-    padding: 12px;
-    background: transparent;
-    color: #0a66c2;
-    border: 2px solid #0a66c2;
-    border-radius: 12px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
     justify-content: center;
-    gap: 10px;
-    transition: all 0.3s;
-  }
-  .btn-outline:hover:not(:disabled) {
-    background: rgba(10, 102, 194, 0.05);
-    transform: translateY(-2px);
-  }
-  .btn-outline:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
   
-  .forgot-link {
-    color: #0a66c2;
-    text-decoration: none;
-    font-size: 0.85rem;
-    font-weight: 600;
+  .input-container input {
+    font-size: 16px; /* يمنع متصفح سفاري وأجهزة الآيفون من عمل تكبير تلقائي (Zoom) عند لمس حقول الإدخال */
   }
-  .forgot-link:hover {
-    text-decoration: underline;
-  }
-  
-  /* ============================================
-     Footer
-     ============================================ */
-  .form-footer {
-    margin-top: auto;
-    padding-top: 30px;
-    text-align: center;
-    border-top: 1px solid #f0f0f0;
-  }
-  .form-footer p {
-    font-size: 0.8rem;
-    color: #999;
-  }
-  
-  /* ============================================
-     Loader
-     ============================================ */
-  .loader-dots {
-    display: inline-block;
-  }
-  .loader-dots::after {
-    content: '...';
-    animation: dots 1.5s steps(5, end) infinite;
-  }
-  @keyframes dots {
-    0%, 20% { content: '.'; }
-    40% { content: '..'; }
-    60% { content: '...'; }
-  }
-  
-  /* ============================================
-     Responsive
-     ============================================ */
-  @media (max-width: 768px) {
-    .login-card-container {
-      flex-direction: column;
-    }
-    .login-visual {
-      padding: 30px;
-    }
-    .login-form-area {
-      padding: 30px;
-    }
-    .visual-content h1 {
-      font-size: 1.8rem;
-    }
-  }
-  
-  @media (max-width: 480px) {
-    .login-form-area {
-      padding: 20px;
-    }
-    .form-header h2 {
-      font-size: 1.4rem;
-    }
-    .input-wrapper input {
-      padding: 12px 40px 12px 12px;
-      font-size: 0.9rem;
-    }
-    .btn-primary {
-      font-size: 1rem;
-      padding: 12px;
-    }
-    .btn-outline {
-      font-size: 0.9rem;
-      padding: 10px;
-    }
-  }
+}

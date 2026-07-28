@@ -1,12 +1,16 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
-import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { environment } from '../../../environments/environment';
+
+// ==============================================
+// الواجهات (Interfaces)
+// ==============================================
 
 interface Class {
   _id: string;
+  schoolId: string;
   name: string;
   subject: string;
   academicYear: string;
@@ -21,11 +25,36 @@ interface Class {
     day: string;
     time: string;
     classroom?: {
+      _id: string;
       name: string;
     };
   }>;
   createdAt: Date;
 }
+
+interface Teacher {
+  _id: string;
+  schoolId: string;
+  name: string;
+  subjects: string[];
+  phone?: string;
+  email?: string;
+  active: boolean;
+}
+
+interface Classroom {
+  _id: string;
+  schoolId: string;
+  name: string;
+  capacity: number;
+  floor: number;
+  building: string;
+  status: string;
+}
+
+// ==============================================
+// المكون الرئيسي
+// ==============================================
 
 @Component({
   selector: 'app-lesson-management',
@@ -33,6 +62,7 @@ interface Class {
   imports: [CommonModule, RouterModule, HttpClientModule, FormsModule],
   template: `
     <div class="dashboard-wrapper" dir="rtl">
+      <!-- رأس الصفحة -->
       <header class="page-header">
         <div class="header-content">
           <div class="header-title">
@@ -42,17 +72,21 @@ interface Class {
           <div class="header-actions">
             <button class="btn btn-primary" (click)="openAddLessonDialog()">
               <i class="fas fa-plus"></i>
-              <span class="btn-text-mobile">إضافة حصة</span>
+              <span>إضافة حصة</span>
             </button>
             <button class="btn btn-outline" (click)="exportToExcel()">
               <i class="fas fa-file-export"></i>
-              <span class="btn-text-mobile">تصدير</span>
+              <span>تصدير</span>
+            </button>
+            <button class="btn btn-outline" (click)="refreshData()">
+              <i class="fas fa-sync-alt"></i>
+              <span>تحديث</span>
             </button>
           </div>
         </div>
       </header>
 
-      <!-- Stats in horizontal row -->
+      <!-- الإحصائيات -->
       <div class="stats-horizontal">
         <div class="stat-card-horizontal">
           <div class="stat-icon-small blue">
@@ -83,7 +117,7 @@ interface Class {
         </div>
       </div>
 
-      <!-- Filter Section -->
+      <!-- فلترة البحث -->
       <section class="filter-section">
         <div class="filter-grid">
           <div class="form-group">
@@ -111,14 +145,14 @@ interface Class {
         </div>
       </section>
 
-      <!-- Table Container with Card View for Mobile -->
+      <!-- جدول الحصص -->
       <div class="table-container">
         <div class="table-header-actions" *ngIf="selectedLessons.size > 0">
           <span>تم تحديد {{ selectedLessons.size }} حصة</span>
           <button class="btn btn-danger btn-sm" (click)="deleteSelectedLessons()">حذف المحدد</button>
         </div>
 
-        <!-- Desktop Table View -->
+        <!-- عرض سطح المكتب (جدول) -->
         <div class="desktop-table-view">
           <table class="custom-table">
             <thead>
@@ -190,7 +224,7 @@ interface Class {
           </table>
         </div>
 
-        <!-- Mobile Card View -->
+        <!-- عرض الهاتف المحمول (بطاقات) -->
         <div class="mobile-card-view">
           <div *ngFor="let lesson of paginatedLessons" class="lesson-card">
             <div class="card-header">
@@ -246,7 +280,7 @@ interface Class {
           </div>
         </div>
 
-        <!-- Pagination -->
+        <!-- ترقيم الصفحات -->
         <div class="pagination-footer">
           <span class="total-info">عرض {{ paginatedLessons.length }} من {{ totalItems }}</span>
           <div class="pagination-controls">
@@ -266,7 +300,7 @@ interface Class {
         </div>
       </div>
 
-      <!-- Add Lesson Dialog -->
+      <!-- نافذة إضافة حصة جديدة -->
       <div class="popup-backdrop" *ngIf="showAddDialog" (click)="closeDialogOnBackdrop($event)">
         <div class="popup-container">
           <div class="popup-header">
@@ -295,12 +329,13 @@ interface Class {
               <div class="form-group">
                 <label>الأستاذ</label>
                 <select [(ngModel)]="newLesson.teacher" class="form-control">
+                  <option value="">اختر الأستاذ</option>
                   <option *ngFor="let t of teachers" [value]="t._id">{{t.name}}</option>
                 </select>
               </div>
               <div class="form-group">
                 <label>سعر الحصة (د.ج)</label>
-                <input type="number" [(ngModel)]="newLesson.price" class="form-control">
+                <input type="number" [(ngModel)]="newLesson.price" class="form-control" min="0">
               </div>
               <div class="form-group">
                 <label>نظام الدفع</label>
@@ -341,7 +376,7 @@ interface Class {
         </div>
       </div>
 
-      <!-- Toast Messages -->
+      <!-- رسائل التنبيه -->
       <div class="toast success" *ngIf="successMessage">
         <i class="fas fa-check-circle"></i>
         <span>{{ successMessage }}</span>
@@ -386,7 +421,6 @@ interface Class {
       overflow-x: hidden;
     }
 
-    /* Header */
     .page-header {
       margin-bottom: 1.25rem;
     }
@@ -418,9 +452,9 @@ interface Class {
     .header-actions {
       display: flex;
       gap: 0.5rem;
+      flex-wrap: wrap;
     }
 
-    /* Buttons */
     .btn {
       padding: 0.5rem 1rem;
       border-radius: var(--radius-sm);
@@ -438,7 +472,6 @@ interface Class {
       background: var(--primary);
       color: white;
     }
-
     .btn-primary:hover {
       background: var(--primary-dark);
     }
@@ -448,7 +481,6 @@ interface Class {
       border: 1.5px solid var(--border);
       color: var(--text-main);
     }
-
     .btn-outline:hover {
       background: var(--white);
       border-color: var(--primary);
@@ -471,7 +503,6 @@ interface Class {
       font-size: 0.7rem;
     }
 
-    /* Horizontal Stats */
     .stats-horizontal {
       display: flex;
       gap: 0.75rem;
@@ -480,7 +511,6 @@ interface Class {
       -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
     }
-
     .stats-horizontal::-webkit-scrollbar {
       display: none;
     }
@@ -527,7 +557,6 @@ interface Class {
       font-weight: 700;
     }
 
-    /* Filter Section */
     .filter-section {
       background: var(--white);
       padding: 1rem;
@@ -564,7 +593,6 @@ interface Class {
       outline: none;
       font-size: 0.8rem;
     }
-
     .form-control:focus {
       border-color: var(--primary);
     }
@@ -573,7 +601,6 @@ interface Class {
       flex-shrink: 0;
     }
 
-    /* Table Container */
     .table-container {
       background: var(--white);
       border-radius: var(--radius);
@@ -581,7 +608,6 @@ interface Class {
       box-shadow: var(--shadow);
     }
 
-    /* Desktop Table View */
     .desktop-table-view {
       display: block;
       overflow-x: auto;
@@ -689,7 +715,6 @@ interface Class {
       border-bottom: 1px solid var(--border);
     }
 
-    /* Mobile Card View */
     .mobile-card-view {
       display: none;
     }
@@ -751,7 +776,6 @@ interface Class {
       color: var(--text-muted);
     }
 
-    /* Pagination */
     .pagination-footer {
       padding: 0.75rem;
       display: flex;
@@ -799,14 +823,12 @@ interface Class {
       cursor: not-allowed;
     }
 
-    /* Empty State */
     .empty-state {
       text-align: center;
       padding: 2rem !important;
       color: var(--text-muted);
     }
 
-    /* Popup Dialog */
     .popup-backdrop {
       position: fixed;
       inset: 0;
@@ -871,7 +893,6 @@ interface Class {
       grid-column: span 2;
     }
 
-    /* Schedule Section */
     .schedule-section {
       margin-top: 1rem;
       background: #f8f9fa;
@@ -925,7 +946,6 @@ interface Class {
       font-size: 0.75rem;
     }
 
-    /* Toast */
     .toast {
       position: fixed;
       bottom: 1rem;
@@ -960,7 +980,7 @@ interface Class {
       }
     }
 
-    /* Responsive */
+    /* التجاوب مع الشاشات الصغيرة */
     @media (max-width: 768px) {
       .dashboard-wrapper {
         padding: 0.75rem;
@@ -1005,10 +1025,6 @@ interface Class {
         justify-content: center;
       }
 
-      .btn-text-mobile {
-        display: inline;
-      }
-
       .card-info-grid {
         grid-template-columns: 1fr;
         gap: 0.375rem;
@@ -1035,10 +1051,18 @@ interface Class {
       .popup-container {
         margin: 0.5rem;
       }
+
+      .header-actions .btn span {
+        display: none;
+      }
+
+      .header-actions .btn {
+        padding: 0.5rem 0.75rem;
+      }
     }
 
     @media (min-width: 769px) {
-      .btn-text-mobile {
+      .header-actions .btn span {
         display: inline;
       }
     }
@@ -1052,8 +1076,9 @@ interface Class {
   `]
 })
 export class LessonManagementComponent implements OnInit {
-  private http = inject(HttpClient);
-  private router = inject(Router);
+  // ==========================================
+  // الخصائص
+  // ==========================================
   
   lessons: Class[] = [];
   filteredLessons: Class[] = [];
@@ -1089,8 +1114,8 @@ export class LessonManagementComponent implements OnInit {
   subjects = ['رياضيات', 'فيزياء', 'علوم', 'لغة عربية', 'لغة فرنسية', 'لغة انجليزية', 'تاريخ', 'جغرافيا', 'فلسفة', 'إعلام آلي'];
   academicYears = ['1AS', '2AS', '3AS', '1MS', '2MS', '3MS', '4MS', '5MS', '1AP', '2AP', '3AP', '4AP', '5AP', 'NS'];
   days = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
-  teachers: any[] = [];
-  classrooms: any[] = [];
+  teachers: Teacher[] = [];
+  classrooms: Classroom[] = [];
   
   currentPage = 1;
   itemsPerPage = 10;
@@ -1099,37 +1124,256 @@ export class LessonManagementComponent implements OnInit {
   sortDirection: 'asc' | 'desc' = 'asc';
   selectedLessons = new Set<string>();
   
+  // ✅ عنوان API
+  private apiUrl = 'http://localhost:5090';
+
+  // ==========================================
+  // المُنشئ
+  // ==========================================
+  
+  constructor(
+    private http: HttpClient,
+    private router: Router
+  ) {}
+
+  // ==========================================
+  // دورة الحياة
+  // ==========================================
+  
   ngOnInit(): void {
     this.loadClasses();
     this.loadTeachers();
     this.loadClassrooms();
   }
-  
+
+  // ==========================================
+  // دوال مساعدة - الحصول على schoolId
+  // ==========================================
+
+  private getSchoolId(): string | null {
+    try {
+      // ✅ من user object
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user?.schoolId) {
+          console.log('✅ schoolId من user:', user.schoolId);
+          return user.schoolId;
+        }
+      }
+
+      // ✅ من school object
+      const schoolStr = localStorage.getItem('school');
+      if (schoolStr) {
+        const school = JSON.parse(schoolStr);
+        if (school?._id) {
+          console.log('✅ schoolId من school:', school._id);
+          return school._id;
+        }
+      }
+
+      // ✅ من token (JWT)
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const base64Url = token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const payload = JSON.parse(atob(base64));
+          if (payload?.schoolId) {
+            console.log('✅ schoolId من token:', payload.schoolId);
+            return payload.schoolId;
+          }
+        } catch (e) {
+          console.warn('⚠️ فشل فك تشفير token');
+        }
+      }
+
+      console.warn('⚠️ لم يتم العثور على schoolId');
+      return null;
+    } catch (e) {
+      console.error('❌ خطأ في getSchoolId:', e);
+      return null;
+    }
+  }
+
+  private getToken(): string | null {
+    try {
+      return localStorage.getItem('token');
+    } catch (e) {
+      console.error('❌ خطأ في قراءة token:', e);
+      return null;
+    }
+  }
+
+  private getHeaders(): HttpHeaders {
+    const token = this.getToken();
+    return new HttpHeaders({
+      'Authorization': token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json'
+    });
+  }
+
+  // ==========================================
+  // تحميل البيانات - مع تصفية حسب المدرسة
+  // ==========================================
+
   loadClasses(): void {
     this.loading = true;
-    this.http.get<Class[]>(`${environment.apiUrl}/classes`)
+    const schoolId = this.getSchoolId();
+    
+    if (!schoolId) {
+      console.warn('⚠️ لا يوجد schoolId، سيتم إرجاع قائمة فارغة');
+      this.lessons = [];
+      this.filteredLessons = [];
+      this.totalItems = 0;
+      this.loading = false;
+      this.showToast('⚠️ لم يتم تحديد المدرسة، يرجى تسجيل الدخول مرة أخرى', 'error');
+      return;
+    }
+    
+    // ✅ استخدم النقطة العامة مع فلترة schoolId
+    const url = `${this.apiUrl}/api/classes?schoolId=${schoolId}`;
+    console.log('📚 جلب الحصص للمدرسة:', schoolId);
+    
+    this.http.get<Class[]>(url, { headers: this.getHeaders() })
       .subscribe({
         next: (classes) => {
+          console.log(`✅ تم تحميل ${classes.length} حصة`);
           this.lessons = classes;
           this.filteredLessons = [...classes];
           this.applyFilter();
           this.loading = false;
         },
-        error: () => {
+        error: (err) => {
+          console.error('❌ خطأ في تحميل الحصص:', err);
+          // ✅ محاولة بديلة
+          this.loadClassesBySchoolId(schoolId);
+        }
+      });
+  }
+
+  private loadClassesBySchoolId(schoolId: string): void {
+    const url = `${this.apiUrl}/api/classes/school/${schoolId}`;
+    console.log('📤 جلب حصص المدرسة (بديل):', url);
+    
+    this.http.get<Class[]>(url, { headers: this.getHeaders() })
+      .subscribe({
+        next: (classes) => {
+          console.log(`✅ تم تحميل ${classes.length} حصة للمدرسة (بديل)`);
+          this.lessons = classes;
+          this.filteredLessons = [...classes];
+          this.applyFilter();
+          this.loading = false;
+        },
+        error: (err) => {
+          console.error('❌ فشل تحميل الحصص (بديل):', err);
           this.errorMessage = 'فشل تحميل قائمة الحصص';
+          this.lessons = [];
+          this.filteredLessons = [];
+          this.totalItems = 0;
           this.loading = false;
         }
       });
   }
 
   loadTeachers(): void {
-    this.http.get<any[]>(`${environment.apiUrl}/teachers`).subscribe(t => this.teachers = t);
+    const schoolId = this.getSchoolId();
+    
+    if (!schoolId) {
+      console.warn('⚠️ لا يوجد schoolId، لا يمكن تحميل الأساتذة');
+      this.teachers = [];
+      return;
+    }
+    
+    const url = `${this.apiUrl}/api/teachers/school/${schoolId}`;
+    console.log('📚 جلب أساتذة المدرسة:', schoolId);
+    
+    this.http.get<Teacher[]>(url, { headers: this.getHeaders() })
+      .subscribe({
+        next: (teachers) => {
+          // ✅ تصفية الأساتذة النشطين فقط
+          this.teachers = teachers.filter(t => t.active !== false);
+          console.log(`✅ تم تحميل ${this.teachers.length} أستاذ`);
+        },
+        error: (err) => {
+          console.error('❌ خطأ في تحميل الأساتذة:', err);
+          // ✅ محاولة بديلة
+          this.loadTeachersFallback();
+        }
+      });
+  }
+
+  private loadTeachersFallback(): void {
+    const schoolId = this.getSchoolId();
+    if (!schoolId) return;
+    
+    const url = `${this.apiUrl}/api/teachers?schoolId=${schoolId}`;
+    console.log('📤 جلب الأساتذة (بديل):', url);
+    
+    this.http.get<Teacher[]>(url, { headers: this.getHeaders() })
+      .subscribe({
+        next: (teachers) => {
+          this.teachers = teachers.filter(t => t.active !== false);
+          console.log(`✅ تم تحميل ${this.teachers.length} أستاذ (بديل)`);
+        },
+        error: (err) => {
+          console.error('❌ فشل تحميل الأساتذة (بديل):', err);
+          this.teachers = [];
+        }
+      });
   }
 
   loadClassrooms(): void {
-    this.http.get<any[]>(`${environment.apiUrl}/classrooms`).subscribe(c => this.classrooms = c);
+    const schoolId = this.getSchoolId();
+    
+    if (!schoolId) {
+      console.warn('⚠️ لا يوجد schoolId، لا يمكن تحميل الغرف');
+      this.classrooms = [];
+      return;
+    }
+    
+    const url = `${this.apiUrl}/api/classrooms/school/${schoolId}`;
+    console.log('📚 جلب غرف المدرسة:', schoolId);
+    
+    this.http.get<Classroom[]>(url, { headers: this.getHeaders() })
+      .subscribe({
+        next: (classrooms) => {
+          // ✅ تصفية الغرف المتاحة فقط للجدولة
+          this.classrooms = classrooms.filter(c => c.status === 'available' || c.status === 'occupied');
+          console.log(`✅ تم تحميل ${this.classrooms.length} غرفة`);
+        },
+        error: (err) => {
+          console.error('❌ خطأ في تحميل الغرف:', err);
+          // ✅ محاولة بديلة
+          this.loadClassroomsFallback();
+        }
+      });
+  }
+
+  private loadClassroomsFallback(): void {
+    const schoolId = this.getSchoolId();
+    if (!schoolId) return;
+    
+    const url = `${this.apiUrl}/api/classrooms?schoolId=${schoolId}`;
+    console.log('📤 جلب غرف المدرسة (بديل):', url);
+    
+    this.http.get<Classroom[]>(url, { headers: this.getHeaders() })
+      .subscribe({
+        next: (classrooms) => {
+          this.classrooms = classrooms.filter(c => c.status === 'available' || c.status === 'occupied');
+          console.log(`✅ تم تحميل ${this.classrooms.length} غرفة (بديل)`);
+        },
+        error: (err) => {
+          console.error('❌ فشل تحميل الغرف (بديل):', err);
+          this.classrooms = [];
+        }
+      });
   }
   
+  // ==========================================
+  // دوال الفلترة
+  // ==========================================
+
   applyFilter(): void {
     this.filteredLessons = this.lessons.filter(lesson => {
       const matchesSubject = !this.filterSubject || lesson.subject === this.filterSubject;
@@ -1173,14 +1417,27 @@ export class LessonManagementComponent implements OnInit {
     this.sortData();
   }
   
+  // ==========================================
+  // دوال التنقل
+  // ==========================================
+
   navigateToDetails(lessonId: string): void {
     this.router.navigate(['/home/lesson-detail', lessonId]);
   }
   
+  // ==========================================
+  // دوال نافذة الإضافة
+  // ==========================================
+
   openAddLessonDialog(): void {
     this.showAddDialog = true;
     this.newLesson = {
-      name: '', subject: '', academicYear: '', price: 0, teacher: '', description: '',
+      name: '',
+      subject: '',
+      academicYear: '',
+      price: 0,
+      teacher: '',
+      description: '',
       paymentSystem: 'monthly',
       roundSettings: { sessionCount: 8, sessionDuration: 2, breakBetweenSessions: 0 },
       schedule: []
@@ -1201,22 +1458,44 @@ export class LessonManagementComponent implements OnInit {
     this.newLesson.schedule.splice(index, 1);
   }
   
+  // ==========================================
+  // عمليات CRUD - مع إضافة schoolId
+  // ==========================================
+
   createLesson(): void {
+    // التحقق من الحقول المطلوبة
     if (!this.newLesson.name || !this.newLesson.subject || !this.newLesson.academicYear || !this.newLesson.price) {
       this.showToast('يرجى ملء جميع الحقول المطلوبة', 'error');
       return;
     }
+
+    const schoolId = this.getSchoolId();
+    if (!schoolId) {
+      this.showToast('⚠️ لا يمكن إضافة حصة بدون تحديد المدرسة', 'error');
+      return;
+    }
     
     this.loading = true;
-    this.http.post(`${environment.apiUrl}/classes`, this.newLesson)
+    
+    // ✅ إضافة schoolId إلى بيانات الحصة الجديدة
+    const lessonData = {
+      ...this.newLesson,
+      schoolId: schoolId
+    };
+    
+    console.log('📤 إرسال بيانات حصة جديدة:', lessonData);
+    
+    this.http.post(`${this.apiUrl}/api/classes`, lessonData, { headers: this.getHeaders() })
       .subscribe({
         next: (response: any) => {
+          console.log('✅ تم إنشاء الحصة:', response);
           this.showToast(response.message || 'تم إنشاء الحصة بنجاح', 'success');
           this.showAddDialog = false;
           this.loadClasses();
           this.loading = false;
         },
         error: (err) => {
+          console.error('❌ خطأ في إنشاء الحصة:', err);
           this.showToast(err.error?.error || 'فشل إنشاء الحصة', 'error');
           this.loading = false;
         }
@@ -1226,12 +1505,49 @@ export class LessonManagementComponent implements OnInit {
   deleteLesson(lessonId: string, event: Event): void {
     event.stopPropagation();
     if (confirm('هل أنت متأكد من حذف هذه الحصة؟')) {
-      this.http.delete(`${environment.apiUrl}/classes/${lessonId}`).subscribe(() => {
-        this.showToast('تم حذف الحصة بنجاح', 'success');
+      this.http.delete(`${this.apiUrl}/api/classes/${lessonId}`, { headers: this.getHeaders() })
+        .subscribe({
+          next: () => {
+            this.showToast('تم حذف الحصة بنجاح', 'success');
+            this.loadClasses();
+          },
+          error: (err) => {
+            console.error('❌ خطأ في حذف الحصة:', err);
+            this.showToast(err.error?.error || 'فشل حذف الحصة', 'error');
+          }
+        });
+    }
+  }
+
+  deleteSelectedLessons(): void {
+    if (this.selectedLessons.size === 0) return;
+    
+    if (confirm(`حذف ${this.selectedLessons.size} حصص؟`)) {
+      const promises = Array.from(this.selectedLessons).map(id => 
+        this.http.delete(`${this.apiUrl}/api/classes/${id}`, { headers: this.getHeaders() }).toPromise()
+      );
+      
+      Promise.all(promises).then(() => {
+        this.showToast('تم الحذف بنجاح', 'success');
+        this.selectedLessons.clear();
         this.loadClasses();
+      }).catch((err) => {
+        console.error('❌ خطأ في الحذف الجماعي:', err);
+        this.showToast('فشل حذف بعض الحصص', 'error');
       });
     }
   }
+
+  refreshData(): void {
+    this.showToast('جاري تحديث البيانات...', 'success');
+    this.loadClasses();
+    this.loadTeachers();
+    this.loadClassrooms();
+  }
+
+  // ==========================================
+  // دوال التنبيهات
+  // ==========================================
 
   showToast(msg: string, type: 'success' | 'error') {
     if (type === 'success') {
@@ -1243,47 +1559,51 @@ export class LessonManagementComponent implements OnInit {
     }
   }
   
+  // ==========================================
+  // دوال التحديد
+  // ==========================================
+
   toggleSelection(lessonId: string, event: Event): void {
     event.stopPropagation();
-    this.selectedLessons.has(lessonId) ? this.selectedLessons.delete(lessonId) : this.selectedLessons.add(lessonId);
+    if (this.selectedLessons.has(lessonId)) {
+      this.selectedLessons.delete(lessonId);
+    } else {
+      this.selectedLessons.add(lessonId);
+    }
   }
   
   toggleAllSelection(): void {
-    if (this.selectedLessons.size === this.paginatedLessons.length) {
+    if (this.selectedLessons.size === this.paginatedLessons.length && this.paginatedLessons.length > 0) {
       this.selectedLessons.clear();
     } else {
       this.paginatedLessons.forEach(lesson => this.selectedLessons.add(lesson._id));
     }
   }
   
-  deleteSelectedLessons(): void {
-    if (confirm(`حذف ${this.selectedLessons.size} حصص؟`)) {
-      const promises = Array.from(this.selectedLessons).map(id => this.http.delete(`${environment.apiUrl}/classes/${id}`).toPromise());
-      Promise.all(promises).then(() => {
-        this.showToast('تم الحذف بنجاح', 'success');
-        this.selectedLessons.clear();
-        this.loadClasses();
-      });
-    }
-  }
+  // ==========================================
+  // دوال ترقيم الصفحات
+  // ==========================================
 
   get paginatedLessons(): Class[] {
     const start = (this.currentPage - 1) * this.itemsPerPage;
     return this.filteredLessons.slice(start, start + this.itemsPerPage);
   }
   
-  get totalPages(): number { return Math.ceil(this.totalItems / this.itemsPerPage); }
+  get totalPages(): number { 
+    return Math.ceil(this.totalItems / this.itemsPerPage); 
+  }
   
-  goToPage(page: any): void { if (typeof page === 'number') this.currentPage = page; }
-  prevPage(): void { if (this.currentPage > 1) this.currentPage--; }
-  nextPage(): void { if (this.currentPage < this.totalPages) this.currentPage++; }
+  goToPage(page: any): void { 
+    if (typeof page === 'number') this.currentPage = page; 
+  }
   
-  formatPrice(price: number): string { return new Intl.NumberFormat('ar-DZ').format(price) + ' د.ج'; }
-  getPaymentSystemText(system: string): string { return system === 'monthly' ? 'دفع شهري' : 'نظام جولات'; }
-  getStudentsCount(lesson: Class): number { return lesson.students?.length || 0; }
-  getTeacherName(lesson: Class): string { return lesson.teacher?.name || 'غير محدد'; }
-  getTotalStudents(): number { return this.lessons.reduce((sum, l) => sum + (l.students?.length || 0), 0); }
-  getAveragePrice(): number { return this.lessons.length ? Math.round(this.lessons.reduce((s, l) => s + l.price, 0) / this.lessons.length) : 0; }
+  prevPage(): void { 
+    if (this.currentPage > 1) this.currentPage--; 
+  }
+  
+  nextPage(): void { 
+    if (this.currentPage < this.totalPages) this.currentPage++; 
+  }
 
   getVisiblePages(): (number | string)[] {
     const pages: (number | string)[] = [];
@@ -1301,7 +1621,35 @@ export class LessonManagementComponent implements OnInit {
     return pages;
   }
   
+  // ==========================================
+  // دوال مساعدة للعرض
+  // ==========================================
+
+  formatPrice(price: number): string { 
+    return new Intl.NumberFormat('ar-DZ').format(price) + ' د.ج'; 
+  }
+  
+  getPaymentSystemText(system: string): string { 
+    return system === 'monthly' ? 'دفع شهري' : 'نظام جولات'; 
+  }
+  
+  getStudentsCount(lesson: Class): number { 
+    return lesson.students?.length || 0; 
+  }
+  
+  getTeacherName(lesson: Class): string { 
+    return lesson.teacher?.name || 'غير محدد'; 
+  }
+  
+  getTotalStudents(): number { 
+    return this.lessons.reduce((sum, l) => sum + (l.students?.length || 0), 0); 
+  }
+  
+  getAveragePrice(): number { 
+    return this.lessons.length ? Math.round(this.lessons.reduce((s, l) => s + l.price, 0) / this.lessons.length) : 0; 
+  }
+  
   exportToExcel(): void { 
-    this.showToast('جاري تحضير ملف الإكسل...', 'success');
+    this.showToast('جاري تحضير ملف الإكسل...', 'success'); 
   }
 }

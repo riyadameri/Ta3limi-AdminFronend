@@ -3,7 +3,6 @@ import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import Swal from 'sweetalert2';
 import { CommonModule } from '@angular/common';
-import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-login',
@@ -19,22 +18,71 @@ export class LoginComponent implements OnInit {
   password: string = '';
   schoolKey: string = '';
   rememberMe: boolean = false;
+  isSchoolKeySaved: boolean = false;
   
   currentYear: number = new Date().getFullYear();
   isLoading: boolean = false;
   passwordFieldType: string = 'password';
   errorMessage: string = '';
+  showPassword: boolean = false;
+
+  stats = {
+    teachers: 0,
+    students: 0,
+    classes: 0
+  };
 
   constructor(private router: Router) {}
 
   ngOnInit(): void {
+    this.loadSavedSchoolKey();
     this.loadRememberedUser();
     this.checkExistingSession();
+    this.loadDashboardStats();
   }
 
-  /**
-   * التحقق من وجود جلسة نشطة
-   */
+  loadSavedSchoolKey(): void {
+    const savedKey = localStorage.getItem('savedSchoolKey');
+    if (savedKey && savedKey.trim() !== '') {
+      this.schoolKey = savedKey;
+      this.isSchoolKeySaved = true;
+    }
+  }
+
+  changeSchool(): void {
+    this.isSchoolKeySaved = false;
+    this.schoolKey = '';
+    localStorage.removeItem('savedSchoolKey');
+  }
+
+  async loadDashboardStats(): Promise<void> {
+    try {
+      const token = localStorage.getItem('token');
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${this.apiUrl}/api/dashboard/stats`, {
+        method: 'GET',
+        headers
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          this.stats = {
+            teachers: data.data?.teachers || 0,
+            students: data.data?.students || 0,
+            classes: data.data?.classes || 0
+          };
+        }
+      }
+    } catch (error) {
+      console.log('الإحصائيات غير متاحة حاليا');
+    }
+  }
+
   checkExistingSession(): void {
     const token = localStorage.getItem('token');
     const user = localStorage.getItem('user');
@@ -45,9 +93,6 @@ export class LoginComponent implements OnInit {
     }
   }
 
-  /**
-   * التحقق من صحة التوكن وتوجيه المستخدم
-   */
   async verifyTokenAndRedirect(token: string): Promise<void> {
     try {
       const response = await fetch(`${this.apiUrl}/api/auth/verify`, {
@@ -61,8 +106,7 @@ export class LoginComponent implements OnInit {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          console.log('✅ جلسة نشطة، توجيه إلى /home');
-          // ✅ تغيير التوجيه إلى /home
+          console.log('جلسة نشطة، توجيه إلى /home');
           this.router.navigate(['/home']);
           return;
         }
@@ -71,17 +115,11 @@ export class LoginComponent implements OnInit {
       this.clearSession();
       
     } catch (error) {
-      console.error('❌ خطأ في التحقق من التوكن:', error);
-      if (localStorage.getItem('token')) {
-        // ✅ تغيير التوجيه إلى /home
-        this.router.navigate(['/home']);
-      }
+      console.error('خطأ في التحقق من التوكن:', error);
+      this.clearSession();
     }
   }
 
-  /**
-   * تحميل المستخدم المحفوظ
-   */
   loadRememberedUser(): void {
     const rememberedUser = localStorage.getItem('rememberedUser');
     if (rememberedUser) {
@@ -89,7 +127,9 @@ export class LoginComponent implements OnInit {
         const credentials = JSON.parse(rememberedUser);
         if (credentials.rememberMe) {
           this.username = credentials.username || '';
-          this.schoolKey = credentials.schoolKey || '';
+          if (!this.isSchoolKeySaved) {
+            this.schoolKey = credentials.schoolKey || '';
+          }
           this.rememberMe = true;
         }
       } catch (e) {
@@ -99,7 +139,8 @@ export class LoginComponent implements OnInit {
   }
 
   togglePasswordVisibility(): void {
-    this.passwordFieldType = this.passwordFieldType === 'password' ? 'text' : 'password';
+    this.showPassword = !this.showPassword;
+    this.passwordFieldType = this.showPassword ? 'text' : 'password';
   }
 
   isFormValid(): boolean {
@@ -110,21 +151,18 @@ export class LoginComponent implements OnInit {
 
   getGreeting(): string {
     const hour = new Date().getHours();
-    if (hour < 12) return '🌅 صباح الخير';
-    if (hour < 18) return '🌤️ مساء الخير';
-    return '🌙 مساء الخير';
+    if (hour < 12) return 'صباح الخير';
+    if (hour < 18) return 'مساء الخير';
+    return 'مساء الخير';
   }
 
-  /**
-   * تسجيل الدخول والتوجيه إلى /home
-   */
   async login(): Promise<void> {
     if (!this.isFormValid()) {
       Swal.fire({
-        title: '⚠️ خطأ',
+        title: 'تنبيه',
         text: 'يرجى إكمال جميع الحقول المطلوبة',
         icon: 'error',
-        confirmButtonColor: '#6C63FF'
+        confirmButtonColor: '#4f46e5'
       });
       return;
     }
@@ -141,8 +179,8 @@ export class LoginComponent implements OnInit {
 
       const url = `${this.apiUrl}/api/auth/login`;
       
-      console.log('📤 محاولة تسجيل الدخول إلى:', url);
-      console.log('📤 البيانات:', { 
+      console.log('محاولة تسجيل الدخول إلى:', url);
+      console.log('البيانات:', { 
         username: loginData.username, 
         schoolKey: loginData.schoolKey 
       });
@@ -158,42 +196,44 @@ export class LoginComponent implements OnInit {
 
       const data = await response.json();
 
-      console.log('📥 رد الخادم:', data);
+      console.log('رد الخادم:', data);
 
       if (response.ok && data.success) {
         this.saveSessionData(data);
         
+        const token = localStorage.getItem('token');
+        console.log('التوكن المحفوظ:', token ? 'موجود (طول: ' + token.length + ')' : 'غير موجود');
+        
         await Swal.fire({
-          title: '✅ تم تسجيل الدخول',
-          text: `مرحباً ${data.data.user.fullName || data.data.user.username}`,
+          title: 'تم تسجيل الدخول بنجاح',
+          text: `مرحبا ${data.data.user.fullName || data.data.user.username}`,
           icon: 'success',
           timer: 1500,
           showConfirmButton: false
         });
 
-        // ✅ توجيه المستخدم إلى /home (وليس /dashboard/students)
-        console.log('🚀 توجيه إلى /home');
+        console.log('توجيه إلى /home');
         this.router.navigate(['/home']);
 
       } else {
         this.errorMessage = data.error || data.message || 'بيانات الدخول غير صحيحة';
         
         Swal.fire({
-          title: '❌ فشل الدخول',
+          title: 'فشل الدخول',
           text: this.errorMessage,
           icon: 'error',
-          confirmButtonColor: '#6C63FF'
+          confirmButtonColor: '#4f46e5'
         });
       }
 
-    } catch (error) {
-      console.error('❌ خطأ في تسجيل الدخول:', error);
+    } catch (error: any) {
+      console.error('خطأ في تسجيل الدخول:', error);
       
       Swal.fire({
-        title: '❌ خطأ في الاتصال',
+        title: 'خطأ في الاتصال',
         text: 'تعذر الاتصال بالخادم. تأكد من تشغيل الخادم على المنفذ 5090',
         icon: 'error',
-        confirmButtonColor: '#6C63FF',
+        confirmButtonColor: '#4f46e5',
         confirmButtonText: 'إعادة المحاولة'
       });
       
@@ -204,9 +244,27 @@ export class LoginComponent implements OnInit {
 
   private saveSessionData(data: any): void {
     try {
-      localStorage.setItem('token', data.data.token);
-      localStorage.setItem('user', JSON.stringify(data.data.user));
-      localStorage.setItem('school', JSON.stringify(data.data.school));
+      const token = data.data.token;
+      if (!token) {
+        throw new Error('لم يتم استلام التوكن من الخادم');
+      }
+      localStorage.setItem('token', token);
+      
+      const userData = {
+        ...data.data.user,
+        schoolId: data.data.school?._id || null,
+        schoolKey: data.data.school?.schoolKey || null
+      };
+      localStorage.setItem('user', JSON.stringify(userData));
+      
+      if (data.data.school) {
+        localStorage.setItem('school', JSON.stringify(data.data.school));
+        console.log('تم حفظ المدرسة:', {
+          id: data.data.school._id,
+          name: data.data.school.name,
+          schoolKey: data.data.school.schoolKey
+        });
+      }
       
       if (data.data.school?.subscription) {
         localStorage.setItem('subscription', JSON.stringify(data.data.school.subscription));
@@ -218,6 +276,11 @@ export class LoginComponent implements OnInit {
 
       localStorage.setItem('loginTime', new Date().toISOString());
 
+      if (this.schoolKey.trim()) {
+        localStorage.setItem('savedSchoolKey', this.schoolKey.trim());
+        this.isSchoolKeySaved = true;
+      }
+
       if (this.rememberMe) {
         localStorage.setItem('rememberedUser', JSON.stringify({
           username: this.username.trim(),
@@ -228,10 +291,11 @@ export class LoginComponent implements OnInit {
         localStorage.removeItem('rememberedUser');
       }
 
-      console.log('✅ تم حفظ بيانات الجلسة');
-
+      console.log('تم حفظ جميع بيانات الجلسة');
+      
     } catch (error) {
-      console.error('❌ خطأ في حفظ البيانات:', error);
+      console.error('خطأ في حفظ البيانات:', error);
+      throw error;
     }
   }
 
@@ -242,16 +306,17 @@ export class LoginComponent implements OnInit {
     localStorage.removeItem('subscription');
     localStorage.removeItem('permissions');
     localStorage.removeItem('loginTime');
-    console.log('🗑️ تم حذف بيانات الجلسة');
+    localStorage.removeItem('rememberedUser');
+    console.log('تم حذف بيانات الجلسة');
   }
 
   forgotPassword(): void {
     Swal.fire({
-      title: '🔑 نسيت كلمة المرور؟',
+      title: 'نسيت كلمة المرور؟',
       text: 'يرجى التواصل مع إدارة المدرسة لإعادة تعيين كلمة المرور',
       icon: 'info',
-      confirmButtonText: 'حسناً',
-      confirmButtonColor: '#6C63FF'
+      confirmButtonText: 'حسنا',
+      confirmButtonColor: '#4f46e5'
     });
   }
 
@@ -299,10 +364,10 @@ export class LoginComponent implements OnInit {
   async redirectToAccountingInterface(): Promise<void> {
     if (!this.isFormValid()) {
       Swal.fire({
-        title: '⚠️ خطأ',
+        title: 'تنبيه',
         text: 'يرجى إكمال جميع الحقول المطلوبة',
         icon: 'error',
-        confirmButtonColor: '#6C63FF'
+        confirmButtonColor: '#4f46e5'
       });
       return;
     }
@@ -331,7 +396,7 @@ export class LoginComponent implements OnInit {
         this.saveSessionData(data);
 
         await Swal.fire({
-          title: '✅ تم تسجيل الدخول',
+          title: 'تم تسجيل الدخول بنجاح',
           text: 'جاري تحويلك إلى واجهة المحاسبة...',
           icon: 'success',
           timer: 1500,
@@ -341,19 +406,19 @@ export class LoginComponent implements OnInit {
         this.router.navigate(['/accounting']);
       } else {
         Swal.fire({
-          title: '❌ فشل الدخول',
+          title: 'فشل الدخول',
           text: data.error || data.message || 'بيانات غير صحيحة',
           icon: 'error',
-          confirmButtonColor: '#6C63FF'
+          confirmButtonColor: '#4f46e5'
         });
       }
     } catch (error) {
-      console.error('❌ خطأ:', error);
+      console.error('خطأ:', error);
       Swal.fire({
-        title: '❌ خطأ في الاتصال',
+        title: 'خطأ في الاتصال',
         text: 'تعذر الاتصال بالخادم',
         icon: 'error',
-        confirmButtonColor: '#6C63FF'
+        confirmButtonColor: '#4f46e5'
       });
     } finally {
       this.isLoading = false;

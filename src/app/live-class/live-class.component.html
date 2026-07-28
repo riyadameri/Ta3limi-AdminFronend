@@ -1,1 +1,356 @@
-  
+<div class="live-class-container" dir="rtl">
+  <!-- Header Section -->
+  <div class="modern-header">
+    <div class="header-content">
+      <div class="title-section">
+        <div class="icon-wrapper">
+          <i class="fas fa-chalkboard-user"></i>
+        </div>
+        <div>
+          <h1>نظام الحصص الحية</h1>
+          <p>إدارة الحصص والحضور بكفاءة عالية</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-glass" (click)="loadLiveClasses()">
+          <i class="fas fa-sync-alt"></i>
+          <span>تحديث</span>
+        </button>
+        <button class="btn-primary-modern" (click)="toggleCreateForm()">
+          <i class="fas fa-plus-circle"></i>
+          <span>حصة جديدة</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters Section -->
+  <div class="filters-modern">
+    <div class="filters-header">
+      <i class="fas fa-sliders-h"></i>
+      <h3>تصفية الحصص</h3>
+    </div>
+    <div class="filters-grid">
+      <div class="filter-item">
+        <label><i class="fas fa-chart-line"></i> الحالة</label>
+        <select class="modern-select" [(ngModel)]="filters.status" (change)="applyFilters()">
+          <option value="">جميع الحالات</option>
+          <option value="scheduled">مجدولة</option>
+          <option value="ongoing">جارية</option>
+          <option value="completed">مكتملة</option>
+          <option value="cancelled">ملغاة</option>
+        </select>
+      </div>
+      <div class="filter-item">
+        <label><i class="fas fa-calendar-alt"></i> التاريخ</label>
+        <input type="date" class="modern-input" [(ngModel)]="filters.date" (change)="applyFilters()">
+      </div>
+      <div class="filter-item">
+        <label><i class="fas fa-book"></i> الحصة</label>
+        <select class="modern-select" [(ngModel)]="filters.class" (change)="applyFilters()">
+          <option value="">جميع الحصص</option>
+          <option *ngFor="let cls of allClasses" [value]="cls._id">
+            {{cls.name}} - {{cls.subject}}
+          </option>
+        </select>
+      </div>
+      <div class="filter-item">
+        <label><i class="fas fa-user-graduate"></i> الأستاذ</label>
+        <select class="modern-select" [(ngModel)]="filters.teacher" (change)="applyFilters()">
+          <option value="">جميع الأساتذة</option>
+          <option *ngFor="let teacher of teachers" [value]="teacher._id">
+            {{teacher.name}}
+          </option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Form -->
+  <div *ngIf="showCreateForm" class="create-form-modern">
+    <div class="form-header">
+      <i class="fas fa-plus-circle"></i>
+      <h3>إنشاء حصة جديدة</h3>
+      <button type="button" class="close-btn" (click)="cancelCreate()">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <form #createForm="ngForm" (ngSubmit)="createLiveClass()">
+      <div class="form-grid">
+        <div class="form-field">
+          <label><i class="fas fa-book"></i> الحصة *</label>
+          <select class="modern-select" [(ngModel)]="newLiveClass.classId" name="classId" required>
+            <option value="">اختر الحصة</option>
+            <option *ngFor="let cls of allClasses" [value]="cls._id">
+              {{cls.name}} - {{cls.subject}}
+            </option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label><i class="fas fa-calendar-day"></i> التاريخ *</label>
+          <input type="date" class="modern-input" [(ngModel)]="newLiveClass.date" name="date" required>
+        </div>
+        <div class="form-field">
+          <label><i class="fas fa-clock"></i> وقت البداية *</label>
+          <input type="time" class="modern-input" [(ngModel)]="newLiveClass.startTime" name="startTime" required>
+        </div>
+        <div class="form-field">
+          <label><i class="fas fa-hourglass-end"></i> وقت النهاية</label>
+          <input type="time" class="modern-input" [(ngModel)]="newLiveClass.endTime" name="endTime">
+        </div>
+        <div class="form-field">
+          <label><i class="fas fa-chalkboard-user"></i> الأستاذ *</label>
+          <select class="modern-select" [(ngModel)]="newLiveClass.teacherId" name="teacherId" required>
+            <option value="">اختر الأستاذ</option>
+            <option *ngFor="let teacher of teachers" [value]="teacher._id">
+              {{teacher.name}}
+            </option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label><i class="fas fa-door-open"></i> القاعة</label>
+          <select class="modern-select" [(ngModel)]="newLiveClass.classroomId" name="classroomId">
+            <option value="">اختر القاعة</option>
+            <option *ngFor="let room of classrooms" [value]="room._id">
+              {{room.name}} ({{room.status === 'available' ? 'متاحة' : room.status === 'occupied' ? 'مشغولة' : 'صيانة'}})
+            </option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label><i class="fas fa-tag"></i> الحالة</label>
+          <select class="modern-select" [(ngModel)]="newLiveClass.status" name="status">
+            <option value="scheduled">مجدولة</option>
+            <option value="ongoing">جارية</option>
+            <option value="completed">مكتملة</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-field full-width">
+        <label><i class="fas fa-sticky-note"></i> ملاحظات</label>
+        <textarea class="modern-textarea" [(ngModel)]="newLiveClass.notes" name="notes" rows="3" placeholder="أدخل أي ملاحظات إضافية..."></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn-submit" [disabled]="!newLiveClass.classId || !newLiveClass.date || !newLiveClass.startTime || !newLiveClass.teacherId || loading">
+          <i class="fas fa-save"></i> حفظ الحصة
+        </button>
+        <button type="button" class="btn-cancel" (click)="cancelCreate()">
+          <i class="fas fa-times"></i> إلغاء
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading" class="loading-modern">
+    <div class="spinner-modern">
+      <div class="spinner-ring"></div>
+      <div class="spinner-ring"></div>
+      <div class="spinner-ring"></div>
+    </div>
+    <p>جاري تحميل الحصص الحية...</p>
+  </div>
+
+  <!-- Empty State -->
+  <div *ngIf="!loading && liveClasses.length === 0" class="empty-state-modern">
+    <div class="empty-icon">
+      <i class="fas fa-calendar-times"></i>
+    </div>
+    <h3>لا توجد حصص حية</h3>
+    <p>لم يتم إنشاء أي حصص حية بعد. يمكنك إنشاء حصة جديدة باستخدام الزر أعلاه.</p>
+  </div>
+
+  <!-- Cards Grid -->
+  <div class="cards-grid">
+    <div *ngFor="let liveClass of liveClasses" class="class-card" [ngClass]="getCardClass(liveClass.status)">
+      <div class="card-status-badge" [ngClass]="getStatusClass(liveClass.status)">
+        {{getStatusText(liveClass.status)}}
+      </div>
+      <div class="card-header">
+        <div class="class-icon">
+          <i class="fas fa-video"></i>
+        </div>
+        <div class="class-info">
+          <h3>{{getClassName(liveClass)}}</h3>
+          <span class="subject-tag">{{getClassSubject(liveClass)}}</span>
+        </div>
+        <div class="card-actions">
+          <button class="icon-btn" (click)="toggleClassDetails(liveClass)" [title]="liveClass.showDetails ? 'إخفاء التفاصيل' : 'عرض التفاصيل'">
+            <i class="fas" [ngClass]="liveClass.showDetails ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+          </button>
+          <button class="icon-btn" (click)="openAttendanceModal(liveClass)" title="تسجيل الحضور">
+            <i class="fas fa-clipboard-check"></i>
+          </button>
+          <button class="icon-btn" (click)="editLiveClass(liveClass)" title="تعديل">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button class="icon-btn danger" (click)="confirmDeleteLiveClass(liveClass._id)" title="حذف">
+            <i class="fas fa-trash-alt"></i>
+          </button>
+        </div>
+      </div>
+      <div class="card-meta">
+        <span class="meta-chip"><i class="fas fa-calendar-alt"></i> {{formatDate(liveClass.date)}}</span>
+        <span class="meta-chip"><i class="fas fa-clock"></i> {{liveClass.startTime}} {{liveClass.endTime ? '- ' + liveClass.endTime : ''}}</span>
+        <span class="meta-chip"><i class="fas fa-chalkboard-user"></i> {{getTeacherName(liveClass)}}</span>
+        <span class="meta-chip"><i class="fas fa-door-open"></i> {{getClassroomName(liveClass) || 'غير محدد'}}</span>
+      </div>
+
+      <!-- Details Section -->
+      <div *ngIf="liveClass.showDetails" class="card-details">
+        <div *ngIf="liveClass._id === editingClassId" class="edit-section">
+          <div class="edit-header">
+            <i class="fas fa-edit"></i>
+            <h4>تعديل الحصة</h4>
+          </div>
+          <form #editForm="ngForm" (ngSubmit)="updateLiveClass(liveClass)">
+            <div class="form-grid compact">
+              <div class="form-field">
+                <label>الحالة</label>
+                <select class="modern-select" [(ngModel)]="liveClass.status" name="editStatus">
+                  <option value="scheduled">مجدولة</option>
+                  <option value="ongoing">جارية</option>
+                  <option value="completed">مكتملة</option>
+                  <option value="cancelled">ملغاة</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label>وقت النهاية</label>
+                <input type="time" class="modern-input" [(ngModel)]="liveClass.endTime" name="editEndTime">
+              </div>
+            </div>
+            <div class="form-field">
+              <label>ملاحظات</label>
+              <textarea class="modern-textarea" [(ngModel)]="liveClass.notes" name="editNotes" rows="2"></textarea>
+            </div>
+            <div class="edit-actions">
+              <button type="submit" class="btn-submit small" [disabled]="loading">
+                <i class="fas fa-check"></i> حفظ
+              </button>
+              <button type="button" class="btn-cancel small" (click)="cancelEdit()">
+                <i class="fas fa-times"></i> إلغاء
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid">
+          <div class="stat-card present">
+            <div class="stat-value">{{countAttendance(liveClass, 'present')}}</div>
+            <div class="stat-label">حاضر</div>
+            <i class="fas fa-check-circle stat-icon"></i>
+          </div>
+          <div class="stat-card absent">
+            <div class="stat-value">{{countAttendance(liveClass, 'absent')}}</div>
+            <div class="stat-label">غائب</div>
+            <i class="fas fa-times-circle stat-icon"></i>
+          </div>
+          <div class="stat-card late">
+            <div class="stat-value">{{countAttendance(liveClass, 'late')}}</div>
+            <div class="stat-label">متأخر</div>
+            <i class="fas fa-clock stat-icon"></i>
+          </div>
+          <div class="stat-card total">
+            <div class="stat-value">{{getTotalStudents(liveClass)}}</div>
+            <div class="stat-label">إجمالي</div>
+            <i class="fas fa-users stat-icon"></i>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions-modern">
+          <button class="action-btn warning" (click)="autoMarkAbsent(liveClass._id)">
+            <i class="fas fa-robot"></i> تسجيل الغائبين تلقائياً
+          </button>
+          <button class="action-btn info" (click)="getClassAttendanceReport(liveClass.class?._id)">
+            <i class="fas fa-chart-bar"></i> تقرير الحضور
+          </button>
+          <button class="action-btn success" (click)="exportMonthlyAttendance(liveClass.class?._id)">
+            <i class="fas fa-file-excel"></i> تصدير Excel
+          </button>
+          <button class="action-btn primary" (click)="startLiveClass(liveClass._id)">
+            <i class="fas fa-play"></i> بدء الحصة
+          </button>
+          <button class="action-btn success" (click)="completeLiveClass(liveClass._id)">
+            <i class="fas fa-stop"></i> إنهاء الحصة
+          </button>
+        </div>
+
+        <!-- Students Table -->
+        <div *ngIf="liveClass.studentsLoaded && liveClass.class?.students?.length > 0" class="students-table-modern">
+          <div class="table-header">
+            <i class="fas fa-user-graduate"></i>
+            <h5>قائمة الطلاب ({{liveClass.class.students.length}})</h5>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>اسم الطالب</th>
+                  <th>رقم الطالب</th>
+                  <th>الحالة</th>
+                  <th>الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let student of liveClass.class.students">
+                  <td>
+                    <div class="student-info">
+                      <i class="fas fa-user-circle"></i>
+                      <span>{{student.name}}</span>
+                    </div>
+                  </td>
+                  <td>{{student.studentId}}</td>
+                  <td>
+                    <span class="status-badge-modern" [ngClass]="getAttendanceStatusClass(liveClass, student._id)">
+                      {{getAttendanceStatus(liveClass, student._id)}}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="action-buttons-modern">
+                      <button class="tiny-btn success" (click)="markStudentAttendance(liveClass._id, student._id, 'present')" title="حاضر">
+                        <i class="fas fa-check"></i>
+                      </button>
+                      <button class="tiny-btn danger" (click)="markStudentAttendance(liveClass._id, student._id, 'absent')" title="غائب">
+                        <i class="fas fa-times"></i>
+                      </button>
+                      <button class="tiny-btn warning" (click)="markStudentAttendance(liveClass._id, student._id, 'late')" title="متأخر">
+                        <i class="fas fa-clock"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <div *ngIf="!liveClass.studentsLoaded && liveClass.class?._id" class="load-students-btn">
+          <button class="outline-btn" (click)="loadClassStudents(liveClass)">
+            <i class="fas fa-user-friends"></i> تحميل قائمة الطلاب
+          </button>
+        </div>
+
+        <div *ngIf="liveClass.notes" class="notes-section">
+          <i class="fas fa-sticky-note"></i>
+          <p><strong>ملاحظات:</strong> {{liveClass.notes}}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pagination -->
+  <div *ngIf="liveClasses.length > 0" class="pagination-modern">
+    <button class="page-nav" [disabled]="currentPage === 1" (click)="previousPage()">
+      <i class="fas fa-chevron-right"></i> السابق
+    </button>
+    <div class="page-numbers">
+      <span class="page-number active">{{currentPage}}</span>
+      <span class="page-separator">/</span>
+      <span class="page-total">{{totalPages}}</span>
+    </div>
+    <button class="page-nav" [disabled]="currentPage === totalPages" (click)="nextPage()">
+      التالي <i class="fas fa-chevron-left"></i>
+    </button>
+  </div>
+</div>

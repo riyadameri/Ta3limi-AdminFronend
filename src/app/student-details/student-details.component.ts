@@ -1,9 +1,9 @@
-// student-details.component.ts
+// ==================== student-details.component.ts ====================
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import Swal from 'sweetalert2';
 import { environment } from '../../environments/environment.development';
 import { PrinterService, ReceiptData, BulkReceiptData } from '../services/printer.service';
@@ -25,6 +25,7 @@ interface Student {
   hasPaidRegistration: boolean;
   classes?: any[];
   new?: boolean;
+  schoolId?: string;
 }
 
 interface Payment {
@@ -50,6 +51,7 @@ interface Payment {
   studentName?: string;
   studentId?: string;
   isLate?: boolean;
+  schoolId?: string;
 }
 
 interface ClassPaymentGroup {
@@ -82,6 +84,7 @@ interface Class {
   description?: string;
   createdAt?: Date;
   updatedAt?: Date;
+  schoolId?: string;
 }
 
 interface MonthlyPayment {
@@ -96,6 +99,7 @@ interface MonthlyPayment {
   paymentMethod?: string;
   notes?: string;
   className?: string;
+  schoolId?: string;
 }
 
 interface RoundPayment {
@@ -114,6 +118,7 @@ interface RoundPayment {
   notes?: string;
   student?: any;
   class?: any;
+  schoolId?: string;
 }
 
 @Component({
@@ -152,6 +157,13 @@ interface RoundPayment {
               </svg>
               تقرير
             </button>
+            <button class="action-btn printer-connect-btn" (click)="connectPrinter()">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 18L18 18M6 14L18 14M6 10L18 10M6 6L18 6"/>
+                <rect x="6" y="2" width="12" height="20" rx="1" ry="1"/>
+              </svg>
+              {{ printerConnected ? '🖨️ طابعة متصلة' : '🔌 اتصال طابعة' }}
+            </button>
             <button class="action-btn whatsapp-btn" (click)="sendWhatsAppMessage()" *ngIf="student?.parentPhone">
               <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21z"/>
@@ -159,6 +171,13 @@ interface RoundPayment {
                 <path d="M14 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1z"/>
               </svg>
               واتساب
+            </button>
+            <button class="action-btn refresh-btn" (click)="refreshData()">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 4v6h6"/>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              </svg>
+              تحديث
             </button>
           </div>
         </div>
@@ -412,12 +431,21 @@ interface RoundPayment {
         <div class="classes-container">
           <div class="classes-header">
             <h3 class="section-title">الحصص المسجلة</h3>
-            <button class="add-btn" (click)="openAddToLessonsModal()">
-              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-              إضافة حصة
-            </button>
+            <div class="header-actions">
+              <button class="add-btn" (click)="openAddToLessonsModal()">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                إضافة حصة
+              </button>
+              <button class="add-btn secondary" (click)="fixStudentClasses()" *ngIf="student">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 4v6h6"/>
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                </svg>
+                إصلاح العلاقات
+              </button>
+            </div>
           </div>
 
           <div class="classes-grid" *ngIf="studentClasses.length > 0; else noClasses" >
@@ -1197,6 +1225,7 @@ interface RoundPayment {
     .header-actions {
       display: flex;
       gap: 0.75rem;
+      flex-wrap: wrap;
     }
     .action-btn {
       display: flex;
@@ -1217,12 +1246,26 @@ interface RoundPayment {
     .print-btn:hover {
       background: var(--gray-300);
     }
+    .printer-connect-btn {
+      background: #6366f1;
+      color: white;
+    }
+    .printer-connect-btn:hover {
+      background: #4f46e5;
+    }
     .whatsapp-btn {
       background: #25D366;
       color: white;
     }
     .whatsapp-btn:hover {
       background: #20b359;
+    }
+    .refresh-btn {
+      background: var(--primary);
+      color: white;
+    }
+    .refresh-btn:hover {
+      background: var(--primary-dark);
     }
 
     /* Tabs */
@@ -2506,6 +2549,9 @@ export class StudentDetailsComponent implements OnInit {
   absenceFilterEndDate: string = '';
   absenceLimit: number = 50;
   
+  // Printer Status
+  printerConnected: boolean = false;
+  
   // Static Data
   months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
   
@@ -2535,6 +2581,7 @@ export class StudentDetailsComponent implements OnInit {
   bulkPaymentProgress: number = 0;
   bulkPaymentResults: any[] = [];
 
+  private schoolId: string | null = null;
   private avatarColors: string[] = [
     '#2563eb', '#7c3aed', '#0891b2', '#059669',
     '#dc2626', '#d97706', '#9333ea', '#0d9488',
@@ -2551,10 +2598,13 @@ export class StudentDetailsComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.schoolId = localStorage.getItem('schoolId') || null;
+    console.log('🏫 School ID from localStorage:', this.schoolId);
     this.loadStudentDetails();
     this.loadAllStudents();
     this.roundSelection.roundNumber = `RND-${Date.now().toString().slice(-6)}`;
     this.loadAbsenceSummary();
+    this.checkPrinterConnection();
   }
 
   private getHeaders(): HttpHeaders {
@@ -2564,6 +2614,58 @@ export class StudentDetailsComponent implements OnInit {
       'Content-Type': 'application/json'
     });
   }
+
+  // ==================== SCHOOL ID HELPER ====================
+  
+private getSchoolId(): string {
+  // 1. Try from localStorage first
+  let schoolId = localStorage.getItem('schoolId');
+  if (schoolId && schoolId !== 'null' && schoolId !== 'undefined') {
+    console.log('📌 schoolId from localStorage:', schoolId);
+    return schoolId;
+  }
+  
+  // 2. Try from user object
+  const userStr = localStorage.getItem('user');
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      if (user?.schoolId) {
+        localStorage.setItem('schoolId', user.schoolId);
+        console.log('📌 schoolId from user:', user.schoolId);
+        return user.schoolId;
+      }
+    } catch (e) {
+      console.error('❌ Error reading user:', e);
+    }
+  }
+  
+  // 3. Try from school object
+  const schoolStr = localStorage.getItem('school');
+  if (schoolStr) {
+    try {
+      const school = JSON.parse(schoolStr);
+      if (school?._id) {
+        localStorage.setItem('schoolId', school._id);
+        console.log('📌 schoolId from school:', school._id);
+        return school._id;
+      }
+    } catch (e) {
+      console.error('❌ Error reading school:', e);
+    }
+  }
+  
+  // 4. Try from student
+  if (this.student?.schoolId) {
+    const sid = this.student.schoolId.toString();
+    localStorage.setItem('schoolId', sid);
+    console.log('📌 schoolId from student:', sid);
+    return sid;
+  }
+  
+  console.warn('⚠️ No schoolId found');
+  return '';
+}
 
   // ==================== AVATAR HELPER ====================
   getAvatarColor(name: string): string {
@@ -2576,42 +2678,74 @@ export class StudentDetailsComponent implements OnInit {
   }
 
   // ==================== LOAD DATA METHODS ====================
-  loadStudentDetails(): void {
-    const studentId = this.route.snapshot.paramMap.get('id');
-    if (!studentId) {
-      this.router.navigate(['/home/students-management']);
-      return;
-    }
-    this.loading = true;
-    this.http.get<any>(`${this.apiUrl}/students/${studentId}`, { headers: this.getHeaders() }).subscribe({
-      next: (student) => {
-        this.student = student;
-        this.newPayment.student = this.getStudentId();
-        this.loadStudentClasses(studentId);
-        this.loadPaymentHistory(studentId);
-        this.loadStudentPaymentSystems(studentId);
-        this.loadAbsenceSummary();
-        this.loading = false;
-      },
-      error: (error) => {
-        console.error('Error loading student details:', error);
-        Swal.fire('خطأ', 'فشل في تحميل بيانات الطالب', 'error');
-        this.router.navigate(['/home/students-management']);
-        this.loading = false;
-      }
-    });
+  
+loadStudentDetails(): void {
+  const studentId = this.route.snapshot.paramMap.get('id');
+  if (!studentId) {
+    this.router.navigate(['/home/students-management']);
+    return;
   }
+  this.loading = true;
+  
+  const schoolId = this.getSchoolId();
+  
+  let url = `${this.apiUrl}/students/${studentId}`;
+  if (schoolId) {
+    url += `?schoolId=${schoolId}`;
+  }
+  
+  console.log('📤 جلب تفاصيل الطالب مع schoolId:', schoolId);
+  
+  this.http.get<any>(url, { headers: this.getHeaders() }).subscribe({
+    next: (student) => {
+      this.student = student;
+      // ✅ تأكد من تخزين schoolId في localStorage
+      if (student?.schoolId) {
+        localStorage.setItem('schoolId', student.schoolId.toString());
+      }
+      this.newPayment.student = this.getStudentId();
+      this.loadStudentClasses(studentId);
+      this.loadPaymentHistory(studentId);
+      this.loadStudentPaymentSystems(studentId);
+      this.loadAbsenceSummary();
+      this.loading = false;
+    },
+    error: (error) => {
+      console.error('❌ خطأ في تحميل بيانات الطالب:', error);
+      Swal.fire('خطأ', 'فشل في تحميل بيانات الطالب', 'error');
+      this.router.navigate(['/home/students-management']);
+      this.loading = false;
+    }
+  });
+}
 
   loadAllStudents(): void {
-    this.http.get<any>(`${this.apiUrl}/students`, { headers: this.getHeaders() }).subscribe({
+    const schoolId = this.getSchoolId();
+    
+    let url = `${this.apiUrl}/students`;
+    if (schoolId) {
+      url += `?schoolId=${schoolId}`;
+    }
+    
+    console.log('🔍 Fetching students from:', url);
+    
+    this.http.get<any>(url, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
-        if (response.success && response.data) {
-          this.allStudents = response.data;
-          this.filteredStudents = [...this.allStudents];
+        let studentsList: Student[] = [];
+        
+        if (Array.isArray(response)) {
+          studentsList = response;
+        } else if (response.success && response.data) {
+          studentsList = response.data;
+        } else if (response && response.students && Array.isArray(response.students)) {
+          studentsList = response.students;
         } else {
-          this.allStudents = [];
-          this.filteredStudents = [];
+          studentsList = [];
         }
+        
+        this.allStudents = studentsList;
+        this.filteredStudents = [...this.allStudents];
+        console.log(`✅ Loaded ${this.allStudents.length} students`);
       },
       error: (error) => {
         console.error('Error loading all students:', error);
@@ -2621,72 +2755,238 @@ export class StudentDetailsComponent implements OnInit {
     });
   }
 
-  loadStudentClasses(studentId: string): void {
-    this.http.get<any>(`${this.apiUrl}/students/${studentId}`, { headers: this.getHeaders() }).subscribe({
-      next: (student) => {
-        this.studentClasses = student.classes || [];
-      },
-      error: (error) => {
-        console.error('Error loading student classes:', error);
-        this.studentClasses = [];
-      }
-    });
+loadStudentClasses(studentId: string): void {
+  const schoolId = this.getSchoolId();
+  
+  let url = `${this.apiUrl}/students/${studentId}/classes`;
+  if (schoolId) {
+    url += `?schoolId=${schoolId}`;
   }
+  
+  console.log('🔍 جلب حصص الطالب من:', url);
+  
+  this.http.get<any>(url, { headers: this.getHeaders() }).subscribe({
+    next: (response) => {
+      console.log('📥 استجابة حصص الطالب:', response);
+      
+      let classesData: any[] = [];
+      
+      if (response?.success && response?.data) {
+        classesData = response.data || [];
+      } else if (Array.isArray(response)) {
+        classesData = response;
+      } else if (response?.classes && Array.isArray(response.classes)) {
+        classesData = response.classes;
+      }
+      
+      this.studentClasses = classesData;
+      console.log(`✅ تم تحميل ${this.studentClasses.length} حصة للطالب`);
+      this.cdr.detectChanges();
+    },
+    error: (error) => {
+      console.error('❌ خطأ في تحميل حصص الطالب:', error);
+      this.studentClasses = [];
+      this.cdr.detectChanges();
+    }
+  });
+}
 
   loadPaymentHistory(studentId: string): void {
     console.log('Loading payment history for student:', studentId);
-    this.http.get<any>(`${this.apiUrl}/payments/student/${studentId}`, { headers: this.getHeaders() }).subscribe({
+    let url = `${this.apiUrl}/payments/student/${studentId}`;
+    const schoolId = this.getSchoolId();
+    
+    if (schoolId) {
+      url += `?schoolId=${schoolId}`;
+    }
+    
+    this.http.get<any>(url, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
         if (response.success && response.payments) {
           this.paymentHistory = response.payments;
           this.classPaymentGroups = this.groupPaymentsByClass(response.payments);
+        } else if (Array.isArray(response)) {
+          this.paymentHistory = response;
+          this.classPaymentGroups = this.groupPaymentsByClass(response);
         } else {
           this.paymentHistory = [];
           this.classPaymentGroups = [];
         }
+        this.cdr.detectChanges();
       },
       error: (error) => {
         console.error('Error loading payment history:', error);
         this.paymentHistory = [];
         this.classPaymentGroups = [];
+        this.cdr.detectChanges();
         Swal.fire('خطأ', 'فشل في تحميل سجل المدفوعات', 'error');
       }
     });
   }
 
   loadStudentPaymentSystems(studentId: string): void {
-    this.http.get<any>(`${this.apiUrl}/payments/student/${studentId}`, { headers: this.getHeaders() }).subscribe({
+    // Load monthly payments with schoolId filter
+    let monthlyUrl = `${this.apiUrl}/payments/student/${studentId}`;
+    const schoolId = this.getSchoolId();
+    
+    if (schoolId) {
+      monthlyUrl += `?schoolId=${schoolId}`;
+    }
+    
+    this.http.get<any>(monthlyUrl, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
         if (response.success && response.payments) {
           this.studentMonthlyPayments = response.payments.map((p: any) => ({
             id: p._id, _id: p._id, studentId: p.student?._id || studentId,
             month: p.month, amount: p.amount, status: p.status, paymentDate: p.paymentDate,
-            paymentMethod: p.paymentMethod, notes: p.notes, className: p.class?.name
+            paymentMethod: p.paymentMethod, notes: p.notes, className: p.class?.name,
+            schoolId: p.schoolId || schoolId
+          }));
+        } else if (Array.isArray(response)) {
+          this.studentMonthlyPayments = response.map((p: any) => ({
+            id: p._id, _id: p._id, studentId: p.student?._id || studentId,
+            month: p.month, amount: p.amount, status: p.status, paymentDate: p.paymentDate,
+            paymentMethod: p.paymentMethod, notes: p.notes, className: p.class?.name,
+            schoolId: p.schoolId || schoolId
           }));
         } else {
           this.studentMonthlyPayments = [];
         }
+        this.cdr.detectChanges();
       },
       error: (error) => {
         console.error('Error loading monthly payments:', error);
         this.studentMonthlyPayments = [];
+        this.cdr.detectChanges();
       }
     });
 
-    this.http.get<any>(`${this.apiUrl}/payment-systems/rounds/student/${studentId}`, { headers: this.getHeaders() }).subscribe({
+    // Load rounds with schoolId filter
+    let roundsUrl = `${this.apiUrl}/payment-systems/rounds/student/${studentId}`;
+    if (schoolId) {
+      roundsUrl += `?schoolId=${schoolId}`;
+    }
+    
+    this.http.get<any>(roundsUrl, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
         if (response.success && response.rounds) {
           this.studentRounds = response.rounds;
           this.updateRoundStatuses();
+        } else if (Array.isArray(response)) {
+          this.studentRounds = response;
+          this.updateRoundStatuses();
         } else {
           this.studentRounds = [];
         }
+        this.cdr.detectChanges();
       },
       error: (error) => {
         console.error('Error loading rounds:', error);
         this.studentRounds = [];
+        this.cdr.detectChanges();
       }
     });
+  }
+
+  // ==================== REFRESH DATA ====================
+  refreshData(): void {
+    const studentId = this.route.snapshot.paramMap.get('id');
+    if (!studentId) return;
+    
+    Swal.fire({
+      title: 'جاري تحديث البيانات...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+    
+    this.loadStudentDetails();
+    this.loadStudentClasses(studentId);
+    this.loadPaymentHistory(studentId);
+    this.loadStudentPaymentSystems(studentId);
+    
+    setTimeout(() => {
+      Swal.close();
+      Swal.fire('نجاح', 'تم تحديث البيانات بنجاح', 'success');
+    }, 1500);
+  }
+
+  // ==================== FIX STUDENT CLASSES ====================
+  fixStudentClasses(): void {
+    const studentId = this.route.snapshot.paramMap.get('id');
+    if (!studentId) return;
+    
+    Swal.fire({
+      title: 'إصلاح علاقات الحصص',
+      text: 'سيتم إعادة مزامنة الحصص مع قاعدة البيانات',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، إصلاح',
+      cancelButtonText: 'إلغاء'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire({
+          title: 'جاري الإصلاح...',
+          allowOutsideClick: false,
+          didOpen: () => Swal.showLoading()
+        });
+        
+        let url = `${this.apiUrl}/debug/fix-student-classes/${studentId}`;
+        const schoolId = this.getSchoolId();
+        if (schoolId) {
+          url += `?schoolId=${schoolId}`;
+        }
+        
+        this.http.post<any>(url, {}, { headers: this.getHeaders() }).subscribe({
+          next: (response) => {
+            Swal.close();
+            if (response.success) {
+              Swal.fire({
+                icon: 'success',
+                title: 'تم الإصلاح بنجاح',
+                html: `
+                  <p>تم تحديث الطالب بـ ${response.student.classes.length} حصة</p>
+                  <div class="text-start mt-3">
+                    <p><strong>الحصص:</strong></p>
+                    <ul>
+                      ${response.classes.map((c: any) => `<li>${c.name}</li>`).join('')}
+                    </ul>
+                  </div>
+                `
+              });
+              this.loadStudentClasses(studentId);
+            } else {
+              Swal.fire('خطأ', response.error || 'فشل في الإصلاح', 'error');
+            }
+          },
+          error: (error) => {
+            Swal.close();
+            console.error('Error fixing classes:', error);
+            Swal.fire('خطأ', 'فشل في إصلاح العلاقات', 'error');
+          }
+        });
+      }
+    });
+  }
+
+  // ==================== SEARCH STUDENTS ====================
+  searchStudents(event: Event): void {
+    const searchTerm = (event.target as HTMLInputElement).value.toLowerCase().trim();
+    this.studentSearchTerm = searchTerm;
+    
+    if (!searchTerm) {
+      this.filteredStudents = [...this.allStudents];
+      return;
+    }
+    
+    this.filteredStudents = this.allStudents.filter(student => {
+      return student.name.toLowerCase().includes(searchTerm) || 
+             student.studentId.toLowerCase().includes(searchTerm);
+    });
+  }
+
+  clearSearch(): void {
+    this.studentSearchTerm = '';
+    this.filteredStudents = [...this.allStudents];
   }
 
   // ==================== ABSENCE METHODS ====================
@@ -2701,6 +3001,11 @@ export class StudentDetailsComponent implements OnInit {
     if (this.absenceFilterStartDate) params.append('startDate', this.absenceFilterStartDate);
     if (this.absenceFilterEndDate) params.append('endDate', this.absenceFilterEndDate);
     params.append('limit', this.absenceLimit.toString());
+    
+    const schoolId = this.getSchoolId();
+    if (schoolId) {
+      params.append('schoolId', schoolId);
+    }
     
     if (params.toString()) {
       url += `?${params.toString()}`;
@@ -2717,12 +3022,14 @@ export class StudentDetailsComponent implements OnInit {
           this.absenceSummary = null;
         }
         this.loadingAbsences = false;
+        this.cdr.detectChanges();
       },
       error: (error) => {
         console.error('Error loading student absences:', error);
         this.studentAbsences = [];
         this.absenceSummary = null;
         this.loadingAbsences = false;
+        this.cdr.detectChanges();
         Swal.fire('خطأ', 'فشل في تحميل سجل الغيابات', 'error');
       }
     });
@@ -2732,14 +3039,22 @@ export class StudentDetailsComponent implements OnInit {
     const studentId = this.getStudentId();
     if (!studentId) return;
 
-    this.http.get<any>(`${this.apiUrl}/students/${studentId}/absences-summary`, { headers: this.getHeaders() }).subscribe({
+    let url = `${this.apiUrl}/students/${studentId}/absences-summary`;
+    const schoolId = this.getSchoolId();
+    if (schoolId) {
+      url += `?schoolId=${schoolId}`;
+    }
+
+    this.http.get<any>(url, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
         if (response.success) {
           this.absenceSummary = response;
         }
+        this.cdr.detectChanges();
       },
       error: (error) => {
         console.error('Error loading absence summary:', error);
+        this.cdr.detectChanges();
       }
     });
   }
@@ -2827,6 +3142,8 @@ export class StudentDetailsComponent implements OnInit {
 
   // ==================== HELPER METHODS ====================
   private groupPaymentsByClass(payments: Payment[]): ClassPaymentGroup[] {
+    if (!payments || !Array.isArray(payments)) return [];
+    
     const groups: { [key: string]: ClassPaymentGroup } = {};
     payments.forEach(payment => {
       const classId = payment.class?._id || payment.class || 'general';
@@ -3041,28 +3358,70 @@ export class StudentDetailsComponent implements OnInit {
     this.showRoundSelectionModal = false;
   }
 
-  loadAvailableClasses(): void {
-    if (!this.student) return;
-    this.loadingAvailableClasses = true;
-    this.http.get<Class[]>(`${this.apiUrl}/classes/available`, { headers: this.getHeaders() }).subscribe({
-      next: (classes) => {
-        this.availableClasses = classes;
-        const enrolledClassIds = this.studentClasses.map(c => c._id || c.id);
-        this.alreadyEnrolledClasses = classes.filter(c => enrolledClassIds.includes(c._id || c.id));
-        this.availableClasses = classes.filter(c => !enrolledClassIds.includes(c._id || c.id));
-        this.filterAvailableClasses();
-        this.loadingAvailableClasses = false;
-      },
-      error: (error) => {
-        console.error('Error loading available classes:', error);
-        Swal.fire('خطأ', 'فشل في تحميل الحصص المتاحة', 'error');
-        this.loadingAvailableClasses = false;
-      }
-    });
+// في دالة loadAvailableClasses()
+loadAvailableClasses(): void {
+  if (!this.student) return;
+  this.loadingAvailableClasses = true;
+  
+  // ✅ تأكد من وجود schoolId
+  const schoolId = this.getSchoolId();
+  
+  if (!schoolId) {
+    console.warn('⚠️ لا يوجد schoolId، لا يمكن تحميل الحصص');
+    this.loadingAvailableClasses = false;
+    this.availableClasses = [];
+    this.filteredAvailableClasses = [];
+    Swal.fire('تنبيه', 'لم يتم تحديد المدرسة، يرجى تسجيل الدخول مرة أخرى', 'warning');
+    return;
   }
+  
+  // ✅ أضف schoolId كـ query parameter
+  const url = `${this.apiUrl}/classes/available?schoolId=${schoolId}`;
+  console.log('📚 جلب الحصص المتاحة من:', url);
+  
+  this.http.get<any>(url, { headers: this.getHeaders() }).subscribe({
+    next: (response) => {
+      console.log('📥 استجابة الحصص المتاحة:', response);
+      
+      let classes: Class[] = [];
+      
+      if (response?.success && response?.classes) {
+        classes = response.classes;
+      } else if (Array.isArray(response)) {
+        classes = response;
+      } else if (response?.data && Array.isArray(response.data)) {
+        classes = response.data;
+      } else {
+        classes = [];
+      }
+      
+      // ✅ تصفية الحصص التي الطالب مسجل فيها بالفعل
+      const enrolledClassIds = (this.studentClasses || []).map(c => c._id || c.id).filter(id => id);
+      this.availableClasses = classes.filter(c => {
+        const classId = c._id || c.id;
+        return classId && !enrolledClassIds.includes(classId);
+      });
+      
+      this.filteredAvailableClasses = [...this.availableClasses];
+      console.log(`✅ ${this.availableClasses.length} حصة متاحة للتسجيل`);
+      this.loadingAvailableClasses = false;
+      this.cdr.detectChanges();
+    },
+    error: (error) => {
+      console.error('❌ خطأ في تحميل الحصص المتاحة:', error);
+      this.loadingAvailableClasses = false;
+      this.availableClasses = [];
+      this.filteredAvailableClasses = [];
+      Swal.fire('خطأ', 'فشل في تحميل الحصص المتاحة للتسجيل', 'error');
+      this.cdr.detectChanges();
+    }
+  });
+}
 
   filterAvailableClasses(): void {
-    this.filteredAvailableClasses = this.availableClasses.filter((cls: Class) => {
+    const available = Array.isArray(this.availableClasses) ? this.availableClasses : [];
+    
+    this.filteredAvailableClasses = available.filter((cls: Class) => {
       if (this.filterSubject && cls.subject !== this.filterSubject) return false;
       if (this.filterLevel && cls.academicYear !== this.filterLevel) return false;
       return true;
@@ -3087,13 +3446,39 @@ export class StudentDetailsComponent implements OnInit {
   }
 
   checkAndEnrollStudentToSelectedClasses(): void {
-    if (!this.student || this.selectedClasses.length === 0) return;
+    if (!this.student || this.selectedClasses.length === 0) {
+      Swal.fire('تنبيه', 'لم يتم اختيار أي حصص', 'warning');
+      return;
+    }
+
+    const studentId = this.getStudentId();
+    if (!studentId) {
+      Swal.fire('خطأ', 'معرف الطالب غير موجود', 'error');
+      return;
+    }
+
+    const classIds = this.selectedClasses
+      .map(c => c._id || c.id)
+      .filter((id): id is string => !!id);
+
+    if (classIds.length === 0) {
+      Swal.fire('خطأ', 'معرفات الحصص غير صالحة', 'error');
+      return;
+    }
+
+    console.log('📤 Enrolling in classes:', {
+      studentId,
+      classIds,
+      selectedClasses: this.selectedClasses.map(c => c.name)
+    });
+
     const classesWithRounds = this.selectedClasses.filter(cls => cls.paymentSystem === 'rounds');
+    
     if (classesWithRounds.length > 0) {
       this.selectedClassForRounds = classesWithRounds[0];
       this.openRoundSelectionModal();
     } else {
-      this.enrollStudentToSelectedClasses();
+      this.enrollStudentMultiple(studentId, classIds);
     }
   }
 
@@ -3135,6 +3520,7 @@ export class StudentDetailsComponent implements OnInit {
     if (!this.student || this.selectedClasses.length === 0) return;
     const classIds = this.selectedClasses.map(c => c._id || c.id);
     const studentId = this.getStudentId();
+    
     Swal.fire({
       title: 'تأكيد التسجيل',
       html: `<p>هل تريد تسجيل الطالب في ${this.selectedClasses.length} حصة؟</p><p><strong>الإجمالي:</strong> ${this.calculateMonthlyTotal().toLocaleString()} د.ج</p>`,
@@ -3149,22 +3535,79 @@ export class StudentDetailsComponent implements OnInit {
 
   enrollStudentMultiple(studentId: string, classIds: string[]): void {
     this.isEnrolling = true;
-    const roundSettings = this.selectedClassForRounds ? {
-      sessionCount: this.roundSelection.sessionCount,
-      sessionDuration: 2,
-      breakBetweenSessions: 0
-    } : undefined;
-    this.http.post<any>(`${this.apiUrl}/students/${studentId}/enroll-multiple`, { classIds, roundSettings }, { headers: this.getHeaders() }).subscribe({
+    
+    if (!classIds || classIds.length === 0) {
+      Swal.fire('خطأ', 'لم يتم تحديد أي حصص للتسجيل', 'error');
+      this.isEnrolling = false;
+      return;
+    }
+
+    const validClassIds = classIds.filter(id => id && id.trim() !== '');
+    
+    if (validClassIds.length === 0) {
+      Swal.fire('خطأ', 'معرفات الحصص غير صالحة', 'error');
+      this.isEnrolling = false;
+      return;
+    }
+
+    const schoolId = this.getSchoolId();
+    
+    const payload: any = { 
+      classIds: validClassIds 
+    };
+    
+    if (schoolId) {
+      payload.schoolId = schoolId;
+    }
+    
+    if (this.selectedClassForRounds && this.roundSelection) {
+      payload.roundSettings = {
+        sessionCount: this.roundSelection.sessionCount,
+        sessionDuration: 2,
+        breakBetweenSessions: 0
+      };
+    }
+
+    console.log('📤 Sending enrollment request:', {
+      studentId,
+      payload,
+      schoolId
+    });
+
+    this.http.post<any>(
+      `${this.apiUrl}/students/${studentId}/enroll-multiple`, 
+      payload, 
+      { headers: this.getHeaders() }
+    ).subscribe({
       next: (response) => {
-        Swal.fire({ icon: 'success', title: 'تم التسجيل بنجاح', timer: 3000, showConfirmButton: false });
-        this.loadStudentClasses(this.route.snapshot.paramMap.get('id') || '');
-        this.loadStudentPaymentSystems(this.route.snapshot.paramMap.get('id') || '');
+        console.log('✅ Enrollment response:', response);
+        Swal.fire({
+          icon: 'success',
+          title: 'تم التسجيل بنجاح',
+          timer: 3000,
+          showConfirmButton: false
+        });
+        
+        const studentId = this.route.snapshot.paramMap.get('id') || '';
+        this.loadStudentClasses(studentId);
+        this.loadStudentPaymentSystems(studentId);
         this.closeAddToLessonsModal();
         this.isEnrolling = false;
+        this.cdr.detectChanges();
       },
       error: (error) => {
-        console.error('Error enrolling student:', error);
-        Swal.fire('خطأ', 'فشل في تسجيل الطالب في الحصص', 'error');
+        console.error('❌ Enrollment error:', error);
+        
+        let errorMessage = 'فشل في تسجيل الطالب في الحصص';
+        if (error.error?.error) {
+          errorMessage = error.error.error;
+        } else if (error.error?.message) {
+          errorMessage = error.error.message;
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        Swal.fire('خطأ', errorMessage, 'error');
         this.isEnrolling = false;
       }
     });
@@ -3238,6 +3681,7 @@ export class StudentDetailsComponent implements OnInit {
   }
 
   // ==================== PAYMENT ACTIONS ====================
+  
   addPayment(): void {
     if (!this.student || !this.newPayment.amount || this.newPayment.amount <= 0) {
       Swal.fire('خطأ', 'يرجى إدخال مبلغ صحيح', 'error');
@@ -3247,8 +3691,19 @@ export class StudentDetailsComponent implements OnInit {
       Swal.fire('خطأ', 'يرجى اختيار الشهر', 'error');
       return;
     }
+    
     Swal.fire({ title: 'جاري تسجيل الدفعة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-    this.http.post<any>(`${this.apiUrl}/payments`, this.newPayment, { headers: this.getHeaders() }).subscribe({
+    
+    const schoolId = this.getSchoolId();
+    
+    const paymentData = { 
+      ...this.newPayment,
+      schoolId: schoolId || this.student?.schoolId
+    };
+    
+    console.log('📤 Sending new payment with schoolId:', paymentData);
+    
+    this.http.post<any>(`${this.apiUrl}/payments`, paymentData, { headers: this.getHeaders() }).subscribe({
       next: () => {
         Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم تسجيل الدفعة بنجاح', timer: 1500, showConfirmButton: false });
         this.closePaymentModal();
@@ -3283,7 +3738,6 @@ export class StudentDetailsComponent implements OnInit {
     });
   }
 
-  // دالة دفع الدفعة المحسنة
   payPayment(payment: Payment): void {
     Swal.fire({
       title: 'تأكيد الدفع',
@@ -3318,11 +3772,16 @@ export class StudentDetailsComponent implements OnInit {
   }
 
   private processPaymentWithPrint(payment: Payment, method: string, shouldPrint: boolean): void {
+    const schoolId = this.getSchoolId();
+    
     const paymentData = { 
       paymentMethod: method, 
       paymentDate: new Date().toISOString(), 
-      notes: 'تم الدفع من خلال النظام' 
+      notes: 'تم الدفع من خلال النظام',
+      schoolId: schoolId
     };
+    
+    console.log('📤 Processing payment with schoolId:', paymentData);
     
     Swal.fire({ 
       title: 'جاري الدفع...', 
@@ -3361,7 +3820,6 @@ export class StudentDetailsComponent implements OnInit {
       });
   }
 
-  // دالة إلغاء الدفعة
   async cancelPayment(payment: Payment): Promise<void> {
     if (payment.status !== 'paid') {
       Swal.fire({
@@ -3478,47 +3936,112 @@ export class StudentDetailsComponent implements OnInit {
     if (hasPaidPayments) {
       const unpaidPayments = this.selectedPaymentsForBulkPay.filter(p => p.status !== 'paid');
       const { value: proceed } = await Swal.fire({
-        title: 'تحذير', html: `<div class="text-start"><p class="text-warning">بعض المدفوعات المختارة مدفوعة مسبقاً</p><p><strong>المعلقة:</strong> ${unpaidPayments.length}</p><p>هل تريد المتابعة مع المدفوعات المعلقة فقط؟</p></div>`,
-        icon: 'warning', showCancelButton: true, confirmButtonText: 'نعم، متابعة', cancelButtonText: 'إلغاء'
+        title: 'تحذير',
+        html: `<div class="text-start"><p class="text-warning">بعض المدفوعات المختارة مدفوعة مسبقاً</p>
+               <p><strong>المعلقة:</strong> ${unpaidPayments.length}</p>
+               <p>هل تريد المتابعة مع المدفوعات المعلقة فقط؟</p></div>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، متابعة',
+        cancelButtonText: 'إلغاء'
       });
       if (!proceed) return;
       this.selectedPaymentsForBulkPay = unpaidPayments;
+    }
+
+    if (this.selectedPaymentsForBulkPay.length === 0) {
+      Swal.fire({ icon: 'info', title: 'لا توجد مدفوعات معلقة للدفع' });
+      return;
     }
 
     const totalAmount = this.getSelectedPaymentsTotal();
     
     const { value: userChoice } = await Swal.fire({
       title: 'خيارات الدفع الجماعي',
-      html: `<div class="text-start"><div class="alert alert-info"><h6>تفاصيل الدفع الجماعي</h6><p><strong>عدد المدفوعات:</strong> ${this.selectedPaymentsForBulkPay.length}</p><p><strong>المبلغ الإجمالي:</strong> ${totalAmount.toLocaleString('ar-SA')} د.ج</p></div>
-              <div class="mb-3"><label class="form-label">طريقة الدفع:</label><select class="form-select" id="paymentMethod"><option value="cash">نقداً</option><option value="bank">تحويل بنكي</option><option value="card">بطاقة ائتمان</option><option value="online">دفع إلكتروني</option></select></div>
-              <div class="mb-3"><label class="form-label">خيار الطباعة:</label><select class="form-select" id="printOption"><option value="single">إيصال واحد لجميع الدفعات</option><option value="multiple">إيصالات منفصلة لكل دفعة</option></select></div>
-              <div class="mb-3"><label class="form-label">ملاحظات:</label><textarea class="form-control" id="paymentNotes" rows="2"></textarea></div></div>`,
-      icon: 'question', showCancelButton: true, confirmButtonText: 'دفع', cancelButtonText: 'إلغاء', width: '600px',
+      html: `<div class="text-start">
+        <div class="alert alert-info">
+          <h6>تفاصيل الدفع الجماعي</h6>
+          <p><strong>عدد المدفوعات:</strong> ${this.selectedPaymentsForBulkPay.length}</p>
+          <p><strong>المبلغ الإجمالي:</strong> ${totalAmount.toLocaleString('ar-SA')} د.ج</p>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">طريقة الدفع:</label>
+          <select class="form-select" id="bulkPaymentMethod">
+            <option value="cash">نقداً</option>
+            <option value="bank">تحويل بنكي</option>
+            <option value="card">بطاقة ائتمان</option>
+            <option value="online">دفع إلكتروني</option>
+            <option value="mobile">دفع محمول</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">خيار الطباعة:</label>
+          <select class="form-select" id="bulkPrintOption">
+            <option value="single">إيصال واحد لجميع الدفعات</option>
+            <option value="multiple">إيصالات منفصلة لكل دفعة</option>
+            <option value="none">لا تطبع</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">ملاحظات:</label>
+          <textarea class="form-control" id="bulkPaymentNotes" rows="2"></textarea>
+        </div>
+      </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'دفع',
+      cancelButtonText: 'إلغاء',
+      width: '600px',
       preConfirm: () => {
-        const paymentMethod = (document.getElementById('paymentMethod') as HTMLSelectElement).value;
-        const printOption = (document.getElementById('printOption') as HTMLSelectElement).value;
-        const paymentNotes = (document.getElementById('paymentNotes') as HTMLTextAreaElement).value;
-        if (!paymentMethod) { Swal.showValidationMessage('يرجى اختيار طريقة الدفع'); return false; }
+        const paymentMethod = (document.getElementById('bulkPaymentMethod') as HTMLSelectElement).value;
+        const printOption = (document.getElementById('bulkPrintOption') as HTMLSelectElement).value;
+        const paymentNotes = (document.getElementById('bulkPaymentNotes') as HTMLTextAreaElement).value;
+        if (!paymentMethod) {
+          Swal.showValidationMessage('يرجى اختيار طريقة الدفع');
+          return false;
+        }
         return { paymentMethod, printOption, paymentNotes };
       }
     });
+
     if (!userChoice) return;
 
     const { paymentMethod, printOption, paymentNotes } = userChoice;
     
     Swal.fire({
       title: 'جاري معالجة الدفعات...',
-      html: `<div class="text-center"><div class="spinner-border text-primary mb-3"></div><h5>دفع جماعي</h5><p>جاري معالجة ${this.selectedPaymentsForBulkPay.length} دفعة...</p>
-              <div class="progress mt-4"><div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 0%;" id="bulk-pay-progress">0%</div></div>
-              <div class="row mt-4"><div class="col-6 text-end"><small class="text-muted">النجاح:</small><h5 class="text-success" id="success-count">0</h5></div>
-              <div class="col-6 text-start"><small class="text-muted">الفشل:</small><h5 class="text-danger" id="fail-count">0</h5></div></div>
-              <div class="mt-3"><small class="text-muted" id="current-payment">جاري بدء المعالجة...</small></div></div>`,
-      showConfirmButton: false, allowOutsideClick: false, width: '500px'
+      html: `<div class="text-center">
+        <div class="spinner-border text-primary mb-3"></div>
+        <h5>دفع جماعي</h5>
+        <p>جاري معالجة ${this.selectedPaymentsForBulkPay.length} دفعة...</p>
+        <div class="progress mt-4">
+          <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 0%;" id="bulk-pay-progress">0%</div>
+        </div>
+        <div class="row mt-4">
+          <div class="col-6 text-end">
+            <small class="text-muted">النجاح:</small>
+            <h5 class="text-success" id="success-count">0</h5>
+          </div>
+          <div class="col-6 text-start">
+            <small class="text-muted">الفشل:</small>
+            <h5 class="text-danger" id="fail-count">0</h5>
+          </div>
+        </div>
+        <div class="mt-3">
+          <small class="text-muted" id="current-payment">جاري بدء المعالجة...</small>
+        </div>
+      </div>`,
+      showConfirmButton: false,
+      allowOutsideClick: false,
+      width: '500px'
     });
 
-    let successfulPayments = 0, failedPayments = 0;
+    let successfulPayments = 0;
+    let failedPayments = 0;
     const results: any[] = [];
     const paidPayments: Payment[] = [];
+
+    const schoolId = this.getSchoolId();
 
     for (let i = 0; i < this.selectedPaymentsForBulkPay.length; i++) {
       const payment = this.selectedPaymentsForBulkPay[i];
@@ -3529,45 +4052,150 @@ export class StudentDetailsComponent implements OnInit {
       const successCount = document.getElementById('success-count');
       const failCount = document.getElementById('fail-count');
       const currentPayment = document.getElementById('current-payment');
-      if (progressBar) { progressBar.style.width = `${progress}%`; progressBar.textContent = `${progress}%`; }
+      
+      if (progressBar) {
+        progressBar.style.width = `${progress}%`;
+        progressBar.textContent = `${progress}%`;
+      }
       if (successCount) successCount.textContent = successfulPayments.toString();
       if (failCount) failCount.textContent = failedPayments.toString();
-      if (currentPayment) currentPayment.textContent = `جاري معالجة: ${i+1}/${this.selectedPaymentsForBulkPay.length} - ${payment.month} - ${payment.amount.toLocaleString()} د.ج`;
+      if (currentPayment) {
+        currentPayment.textContent = `جاري معالجة: ${i+1}/${this.selectedPaymentsForBulkPay.length} - ${payment.month} - ${payment.amount.toLocaleString()} د.ج`;
+      }
 
       if (!paymentId) {
         failedPayments++;
-        results.push({ payment: payment.month, student: payment.studentName, success: false, message: 'رقم الدفعة غير صالح' });
+        results.push({
+          payment: payment.month,
+          student: payment.studentName || 'طالب',
+          success: false,
+          message: 'رقم الدفعة غير صالح'
+        });
         continue;
       }
 
       try {
-        const paymentData = { paymentMethod, paymentDate: new Date().toISOString(), notes: paymentNotes || `دفع جماعي - ${new Date().toLocaleDateString('ar-SA')}` };
-        const response = await this.http.put<any>(`${this.apiUrl}/payments/${paymentId}/pay`, paymentData, { headers: this.getHeaders() }).toPromise();
+        const paymentData = {
+          paymentMethod: paymentMethod,
+          paymentDate: new Date().toISOString(),
+          notes: paymentNotes || `دفع جماعي - ${new Date().toLocaleDateString('ar-SA')}`,
+          schoolId: schoolId
+        };
+
+        const response = await this.http.put<any>(
+          `${this.apiUrl}/payments/${paymentId}/pay`,
+          paymentData,
+          { headers: this.getHeaders() }
+        ).toPromise();
+
         successfulPayments++;
-        paidPayments.push({ ...payment, paymentMethod, paymentDate: new Date(), invoiceNumber: response.invoiceNumber, notes: paymentData.notes });
-        results.push({ payment: payment.month, student: payment.studentName, success: true, message: 'تم الدفع بنجاح' });
+        paidPayments.push({ 
+          ...payment, 
+          paymentMethod, 
+          paymentDate: new Date(), 
+          invoiceNumber: response?.invoiceNumber || `INV-${Date.now().toString().slice(-8)}-${i}`,
+          notes: paymentData.notes 
+        });
+        
+        results.push({
+          payment: payment.month,
+          student: payment.studentName || 'طالب',
+          amount: payment.amount,
+          success: true,
+          message: 'تم الدفع بنجاح'
+        });
+
       } catch (error: any) {
         failedPayments++;
-        results.push({ payment: payment.month, student: payment.studentName, success: false, message: error.error?.message || error.message || 'فشل في الدفع' });
+        results.push({
+          payment: payment.month,
+          student: payment.studentName || 'طالب',
+          amount: payment.amount,
+          success: false,
+          message: error.error?.message || error.message || 'فشل في الدفع'
+        });
+        console.error('❌ Payment failed:', error);
       }
-      await this.delay(100);
+
+      await this.delay(200);
     }
 
     Swal.close();
-    if (printOption === 'single' && successfulPayments > 0) {
-      await this.printSingleReceiptForMultiplePayments(paidPayments, paymentMethod, paymentNotes);
-    } else if (printOption === 'multiple' && successfulPayments > 0) {
-      await this.printMultipleReceipts(paidPayments);
+
+    const resultsHtml = this.generateBulkPayResultsHTML(successfulPayments, failedPayments, results);
+    
+    await Swal.fire({
+      title: 'نتائج الدفع الجماعي',
+      html: resultsHtml,
+      icon: successfulPayments > 0 ? 'success' : 'error',
+      confirmButtonText: 'حسناً'
+    });
+
+    if (successfulPayments > 0 && paidPayments.length > 0) {
+      try {
+        if (printOption === 'single') {
+          await this.printSingleReceiptForMultiplePayments(paidPayments, paymentMethod, paymentNotes);
+        } else if (printOption === 'multiple') {
+          await this.printMultipleReceipts(paidPayments);
+        }
+      } catch (printError) {
+        console.error('❌ Print error:', printError);
+      }
     }
-    
-    const resultsHtml = `<div class="text-start"><div class="alert alert-success"><h5>تمت الدفعات بنجاح</h5><div class="row mt-3"><div class="col-4 text-center"><h2 class="text-success">${successfulPayments}</h2><small>النجاحات</small></div>
-      <div class="col-4 text-center"><h2 class="text-danger">${failedPayments}</h2><small>الفشل</small></div><div class="col-4 text-center"><h2 class="text-primary">${successfulPayments + failedPayments}</h2><small>الإجمالي</small></div></div></div></div>`;
-    await Swal.fire({ title: 'نتائج الدفع الجماعي', html: resultsHtml, icon: successfulPayments > 0 ? 'success' : 'error', confirmButtonText: 'حسناً' });
-    
+
     if (successfulPayments > 0 && this.student) {
       this.loadPaymentHistory(this.getStudentId());
       this.loadStudentPaymentSystems(this.getStudentId());
     }
+
+    this.selectedPaymentsForBulkPay = [];
+  }
+
+  private generateBulkPayResultsHTML(successCount: number, failCount: number, results: any[]): string {
+    let html = `
+      <div class="text-start">
+        <div class="row mb-3">
+          <div class="col-4 text-center">
+            <h2 class="text-success">${successCount}</h2>
+            <small>✅ نجاح</small>
+          </div>
+          <div class="col-4 text-center">
+            <h2 class="text-danger">${failCount}</h2>
+            <small>❌ فشل</small>
+          </div>
+          <div class="col-4 text-center">
+            <h2 class="text-primary">${successCount + failCount}</h2>
+            <small>📊 الإجمالي</small>
+          </div>
+        </div>
+        <hr>
+        <div style="max-height: 300px; overflow-y: auto;">
+    `;
+
+    results.forEach((result, index) => {
+      const icon = result.success ? '✅' : '❌';
+      const color = result.success ? 'text-success' : 'text-danger';
+      html += `
+        <div class="d-flex justify-content-between align-items-center p-2 ${index % 2 === 0 ? 'bg-light' : ''}" style="border-bottom: 1px solid #eee;">
+          <div>
+            <span class="${color}">${icon}</span>
+            <strong>${result.student}</strong>
+            <span class="text-muted">- ${result.payment}</span>
+          </div>
+          <div>
+            <span class="badge ${result.success ? 'bg-success' : 'bg-danger'}">${result.success ? 'تم الدفع' : 'فشل'}</span>
+            ${result.amount ? `<span class="ms-2">${result.amount.toLocaleString()} د.ج</span>` : ''}
+          </div>
+        </div>
+      `;
+    });
+
+    html += `
+        </div>
+      </div>
+    `;
+
+    return html;
   }
 
   private delay(ms: number): Promise<void> {
@@ -3581,16 +4209,28 @@ export class StudentDetailsComponent implements OnInit {
       icon: 'warning', showCancelButton: true, confirmButtonText: 'تسديد الآن', cancelButtonText: 'إلغاء',
       input: 'select', inputOptions: { 'cash': 'نقداً', 'bank': 'تحويل بنكي', 'card': 'بطاقة ائتمان', 'online': 'دفع إلكتروني' }
     });
+    
     if (paymentMethod) {
       Swal.fire({ title: 'جاري التسديد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      
       if (payment._id) {
-        this.http.put<any>(`${this.apiUrl}/payments/${payment._id}/pay`, { paymentMethod, paymentDate: new Date().toISOString(), notes: 'تم تسديد دفعة متأخرة' }, { headers: this.getHeaders() }).subscribe({
+        const schoolId = this.getSchoolId();
+        
+        this.http.put<any>(`${this.apiUrl}/payments/${payment._id}/pay`, { 
+          paymentMethod, 
+          paymentDate: new Date().toISOString(), 
+          notes: 'تم تسديد دفعة متأخرة',
+          schoolId: schoolId
+        }, { headers: this.getHeaders() }).subscribe({
           next: () => {
             Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم تسديد الدفعة المتأخرة بنجاح', timer: 1500, showConfirmButton: false });
             const routeId = this.route.snapshot.paramMap.get('id');
             if (routeId) this.loadStudentPaymentSystems(routeId);
           },
-          error: (error) => { console.error('Error paying late payment:', error); Swal.fire('خطأ', 'فشل في تسديد الدفعة المتأخرة', 'error'); }
+          error: (error) => { 
+            console.error('Error paying late payment:', error); 
+            Swal.fire('خطأ', 'فشل في تسديد الدفعة المتأخرة', 'error'); 
+          }
         });
       }
     }
@@ -3603,17 +4243,29 @@ export class StudentDetailsComponent implements OnInit {
       icon: 'question', showCancelButton: true, confirmButtonText: 'دفع', cancelButtonText: 'إلغاء',
       input: 'select', inputOptions: { 'cash': 'نقداً', 'bank': 'تحويل بنكي', 'card': 'بطاقة ائتمان', 'online': 'دفع إلكتروني' }, inputValue: 'cash'
     });
+    
     if (paymentMethod) {
       Swal.fire({ title: 'جاري الدفع...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       const roundId = round._id || round.id;
+      
       if (roundId) {
-        this.http.put<any>(`${this.apiUrl}/payment-systems/rounds/${roundId}/pay`, { paymentMethod, paymentDate: new Date().toISOString(), notes: `دفع جولة ${round.roundNumber}` }, { headers: this.getHeaders() }).subscribe({
+        const schoolId = this.getSchoolId();
+        
+        this.http.put<any>(`${this.apiUrl}/payment-systems/rounds/${roundId}/pay`, { 
+          paymentMethod, 
+          paymentDate: new Date().toISOString(), 
+          notes: `دفع جولة ${round.roundNumber}`,
+          schoolId: schoolId
+        }, { headers: this.getHeaders() }).subscribe({
           next: () => {
             Swal.fire({ icon: 'success', title: 'تم الدفع بنجاح', timer: 3000, showConfirmButton: false });
             const studentId = this.route.snapshot.paramMap.get('id');
             if (studentId) { this.loadStudentPaymentSystems(studentId); this.loadPaymentHistory(studentId); }
           },
-          error: (error) => { console.error('Error paying round:', error); Swal.fire('خطأ', `فشل في دفع الجولة: ${error.error?.error || error.message}`, 'error'); }
+          error: (error) => { 
+            console.error('Error paying round:', error); 
+            Swal.fire('خطأ', `فشل في دفع الجولة: ${error.error?.error || error.message}`, 'error'); 
+          }
         });
       }
     }
@@ -3632,15 +4284,65 @@ export class StudentDetailsComponent implements OnInit {
       icon: 'info', confirmButtonText: 'حسناً' });
   }
 
-  // ==================== PRINTING METHODS ====================
+  // ==================== PRINTER METHODS ====================
+  
+  checkPrinterConnection(): void {
+    this.printerConnected = this.printerService.checkConnectionStatus();
+    this.cdr.detectChanges();
+  }
+
+  async connectPrinter(): Promise<void> {
+    try {
+      Swal.fire({
+        title: '🔌 اتصال الطابعة الحرارية',
+        text: 'الرجاء اختيار الطابعة من النافذة المنبثقة',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: '🖨️ اختيار الطابعة',
+        cancelButtonText: 'إلغاء',
+        allowOutsideClick: false
+      });
+
+      const connected = await this.printerService.connectToThermalPrinter();
+      
+      if (connected) {
+        this.printerConnected = true;
+        this.cdr.detectChanges();
+        
+        Swal.fire({
+          icon: 'success',
+          title: '✅ تم الاتصال',
+          text: 'تم الاتصال بالطابعة الحرارية بنجاح!',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: '❌ فشل الاتصال',
+          text: 'لم يتم الاتصال بالطابعة. تأكد من أن الطابعة متصلة ومشغلة.',
+          confirmButtonText: 'حسناً'
+        });
+      }
+    } catch (error: any) {
+      console.error('خطأ في الاتصال بالطابعة:', error);
+      Swal.fire({
+        icon: 'error',
+        title: 'خطأ',
+        text: error.message || 'حدث خطأ أثناء محاولة الاتصال بالطابعة',
+        confirmButtonText: 'حسناً'
+      });
+    }
+  }
+
   async printPaymentReceipt(payment: Payment): Promise<void> {
     if (!this.printerService.checkConnectionStatus()) {
       const result = await Swal.fire({
-        title: 'الاتصال بالطابعة',
+        title: '⚠️ الطابعة غير متصلة',
         html: `
           <div class="text-start">
-            <p>⚠️ لم يتم الاتصال بالطابعة الحرارية بعد.</p>
-            <p>يرجى النقر على "اتصال" واختيار الطابعة من القائمة.</p>
+            <p>لم يتم الاتصال بالطابعة الحرارية بعد.</p>
+            <p>يرجى النقر على "اتصال" لاختيار الطابعة من القائمة.</p>
             <div class="alert alert-info mt-3">
               <small>📌 ملاحظة: تأكد من أن الطابعة متصلة بالجهاز ومشغلة.</small>
             </div>
@@ -3655,23 +4357,8 @@ export class StudentDetailsComponent implements OnInit {
       });
 
       if (result.isConfirmed) {
-        Swal.fire({
-          title: 'جاري الاتصال...',
-          text: 'الرجاء اختيار الطابعة من النافذة المنبثقة',
-          allowOutsideClick: false,
-          didOpen: () => Swal.showLoading()
-        });
-
-        const connected = await this.printerService.connectToThermalPrinter();
-        Swal.close();
-
-        if (!connected) {
-          Swal.fire({
-            icon: 'error',
-            title: 'فشل الاتصال',
-            text: 'لم يتم الاتصال بالطابعة. تأكد من أن الطابعة متصلة ومشغلة.',
-            confirmButtonText: 'حسناً'
-          });
+        await this.connectPrinter();
+        if (!this.printerService.checkConnectionStatus()) {
           return;
         }
       } else if (result.isDenied) {
@@ -3699,7 +4386,7 @@ export class StudentDetailsComponent implements OnInit {
 
     try {
       Swal.fire({
-        title: 'جاري الطباعة...',
+        title: '🖨️ جاري الطباعة...',
         text: 'يرجى الانتظار، يتم إرسال البيانات إلى الطابعة الحرارية.',
         allowOutsideClick: false,
         didOpen: () => Swal.showLoading()
@@ -3712,7 +4399,7 @@ export class StudentDetailsComponent implements OnInit {
       if (success) {
         Swal.fire({
           icon: 'success',
-          title: 'تمت الطباعة',
+          title: '✅ تمت الطباعة',
           text: 'تم طباعة الإيصال على الطابعة الحرارية بنجاح',
           timer: 2000,
           showConfirmButton: false
@@ -3722,14 +4409,14 @@ export class StudentDetailsComponent implements OnInit {
       }
 
     } catch (error) {
-      console.error('خطأ في طباعة الإيصال:', error);
+      console.error('❌ خطأ في طباعة الإيصال:', error);
       Swal.close();
       
       const fallbackResult = await Swal.fire({
-        title: 'فشل الطباعة على الطابعة الحرارية',
+        title: '❌ فشل الطباعة على الطابعة الحرارية',
         html: `
           <div class="text-start">
-            <p>❌ حدث خطأ أثناء محاولة الطباعة على الطابعة الحرارية.</p>
+            <p>حدث خطأ أثناء محاولة الطباعة على الطابعة الحرارية.</p>
             <p>الأسباب المحتملة:</p>
             <ul>
               <li>الطابعة غير متصلة</li>
@@ -3746,7 +4433,7 @@ export class StudentDetailsComponent implements OnInit {
       });
 
       if (fallbackResult.isConfirmed) {
-        await this.printerService.connectToThermalPrinter();
+        await this.connectPrinter();
         await this.printPaymentReceipt(payment);
       } else if (fallbackResult.isDenied) {
         await this.printRegularReceipt(payment);
@@ -3779,7 +4466,7 @@ export class StudentDetailsComponent implements OnInit {
       
       Swal.fire({
         icon: 'success',
-        title: 'تم الطباعة',
+        title: '✅ تم الطباعة',
         text: 'تم فتح نافذة الطباعة، يرجى اختيار الطابعة المناسبة',
         timer: 2000,
         showConfirmButton: false
@@ -3787,7 +4474,7 @@ export class StudentDetailsComponent implements OnInit {
     } else {
       Swal.fire({
         icon: 'error',
-        title: 'خطأ',
+        title: '❌ خطأ',
         text: 'لا يمكن فتح نافذة الطباعة. يرجى السماح بالنوافذ المنبثقة.',
         confirmButtonText: 'حسناً'
       });
@@ -3925,8 +4612,10 @@ export class StudentDetailsComponent implements OnInit {
       Swal.fire({ icon: 'warning', title: 'لا توجد إيصالات للطباعة', confirmButtonText: 'حسناً' });
       return;
     }
+    
     Swal.fire({ title: 'جاري الطباعة...', html: `<div class="text-center"><div class="spinner-border text-primary mb-3"></div><p>جاري طباعة ${payments.length} إيصال...</p>
       <div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%" id="print-progress">0%</div></div></div>`, showConfirmButton: false });
+    
     let printedCount = 0;
     for (let i = 0; i < payments.length; i++) {
       const payment = payments[i];
@@ -3953,14 +4642,17 @@ export class StudentDetailsComponent implements OnInit {
         await this.delay(500);
       } catch (error) { console.error(`فشل طباعة إيصال ${i + 1}:`, error); }
     }
+    
     Swal.close();
     Swal.fire({ title: 'نتائج الطباعة', html: `<div class="alert alert-success"><h6>تمت الطباعة بنجاح</h6><p><strong>المطبوع:</strong> ${printedCount}</p><p><strong>الإجمالي:</strong> ${payments.length}</p></div>`, icon: 'success', confirmButtonText: 'حسناً' });
   }
 
   private async printSingleReceiptForMultiplePayments(payments: Payment[], paymentMethod: string, notes?: string): Promise<void> {
     if (!payments?.length) return;
+    
     try {
       Swal.fire({ title: 'جاري إنشاء الإيصال الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      
       const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
       const bulkReceiptData: BulkReceiptData = {
         receiptNumber: `BLK-${Date.now().toString().slice(-8)}`,
@@ -3980,15 +4672,52 @@ export class StudentDetailsComponent implements OnInit {
         })),
         notes: notes || `دفع جماعي لـ ${payments.length} دفعة`
       };
+      
+      Swal.close();
+
+      Swal.fire({
+        title: '🖨️ جاري طباعة الإيصال الموحد...',
+        text: 'يرجى الانتظار، يتم إرسال البيانات إلى الطابعة.',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
       const success = await this.printerService.printBulkReceipt(bulkReceiptData);
+      
+      Swal.close();
+
       if (success) {
-        Swal.fire({ icon: 'success', title: 'تم الطباعة', text: 'تم طباعة الإيصال الموحد بنجاح', timer: 1500, showConfirmButton: false });
+        Swal.fire({
+          icon: 'success',
+          title: '✅ تمت الطباعة',
+          text: 'تم طباعة الإيصال الموحد بنجاح',
+          timer: 2000,
+          showConfirmButton: false
+        });
       } else {
-        throw new Error('فشل في طباعة الإيصال');
+        throw new Error('فشل في طباعة الإيصال الموحد');
       }
     } catch (error) {
       console.error('خطأ في طباعة الإيصال الموحد:', error);
-      Swal.fire({ icon: 'error', title: 'خطأ في الطباعة', text: 'فشل في طباعة الإيصال الموحد', confirmButtonText: 'حسناً' });
+      Swal.close();
+      
+      const fallbackResult = await Swal.fire({
+        title: '❌ فشل الطباعة على الطابعة الحرارية',
+        html: `
+          <div class="text-start">
+            <p>حدث خطأ أثناء محاولة طباعة الإيصال الموحد.</p>
+            <p>هل تريد طباعة إيصالات منفصلة بدلاً من ذلك؟</p>
+          </div>
+        `,
+        icon: 'error',
+        showCancelButton: true,
+        confirmButtonText: '📄 طباعة إيصالات منفصلة',
+        cancelButtonText: 'إلغاء'
+      });
+
+      if (fallbackResult.isConfirmed) {
+        await this.printMultipleReceipts(payments);
+      }
     }
   }
 

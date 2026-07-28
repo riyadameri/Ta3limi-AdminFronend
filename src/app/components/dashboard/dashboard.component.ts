@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment.development';
 import { catchError, of } from 'rxjs';
+
 @Component({
   selector: 'app-dashboard',
   imports: [CommonModule, FormsModule],
@@ -21,37 +22,42 @@ export class DashboardComponent implements OnInit, OnDestroy {
   rfidStatus: string = 'Waiting for card...';
   private apiUrl = environment.apiUrl;
   
-  // الإحصائيات اليومية
-  dailyStats = {
-    income: 0,
-    expenses: 0,
-    profit: 0,
-    totalClasses: 0
+  // Today's transactions data from API
+  todaysData: any = null;
+  isLoading: boolean = false;
+  
+  // Dashboard stats from API
+  summary = {
+    totalIncome: 0,
+    totalExpenses: 0,
+    totalTransactions: 0,
+    paymentsCount: 0,
+    feesCount: 0,
+    expensesCount: 0,
+    commissionsCount: 0
   };
-
-  // الحصص المقررة اليوم
-  todayClasses: any[] = [];
   
-  // معلومات الطلاب المتأخرين في الدفع
-  lateStudents: any[] = [];
+  // Transactions list
+  transactions: any[] = [];
   
-  // الطلاب الحاليين (الحاضرين/الغائبين)
-  currentStudents = {
-    present: 0,
-    absent: 0,
-    late: []
-  };
-
-  // معلومات الطالب المكتشف بالـ RFID
-  scannedStudent: any = null;
-  isScanning = false;
-  scanInterval: any;
+  // School info
+  schoolInfo: any = null;
   
-  // تاريخ اليوم
+  // Date info
   today = new Date();
   todayDateString: string;
+  formattedDate: string = '';
   
-  // للإشعارات
+  // Counts from API
+  counts = {
+    financialTransactions: 0,
+    payments: 0,
+    fees: 0,
+    expenses: 0,
+    commissions: 0
+  };
+  
+  // For notifications
   notifications: any[] = [];
 
   // Reference to RFID input element
@@ -62,10 +68,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private router: Router
   ) {
     this.todayDateString = this.today.toISOString().split('T')[0];
+    this.formattedDate = this.today.toLocaleDateString('ar-EG', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   }
 
   ngOnInit() {
-    this.loadDashboardData();
+    this.loadTodaysTransactions();
     this.startRFIDScanning();
   }
 
@@ -80,167 +92,216 @@ export class DashboardComponent implements OnInit, OnDestroy {
       clearTimeout(this.rfidTimer);
     }
   }
-  private cacheExpiry = 5 * 60 * 1000; // 5 minutes
-  private lastCacheTime = 0;
-  
-  // تحميل جميع بيانات Dashboard
-  loadDashboardData() {
-    // Use the aggregated endpoint for dashboard stats
-    const token = localStorage.getItem('token'); // أو الطريقة التي تستخدمها لتخزين التوكن
-    this.http.get<any>(`${environment.apiUrl}/dashboard/daily-stats`)
-    .pipe(
-      catchError(error => {
-        console.error('Error loading dashboard stats:', error);
-        this.showNotification('error', 'فشل تحميل بيانات Dashboard');
-        return of({
-          success: false,
-          dailyStats: this.dailyStats,
-          currentStudents: this.currentStudents
-        });
-      })
-    )
-    .subscribe({
-      next: (data) => {
-        if (data.success) {
-          this.dailyStats = data.dailyStats;
-          this.currentStudents = data.currentStudents;
-        }
-      }
-    });
-    // Keep other endpoints as they are
-    this.loadTodayClasses();
-    this.loadLateStudents();
-    this.loadNotifications();
-  }
-  
-  sendPaymentReminder(student: any) {
-    this.http.post(`${environment.apiUrl}/students/${student._id}/send-reminder`, {
-      message: `عزيزي ولي أمر الطالب ${student.name}: لديك دفعات متأخرة بقيمة ${student.amountDue} دج. يرجى التواصل مع الإدارة.`
-    }).subscribe({
-      next: () => {
-        this.showNotification('success', 'تم إرسال تذكير الدفع للطالب');
-      },
-      error: (err) => {
-        console.error('Error sending reminder:', err);
-        this.showNotification('error', 'فشل إرسال التذكير');
-      }
-    });
-  }
-  
-  // 1. تحميل الإحصائيات اليومية
-  loadDailyStats() {
-    // إحصائيات الدخل اليومي
-    this.http.get<any>(`${environment.apiUrl}/accounting/daily-income`).subscribe({
-      next: (data) => {
-        if (data.success) {
-          this.dailyStats.income = data.dailyIncome || 0;
-        }
-      },
-      error: (err) => {
-        console.error('Error loading daily income:', err);
-      }
-    });
 
-    // مصروفات اليوم
-    this.http.get<any>(`${environment.apiUrl}/accounting/today-expenses`).subscribe({
-      next: (data) => {
-        this.dailyStats.expenses = data.total || 0;
-        this.dailyStats.profit = this.dailyStats.income - this.dailyStats.expenses;
-      },
-      error: (err) => {
-        console.error('Error loading today expenses:', err);
+  // Get school ID from localStorage
+  getSchoolId(): string | null {
+    try {
+      const schoolData = localStorage.getItem('school');
+      if (schoolData) {
+        const school = JSON.parse(schoolData);
+        return school._id || null;
       }
-    });
-
-    // عدد الحصص اليوم
-    this.http.get<any>(`${environment.apiUrl}/live-classes/today-count`).subscribe({
-      next: (data) => {
-        this.dailyStats.totalClasses = data.count || 0;
-      },
-      error: (err) => {
-        console.error('Error loading today classes count:', err);
-      }
-    });
+      return null;
+    } catch (e) {
+      console.error('Error getting school from localStorage:', e);
+      return null;
+    }
   }
 
-  // 2. تحميل الحصص المقررة اليوم
-  loadTodayClasses() {
-    this.http.get<any[]>(`${environment.apiUrl}/live-classes/today`).subscribe({
-      next: (classes) => {
-        this.todayClasses = classes;
-        
-        // جدولة الحصص تلقائياً إذا لم تكن مجدولة
-        classes.forEach(cls => {
-          if (!cls.isScheduled) {
-            this.scheduleClass(cls);
+  // Get school info from localStorage
+  getSchoolInfo(): any {
+    try {
+      const schoolData = localStorage.getItem('school');
+      if (schoolData) {
+        return JSON.parse(schoolData);
+      }
+      return null;
+    } catch (e) {
+      console.error('Error getting school info:', e);
+      return null;
+    }
+  }
+
+  // Load today's transactions from API
+  loadTodaysTransactions() {
+    const schoolId = this.getSchoolId();
+    
+    if (!schoolId) {
+      console.error('No school ID found in localStorage');
+      this.showNotification('error', 'لم يتم العثور على بيانات المدرسة');
+      return;
+    }
+
+    this.isLoading = true;
+    this.schoolInfo = this.getSchoolInfo();
+
+    const url = `${this.apiUrl}/accounting/todays-transactions/${schoolId}`;
+    
+    this.http.get<any>(url)
+      .pipe(
+        catchError(error => {
+          console.error('Error loading today\'s transactions:', error);
+          this.showNotification('error', 'فشل تحميل معاملات اليوم');
+          this.isLoading = false;
+          return of(null);
+        })
+      )
+      .subscribe({
+        next: (data) => {
+          this.isLoading = false;
+          
+          if (data && data.success) {
+            this.todaysData = data;
+            
+            // Update summary
+            this.summary = data.summary || {
+              totalIncome: 0,
+              totalExpenses: 0,
+              totalTransactions: 0,
+              paymentsCount: 0,
+              feesCount: 0,
+              expensesCount: 0,
+              commissionsCount: 0
+            };
+            
+            // Update transactions
+            this.transactions = data.transactions || [];
+            
+            // Update counts
+            this.counts = data.counts || {
+              financialTransactions: 0,
+              payments: 0,
+              fees: 0,
+              expenses: 0,
+              commissions: 0
+            };
+            
+            // Update formatted date if available
+            if (data.date && data.date.formatted) {
+              this.formattedDate = data.date.formatted;
+            }
+            
+            // Update school info if available
+            if (data.school) {
+              this.schoolInfo = data.school;
+            }
+            
+            console.log(`✅ Loaded ${this.transactions.length} transactions for today`);
+          } else {
+            this.showNotification('warning', 'لا توجد معاملات اليوم');
           }
-        });
-      },
-      error: (err) => {
-        console.error('Error loading today classes:', err);
-      }
-    });
+        },
+        error: (err) => {
+          this.isLoading = false;
+          console.error('Error loading transactions:', err);
+          this.showNotification('error', 'حدث خطأ أثناء تحميل البيانات');
+        }
+      });
   }
 
-  // 3. تحميل الطلاب المتأخرين في الدفع
-  loadLateStudents() {
-    this.http.get<any[]>(`${environment.apiUrl}/students/late-payments`).subscribe({
-      next: (students) => {
-        this.lateStudents = students;
-      },
-      error: (err) => {
-        console.error('Error loading late students:', err);
-      }
-    });
+  // Get transaction icon based on type
+  getTransactionIcon(transaction: any): string {
+    if (transaction.icon) return transaction.icon;
+    
+    switch (transaction._type) {
+      case 'payment': return 'fa-money-bill-wave';
+      case 'registration_fee': return 'fa-file-invoice';
+      case 'expense': return 'fa-receipt';
+      case 'commission': return 'fa-user-graduate';
+      case 'financial_transaction': return 'fa-exchange-alt';
+      default: return 'fa-circle';
+    }
   }
 
-  // 4. تحميل الطلاب الحاضرين والغائبين اليوم
-  loadCurrentStudents() {
-    this.http.get<any>(`${environment.apiUrl}/attendance/today-stats`).subscribe({
-      next: (stats) => {
-        this.currentStudents = stats;
-      },
-      error: (err) => {
-        console.error('Error loading current students:', err);
-      }
-    });
+  // Get transaction label based on type
+  getTransactionLabel(transaction: any): string {
+    if (transaction.typeLabel) return transaction.typeLabel;
+    
+    switch (transaction._type) {
+      case 'payment': return 'دفعة طالب';
+      case 'registration_fee': return 'رسوم تسجيل';
+      case 'expense': return 'مصروف';
+      case 'commission': return 'عمولة أستاذ';
+      case 'financial_transaction': return 'معاملة مالية';
+      default: return 'معاملة';
+    }
   }
 
-  // 5. تحميل الإشعارات
-  loadNotifications() {
-    this.http.get<any[]>(`${environment.apiUrl}/notifications`).subscribe({
-      next: (notifications) => {
-        this.notifications = notifications;
-      },
-      error: (err) => {
-        console.error('Error loading notifications:', err);
-      }
-    });
+  // Get transaction status color
+  getTransactionStatusColor(transaction: any): string {
+    if (transaction.status === 'paid') return 'text-success';
+    if (transaction.status === 'pending') return 'text-warning';
+    if (transaction.status === 'late') return 'text-danger';
+    return 'text-secondary';
   }
 
-  // جدولة حصة
-  scheduleClass(classInfo: any) {
-    this.http.post(`${environment.apiUrl}/live-classes/schedule`, classInfo).subscribe({
-      next: (response) => {
-        console.log('Class scheduled:', response);
-        this.showNotification('success', 'تم جدولة الحصة بنجاح');
-      },
-      error: (err) => {
-        console.error('Error scheduling class:', err);
-        this.showNotification('error', 'فشل جدولة الحصة');
-      }
-    });
+  // Get transaction type color
+  getTransactionTypeColor(transaction: any): string {
+    if (transaction.type === 'income' || transaction._type === 'payment' || transaction._type === 'registration_fee') {
+      return 'text-success';
+    }
+    if (transaction.type === 'expense' || transaction._type === 'expense' || transaction._type === 'commission') {
+      return 'text-danger';
+    }
+    return 'text-primary';
   }
 
-  // 6. نظام RFID - بدء المسح
+  // Format date for display
+  formatDate(dateStr: string): string {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleString('ar-EG', {
+        hour: '2-digit',
+        minute: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  // Get student name from transaction
+  getStudentName(transaction: any): string {
+    if (transaction.student) {
+      if (typeof transaction.student === 'object') {
+        return transaction.student.name || 'غير معروف';
+      }
+      return transaction.student.name || 'غير معروف';
+    }
+    return 'غير معروف';
+  }
+
+  // Get transaction description
+  getTransactionDescription(transaction: any): string {
+    if (transaction.description) return transaction.description;
+    if (transaction._type === 'payment') {
+      return `دفعة من الطالب ${this.getStudentName(transaction)}`;
+    }
+    if (transaction._type === 'registration_fee') {
+      return `رسوم تسجيل الطالب ${this.getStudentName(transaction)}`;
+    }
+    if (transaction._type === 'commission') {
+      const teacherName = transaction.teacher?.name || 'غير معروف';
+      return `عمولة الأستاذ ${teacherName}`;
+    }
+    return 'معاملة مالية';
+  }
+
+  // Load additional data (keep for compatibility)
+  loadDashboardData() {
+    this.loadTodaysTransactions();
+  }
+
+  // --- RFID Methods (kept from original) ---
+  
   startRFIDScanning() {
     this.isScanning = true;
     this.rfidStatus = 'Waiting for card...';
-    
-    // تمكين الاستماع لأحداث لوحة المفاتيح
     this.isRFIDInputActive = true;
     
-    // التركيز على حقل الإدخال تلقائياً
     setTimeout(() => {
       if (this.rfidInput) {
         this.rfidInput.nativeElement.focus();
@@ -260,48 +321,38 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  // استمع لأحداث لوحة المفاتيح على مستوى المكون
   @HostListener('document:keydown', ['$event'])
   handleKeyDown(event: KeyboardEvent) {
-    // تأكد من أن المسح مفعّل والمكون ليس في حالة إدخال نصية
     if (!this.isRFIDInputActive || !this.isScanning) {
       return;
     }
 
-    // تجاهل أحداث لوحة المفاتيح إذا كان المستخدم في حقل إدخال
     if ((event.target as HTMLElement).tagName === 'INPUT' || 
         (event.target as HTMLElement).tagName === 'TEXTAREA') {
       return;
     }
 
-    // إلغاء المؤقت القديم
     if (this.rfidTimer) {
       clearTimeout(this.rfidTimer);
     }
 
-    // إذا كان المفتاح Enter، قم بمعالجة RFID
     if (event.key === 'Enter') {
       event.preventDefault();
       this.processRFIDInput();
       return;
     }
 
-    // إذا كان المفتاح حرفاً واحداً، أضفه للـ buffer
     if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
       this.rfidBuffer += event.key;
       this.rfidStatus = 'Reading...';
-      
-      // تحديث عرض قيمة RFID
       this.rfidInputValue = this.rfidBuffer;
     }
 
-    // ضبط مؤقت لمسح الـ buffer بعد وقت قصير
     this.rfidTimer = setTimeout(() => {
       this.resetRFIDBuffer();
     }, 100);
   }
 
-  // معالجة إدخال RFID
   processRFIDInput() {
     if (this.rfidBuffer.length === 0) {
       return;
@@ -309,21 +360,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     const uid = this.rfidBuffer;
     console.log('RFID UID:', uid);
-    
-    // عرض الـ UID في حقل الإدخال
     this.rfidInputValue = uid;
     this.rfidStatus = 'Card read successfully ✔';
-    
-    // معالجة البطاقة
     this.processRFIDCard(uid);
     
-    // إعادة تعيين الـ buffer بعد المعالجة
     setTimeout(() => {
       this.resetRFIDBuffer();
     }, 2000);
   }
 
-  // إعادة تعيين buffer RFID
   resetRFIDBuffer() {
     this.rfidBuffer = '';
     this.rfidInputValue = '';
@@ -335,14 +380,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  // تركيز/إلغاء تركيز حقل RFID
   focusRFIDField() {
     this.isRFIDInputActive = true;
     this.rfidStatus = 'Ready for scanning...';
   }
 
   blurRFIDField() {
-    // لا تغير الحالة إذا كان المسح لا يزال نشطاً
     if (this.isScanning) {
       setTimeout(() => {
         if (this.rfidInput) {
@@ -352,46 +395,40 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  // معالجة بطاقة RFID
-// Add this to prevent multiple simultaneous scans
-private isProcessingRFID = false;
+  private isProcessingRFID = false;
 
-// In processRFIDCard method
-processRFIDCard(uid: string) {
-  if (this.isProcessingRFID) {
-    return;
-  }
-  
-  this.isProcessingRFID = true;
-  
-  this.http.get<any>(`${this.apiUrl}/cards/uid/${uid}`).subscribe({
-    next: (data) => {
-      if (data.student) {
-        this.scannedStudent = data;
-        this.showStudentCard(data);
-        
-        // تسجيل الحضور تلقائياً
-        this.recordAttendance(data.student._id);
-      } else {
-        this.showUnknownCard(uid);
-      }
-      this.isProcessingRFID = false;
-    },
-    error: (err) => {
-      console.error('Error processing RFID card:', err);
-      this.showNotification('error', 'خطأ في معالجة البطاقة');
-      this.rfidStatus = 'Error processing card';
-      this.isProcessingRFID = false;
+  processRFIDCard(uid: string) {
+    if (this.isProcessingRFID) {
+      return;
     }
-  });
-}
+    
+    this.isProcessingRFID = true;
+    
+    this.http.get<any>(`${this.apiUrl}/cards/uid/${uid}`).subscribe({
+      next: (data) => {
+        if (data.student) {
+          this.scannedStudent = data;
+          this.showStudentCard(data);
+          this.recordAttendance(data.student._id);
+        } else {
+          this.showUnknownCard(uid);
+        }
+        this.isProcessingRFID = false;
+      },
+      error: (err) => {
+        console.error('Error processing RFID card:', err);
+        this.showNotification('error', 'خطأ في معالجة البطاقة');
+        this.rfidStatus = 'Error processing card';
+        this.isProcessingRFID = false;
+      }
+    });
+  }
 
-  // عرض معلومات الطالب المكتشف
+  // Display student info when card is scanned
   showStudentCard(studentData: any) {
     this.showNotification('success', `تم اكتشاف الطالب: ${studentData.student.name}`);
     this.rfidStatus = `Student detected: ${studentData.student.name}`;
     
-    // عرض معلومات الطالب لمدة 10 ثواني
     setTimeout(() => {
       if (this.scannedStudent?.student?._id === studentData.student._id) {
         this.scannedStudent = null;
@@ -399,13 +436,11 @@ processRFIDCard(uid: string) {
     }, 10000);
   }
 
-  // عرض بطاقة غير معروفة
   showUnknownCard(uid: string) {
     this.showNotification('warning', `بطاقة غير معروفة: ${uid}`);
     this.rfidStatus = `Unknown card: ${uid}`;
   }
 
-  // تسجيل الحضور تلقائياً
   recordAttendance(studentId: string) {
     const attendanceData = {
       studentId: studentId,
@@ -423,38 +458,40 @@ processRFIDCard(uid: string) {
     });
   }
 
-  // محاكاة اكتشاف طالب (لأغراض التطوير)
+  // Variables for scanned student (keep from original)
+  scannedStudent: any = null;
+  isScanning = false;
+  scanInterval: any;
+  lateStudents: any[] = [];
+
   simulateRFIDScan() {
     const mockUID = 'RFID-' + Math.random().toString(36).substr(2, 9);
     console.log('Simulating RFID scan:', mockUID);
     this.processRFIDCard(mockUID);
   }
 
-  // بدء محاكاة RFID (للتجربة)
   startSimulatedScan() {
     this.stopRFIDScanning();
     this.isScanning = true;
     this.rfidStatus = 'Simulation mode active';
     
-    // محاكاة قراءة بطاقة كل 5 ثواني
     this.scanInterval = setInterval(() => {
       this.simulateRFIDScan();
     }, 5000);
   }
 
-  // الانتقال لتفاصيل الطالب
+  // Navigation and action methods
   goToStudentDetails(studentId: string) {
     this.router.navigate(['/home/students-management', studentId]);
   }
 
-  // الدفع لحصة
   payForClass(studentId: string, classId?: string) {
     this.router.navigate(['/home/payments-management'], {
       queryParams: { studentId, classId }
     });
   }
 
-  // إظهار الإشعارات
+  // Notification system
   showNotification(type: 'success' | 'error' | 'warning', message: string) {
     const notification = {
       id: Date.now(),
@@ -465,28 +502,32 @@ processRFIDCard(uid: string) {
 
     this.notifications.unshift(notification);
     
-    // إزالة الإشعار بعد 5 ثواني
     setTimeout(() => {
       this.notifications = this.notifications.filter(n => n.id !== notification.id);
     }, 5000);
   }
 
-  // تحديث البيانات يدوياً
+  // Refresh data
   refreshData() {
-    this.loadDashboardData();
+    this.loadTodaysTransactions();
     this.showNotification('success', 'تم تحديث البيانات');
   }
 
-  // تصدير تقرير اليوم
+  // Export daily report
   exportDailyReport() {
-    this.http.get(`/${environment.apiUrl}/accounting/export-daily-report`, { responseType: 'blob' }).subscribe({
-      next: (blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `daily-report-${this.todayDateString}.xlsx`;
-        a.click();
-        window.URL.revokeObjectURL(url);
+    const schoolId = this.getSchoolId();
+    if (!schoolId) {
+      this.showNotification('error', 'لم يتم العثور على بيانات المدرسة');
+      return;
+    }
+    
+    // Use the school-specific export endpoint
+    this.http.get(`${this.apiUrl}/accounting/todays-transactions/${schoolId}`, { 
+      responseType: 'json' 
+    }).subscribe({
+      next: (data: any) => {
+        // Create a simple text report
+        this.generateAndDownloadReport(data);
       },
       error: (err) => {
         console.error('Error exporting report:', err);
@@ -495,10 +536,101 @@ processRFIDCard(uid: string) {
     });
   }
 
-  // مسح بيانات RFID يدوياً
+  // Generate and download simple report
+  generateAndDownloadReport(data: any) {
+    if (!data) {
+      this.showNotification('error', 'لا توجد بيانات للتصدير');
+      return;
+    }
+
+    try {
+      const schoolName = data.school?.name || 'المدرسة';
+      const date = data.date?.formatted || this.formattedDate;
+      
+      let reportContent = `تقرير معاملات اليوم\n`;
+      reportContent += `================================\n`;
+      reportContent += `المدرسة: ${schoolName}\n`;
+      reportContent += `التاريخ: ${date}\n`;
+      reportContent += `================================\n\n`;
+      
+      reportContent += `إحصائيات اليوم:\n`;
+      reportContent += `─────────────────\n`;
+      reportContent += `إجمالي الإيرادات: ${data.summary?.totalIncome || 0} د.ج\n`;
+      reportContent += `إجمالي المصروفات: ${data.summary?.totalExpenses || 0} د.ج\n`;
+      reportContent += `عدد المعاملات: ${data.summary?.totalTransactions || 0}\n`;
+      reportContent += `مدفوعات الطلاب: ${data.counts?.payments || 0}\n`;
+      reportContent += `رسوم تسجيل: ${data.counts?.fees || 0}\n`;
+      reportContent += `مصروفات: ${data.counts?.expenses || 0}\n`;
+      reportContent += `عمولات: ${data.counts?.commissions || 0}\n\n`;
+      
+      reportContent += `المعاملات:\n`;
+      reportContent += `─────────────────\n`;
+      
+      if (data.transactions && data.transactions.length > 0) {
+        data.transactions.forEach((t: any, index: number) => {
+          const label = this.getTransactionLabel(t);
+          const amount = t.amount || 0;
+          const desc = this.getTransactionDescription(t);
+          const student = this.getStudentName(t);
+          const dateStr = this.formatDate(t.paymentDate || t.date || t.createdAt);
+          
+          reportContent += `${index + 1}. ${label}\n`;
+          reportContent += `   المبلغ: ${amount} د.ج\n`;
+          reportContent += `   الوصف: ${desc}\n`;
+          reportContent += `   الطالب: ${student}\n`;
+          reportContent += `   التاريخ: ${dateStr}\n`;
+          reportContent += `   الحالة: ${t.status || 'مكتمل'}\n`;
+          reportContent += `   ─────────────────\n`;
+        });
+      } else {
+        reportContent += `لا توجد معاملات اليوم\n`;
+      }
+      
+      reportContent += `\n================================\n`;
+      reportContent += `تم إنشاء التقرير في: ${new Date().toLocaleString('ar-EG')}`;
+      
+      // Download as text file
+      const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `تقرير-معاملات-${this.todayDateString}.txt`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      this.showNotification('success', 'تم تصدير التقرير بنجاح');
+    } catch (err) {
+      console.error('Error generating report:', err);
+      this.showNotification('error', 'فشل إنشاء التقرير');
+    }
+  }
+
+  // Clear RFID data
   clearRFIDData() {
     this.resetRFIDBuffer();
     this.scannedStudent = null;
     this.rfidStatus = 'Data cleared. Waiting for card...';
+  }
+
+  // Helper to get student name safely
+  getStudentNameFromId(studentId: string): string {
+    if (!studentId) return 'غير معروف';
+    const transaction = this.transactions.find(t => 
+      t.student && t.student._id === studentId
+    );
+    if (transaction && transaction.student) {
+      return transaction.student.name || 'غير معروف';
+    }
+    return 'غير معروف';
+  }
+
+  // Helper to get class name
+  getClassName(transaction: any): string {
+    if (transaction.class) {
+      if (typeof transaction.class === 'object') {
+        return transaction.class.name || 'غير معروف';
+      }
+    }
+    return 'غير محدد';
   }
 }

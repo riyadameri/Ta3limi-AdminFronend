@@ -1,8 +1,10 @@
+// ==================== printer.service.ts - WebUSB with International Numbers ====================
 import { Injectable, NgZone } from '@angular/core';
 import Swal from 'sweetalert2';
 
 declare const navigator: any;
-// في printer.service.ts، أضف هذه الواجهة
+
+// ==================== INTERFACES ====================
 export interface BulkReceiptData {
   receiptNumber: string;
   date: string;
@@ -19,20 +21,6 @@ export interface BulkReceiptData {
     amount: number;
     notes?: string;
   }[];
-  notes?: string;
-}
-export interface StudentReceiptData {
-  studentName: string;
-  studentId: string;
-  receiptNumber: string;
-  date: string;
-  time: string;
-  className: string;
-  month: string;
-  amount: number;
-  paymentMethod: string;
-  academicYear?: string;
-  parentPhone?: string;
   notes?: string;
 }
 
@@ -55,26 +43,19 @@ export interface ReceiptData {
   providedIn: 'root'
 })
 export class PrinterService {
-  private port: any = null;
-  private writer: any = null;
-  private reader: any = null;
+  private device: any = null;
+  private interfaceNumber: number = 0;
+  private endpointNumber: number | null = null;
   private isConnected: boolean = false;
   
   // إعدادات الطابعة للورق 80 مم
-  private readonly PRINT_WIDTH = 576; // 80 مم × 8 نقطة/مم = 640 نقطة، لكننا نستخدم 576 للهامش
-  private readonly PRINT_HEIGHT = 900; // ارتفاع ديناميكي
   private readonly CANVAS_WIDTH = 576;
   private readonly CANVAS_HEIGHT = 900;
-  private readonly MAX_CHUNK_SIZE = 1024;
-  private readonly COMPANY_NAME = 'أكاديمية الرواد للتعليم والمعارف';
-  private readonly DEVELOPER_NAME = 'ريدوكس';
-  private readonly FOOTER_TEXT = 'تتمنى لكم تجربة تعليمية ممتعة ومفيدة';
-  private readonly COMPANY_ADDRESS = 'الجزائر، ولاية الجزائر';
-  private readonly QR_CODE_TEXT = 'أكاديمية الرواد للتعليم والمعارف\nالموقع: academy-arrowad.edu.dz\nهاتف: 1234567890';
-
-  // روابط الصور
-  private readonly REDOX_LOGO_URL = 'https://redox-sm.onrender.com/favicon.ico';
-  private readonly ACADEMY_LOGO_URL = 'https://redox-sm.onrender.com/favicon.ico';
+  private readonly COMPANY_NAME = 'ROUAD AL-MAARIFA ACADEMY';
+  private readonly DEVELOPER_NAME = 'REDOX';
+  private readonly FOOTER_TEXT = 'We wish you a pleasant and useful educational experience';
+  private readonly COMPANY_ADDRESS = 'Algeria, Touggourt';
+  private readonly COMPANY_PHONE = '+213 673586274';
 
   constructor(private ngZone: NgZone) {
     window.addEventListener('beforeunload', () => {
@@ -83,292 +64,466 @@ export class PrinterService {
   }
 
   /**
- * طباعة Canvas مباشرة على الطابعة الحرارية
- */
-  async printCanvasDirect(canvas: HTMLCanvasElement): Promise<boolean> {
+   * الاتصال بالطابعة الحرارية عبر WebUSB
+   */
+  async connectToThermalPrinter(): Promise<boolean> {
     try {
-      if (!this.isConnected) {
-        const connected = await this.connectToThermalPrinter();
-        if (!connected) {
-          throw new Error('فشل الاتصال بالطابعة');
-        }
+      if (!('usb' in navigator)) {
+        throw new Error('WebUSB is not supported in this browser. Please use Chrome or Edge.');
       }
 
-      const width = canvas.width;
-      const height = canvas.height;
+      let device;
       
-      const ctx = canvas.getContext('2d')!;
-      const imageData = ctx.getImageData(0, 0, width, height);
+      // 1. التحقق من الأجهزة المسجلة
+      const pairedDevices = await navigator.usb.getDevices();
       
-      const widthBytes = Math.ceil(width / 8);
-      const rasterData = new Uint8Array(widthBytes * height);
-      rasterData.fill(0);
-      
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const i = (y * width + x) * 4;
-          const red = imageData.data[i];
-          const green = imageData.data[i + 1];
-          const blue = imageData.data[i + 2];
-          
-          const gray = Math.floor((red * 0.3 + green * 0.59 + blue * 0.11));
-          
-          if (gray < 200) {
-            const byteIndex = Math.floor(y * widthBytes + x / 8);
-            const bitIndex = 7 - (x % 8);
-            rasterData[byteIndex] |= (1 << bitIndex);
+      if (pairedDevices.length > 0) {
+        device = pairedDevices[0];
+      } else {
+        device = await navigator.usb.requestDevice({ 
+          filters: [] 
+        });
+      }
+
+      this.device = device;
+
+      // 2. فتح الاتصال
+      await device.open();
+      if (device.configuration === null) {
+        await device.selectConfiguration(1);
+      }
+
+      // 3. البحث عن منفذ الطباعة
+      let interfaceNumber = 0;
+      let endpointNumber = null;
+
+      for (const iface of device.configuration.interfaces) {
+        for (const alt of iface.alternates) {
+          if (alt.interfaceClass === 7 || alt.interfaceClass === 255) {
+            interfaceNumber = iface.interfaceNumber;
+            for (const ep of alt.endpoints) {
+              if (ep.direction === 'out') {
+                endpointNumber = ep.endpointNumber;
+                break;
+              }
+            }
           }
         }
+        if (endpointNumber !== null) break;
       }
 
-      await this.writer.write(new Uint8Array([0x1B, 0x40]));
-      await this.writer.write(new Uint8Array([0x1B, 0x33, 0x24]));
-      
-      const header = new Uint8Array([
-        0x1D, 0x76, 0x30, 0x00,
-        widthBytes & 0xFF,
-        (widthBytes >> 8) & 0xFF,
-        height & 0xFF,
-        (height >> 8) & 0xFF
-      ]);
-      
-      await this.writer.write(header);
-      
-      const CHUNK_SIZE = 1024;
-      for (let i = 0; i < rasterData.length; i += CHUNK_SIZE) {
-        const chunk = rasterData.slice(i, i + CHUNK_SIZE);
-        await this.writer.write(chunk);
-        await this.delay(10);
-      }
-      
-      await this.writer.write(new Uint8Array([0x1B, 0x64, 0x05]));
-      await this.writer.write(new Uint8Array([0x1D, 0x56, 0x41, 0x03]));
-      
-      return true;
-      
-    } catch (error) {
-      console.error('خطأ في طباعة Canvas:', error);
-      return false;
-    }
-  }
-
-
-
-/**
- * تأخير
- */
-private delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-  /**
-   * الاتصال بالطابعة الحرارية
-   */
-  async connectToThermalPrinter(baudRate: number = 115200): Promise<boolean> {
-    try {
-      if (!('serial' in navigator)) {
-        throw new Error('واجهة الطابعة غير مدعومة في هذا المتصفح. الرجاء استخدام Chrome أو Edge.');
+      // كود احتياطي
+      if (endpointNumber === null) {
+        interfaceNumber = 0;
+        endpointNumber = device.configuration.interfaces[0].alternates[0].endpoints
+          .find((e: any) => e.direction === 'out').endpointNumber;
       }
 
-      this.port = await navigator.serial.requestPort();
-      
-      await this.port.open({
-        baudRate: baudRate,
-        dataBits: 8,
-        stopBits: 1,
-        parity: 'none',
-        flowControl: 'none'
-      });
+      this.interfaceNumber = interfaceNumber;
+      this.endpointNumber = endpointNumber;
 
-      this.writer = this.port.writable.getWriter();
-      
-      await this.writer.write(new Uint8Array([0x1B, 0x40]));
-      await this.writer.write(new Uint8Array([0x1B, 0x33, 0x18]));
+      // 4. حجز المنفذ
+      await device.claimInterface(interfaceNumber);
+
+      // 5. تهيئة الطابعة
+      await this.writeToPrinter(new Uint8Array([0x1B, 0x40]));
 
       this.isConnected = true;
 
       this.ngZone.run(() => {
         Swal.fire({
           icon: 'success',
-          title: '✅ تم الاتصال',
-          text: 'تم الاتصال بالطابعة الحرارية بنجاح',
+          title: '✅ Connected',
+          text: 'Thermal printer connected successfully via USB',
           timer: 1500,
           showConfirmButton: false
         });
       });
 
-      console.log('✅ تم الاتصال بالطابعة بنجاح');
+      console.log('✅ Printer connected successfully via WebUSB');
       return true;
 
     } catch (err: any) {
-      console.error("❌ خطأ الاتصال:", err);
+      console.error('❌ Connection error:', err);
       this.showConnectionError(err);
       this.isConnected = false;
       return false;
     }
   }
 
+  /**
+   * كتابة بيانات إلى الطابعة
+   */
+  private async writeToPrinter(data: Uint8Array): Promise<void> {
+    if (!this.device || this.endpointNumber === null) {
+      throw new Error('Printer is not connected');
+    }
 
+    try {
+      await this.device.transferOut(this.endpointNumber, data);
+    } catch (error) {
+      console.error('Error writing to printer:', error);
+      throw error;
+    }
+  }
 
   /**
-   * إنشاء QR Code باستخدام Canvas
+   * كتابة نص إلى الطابعة
    */
-  private generateQRCode(text: string): HTMLCanvasElement {
-    const qrCanvas = document.createElement('canvas');
-    qrCanvas.width = 120;
-    qrCanvas.height = 120;
-    
-    const ctx = qrCanvas.getContext('2d')!;
-    
-    // خلفية بيضاء
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, qrCanvas.width, qrCanvas.height);
-    
-    // إنشاء QR Code بسيط
-    ctx.fillStyle = '#000000';
-    
-    // إطار خارجي
-    ctx.lineWidth = 3;
-    ctx.strokeRect(10, 10, qrCanvas.width - 20, qrCanvas.height - 20);
-    
-    // نمط داخلي بسيط
-    const size = 8;
-    const offset = 20;
-    
-    // نقاط QR Code نموذجية
-    for (let i = 0; i < 7; i++) {
-      for (let j = 0; j < 7; j++) {
-        if ((i === 0 || i === 6 || j === 0 || j === 6) || 
-            (i >= 2 && i <= 4 && j >= 2 && j <= 4)) {
-          ctx.fillRect(offset + i * size, offset + j * size, size - 1, size - 1);
+  private async writeText(text: string): Promise<void> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    await this.writeToPrinter(data);
+  }
+
+  /**
+   * قطع الاتصال
+   */
+  async disconnect(): Promise<void> {
+    try {
+      if (this.device) {
+        if (this.interfaceNumber !== undefined) {
+          await this.device.releaseInterface(this.interfaceNumber);
         }
+        await this.device.close();
+        this.device = null;
+      }
+      
+      this.isConnected = false;
+      console.log('Printer disconnected');
+      
+    } catch (err) {
+      console.error('Disconnect error:', err);
+    }
+  }
+
+  /**
+   * التحقق من حالة الاتصال
+   */
+  checkConnectionStatus(): boolean {
+    return this.isConnected && this.device !== null;
+  }
+
+  /**
+   * الحصول على حالة الطابعة
+   */
+  getPrinterStatus(): any {
+    return {
+      isConnected: this.isConnected,
+      device: this.device ? 'Connected' : 'Disconnected',
+      interfaceNumber: this.interfaceNumber,
+      endpointNumber: this.endpointNumber,
+      timestamp: new Date().toLocaleString('en-US'),
+      width: this.CANVAS_WIDTH,
+      height: this.CANVAS_HEIGHT,
+      academy: this.COMPANY_NAME,
+      developer: this.DEVELOPER_NAME
+    };
+  }
+
+  // ==================== PRINTING METHODS ====================
+
+  /**
+   * طباعة إيصال احترافي
+   */
+  async printProfessionalReceipt(data: ReceiptData): Promise<boolean> {
+    if (!this.isConnected) {
+      const connected = await this.connectToThermalPrinter();
+      if (!connected) {
+        this.showError('Failed to connect to printer');
+        return false;
       }
     }
-    
-    // إضافة نص
-    ctx.fillStyle = '#333333';
-    ctx.font = '10px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('QR Code', qrCanvas.width / 2, qrCanvas.height - 8);
-    
-    return qrCanvas;
+
+    try {
+      this.showLoading('Printing...');
+
+      await this.writeToPrinter(new Uint8Array([0x1B, 0x40]));
+
+      const canvas = await this.createReceiptCanvas(data);
+      const rasterData = this.canvasToRaster(canvas);
+      
+      await this.printRasterImage(rasterData, canvas);
+
+      await this.writeToPrinter(new Uint8Array([0x1D, 0x56, 0x41, 0x03]));
+
+      this.showSuccessToast('Receipt printed successfully');
+      return true;
+
+    } catch (err: any) {
+      this.handleError(err);
+      return false;
+    }
   }
 
   /**
-   * تحميل الصورة من رابط
+   * طباعة إيصال جماعي
    */
-  private async loadImage(url: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = url;
-    });
-  }
-
-  private ensureArabicNumbers(str: string): string {
-    // أرقام هندية إلى عربية
-    const hindiToArabic: { [key: string]: string } = {
-      '٠': '0',
-      '١': '1', 
-      '٢': '2',
-      '٣': '3',
-      '٤': '4',
-      '٥': '5',
-      '٦': '6',
-      '٧': '7',
-      '٨': '8',
-      '٩': '9'
-    };
-    
-    return str.split('').map(char => hindiToArabic[char] || char).join('');
-  }
-  
-  /**
-   * تنسيق المبلغ بفواصل آلاف بالأرقام العربية
-   */
-  private formatAmountWithCommas(amount: number): string {
-    // تنسيق الرقم بفواصل الآلاف
-    return amount.toLocaleString('ar-SA');
-  }
-  
-  /**
-   * تحويل الأرقام إلى عربية صحيحة (من هندية إلى عربية)
-   */
-  private formatArabicNumber(num: string): string {
-    const hindiNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-    const arabicNumerals = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-  
-    return num.split('').map(char => {
-      const index = hindiNumerals.indexOf(char);
-      return index !== -1 ? arabicNumerals[index] : char;
-    }).join('');
-  }
-  
-  /**
-   * تنسيق المبلغ بالأرقام العربية مع فواصل
-   */
-  private formatAmountArabic(amount: number): string {
-    // تنسيق الرقم بفواصل الآلاف بالأرقام العربية
-    const formatted = amount.toLocaleString('ar-SA');
-    
-    // تحويل الأرقام الهندية إلى عربية
-    const hindiToArabic: { [key: string]: string } = {
-      '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
-      '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
-    };
-    
-    // تحويل كل رقم
-    const arabicFormatted = formatted.split('').map(char => 
-      hindiToArabic[char] || char
-    ).join('');
-    
-    return arabicFormatted + ' د.ج';
-  }
-
-  
-  private formatNumberArabic(num: string | number): string {
-    const numStr = typeof num === 'number' ? num.toString() : num;
-    if (!numStr) return '';
-    
-    const hindiToArabic: { [key: string]: string } = {
-      '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
-      '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
-    };
-    
-    return numStr.split('').map(char => 
-      hindiToArabic[char] || char
-    ).join('');
-  }
-  private formatDateTimeArabic(dateTime: string): string {
-    if (!dateTime) return dateTime;
-    
-    const hindiToArabic: { [key: string]: string } = {
-      '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
-      '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
-      '٠٠': '00', '٠١': '01', '٠٢': '02', '٠٣': '03', '٠٤': '04',
-      '٠٥': '05', '٠٦': '06', '٠٧': '07', '٠٨': '08', '٠٩': '09'
-    };
-    
-    // تحويل الأرقام الهندية إلى عربية
-    let result = dateTime;
-    Object.keys(hindiToArabic).forEach(hindi => {
-      const arabic = hindiToArabic[hindi];
-      result = result.replace(new RegExp(hindi, 'g'), arabic);
-    });
-    
-    return result;
-  }
-
-  
-  /**
- * إنشاء إيصال واحد لدفعات متعددة
+/**
+ * طباعة إيصال جماعي - مع تحسين معالجة الأخطاء
  */
+async printBulkReceipt(data: BulkReceiptData): Promise<boolean> {
+  try {
+    // ✅ التحقق من الاتصال
+    if (!this.isConnected) {
+      const connected = await this.connectToThermalPrinter();
+      if (!connected) {
+        console.warn('⚠️ فشل الاتصال بالطابعة، سيتم تخطي الطباعة');
+        return false; // لا نرمي خطأ، فقط نرجع false
+      }
+    }
+
+    // ✅ التحقق من وجود بيانات
+    if (!data || !data.payments || data.payments.length === 0) {
+      console.warn('⚠️ لا توجد بيانات للطباعة');
+      return false;
+    }
+
+    this.showLoading('جاري طباعة الإيصال الجماعي...');
+
+    await this.writeToPrinter(new Uint8Array([0x1B, 0x40]));
+
+    const canvas = await this.createBulkReceiptCanvas(data);
+    const rasterData = this.canvasToRaster(canvas);
+    
+    await this.printRasterImage(rasterData, canvas);
+
+    await this.writeToPrinter(new Uint8Array([0x1D, 0x56, 0x41, 0x03]));
+
+    this.showSuccessToast('تم طباعة الإيصال الجماعي بنجاح');
+    return true;
+
+  } catch (err: any) {
+    console.error('❌ خطأ في طباعة الإيصال الجماعي:', err);
+    // ✅ لا نعرض رسالة خطأ للمستخدم، فقط نسجل في الكونسول
+    // هذا يمنع ظهور "فشل" في نتائج الدفع
+    return false;
+  }
+}
+  /**
+   * طباعة نص بسيط (للاختبار)
+   */
+  async printSimpleText(text: string): Promise<boolean> {
+    if (!this.isConnected) {
+      const connected = await this.connectToThermalPrinter();
+      if (!connected) {
+        this.showError('Failed to connect to printer');
+        return false;
+      }
+    }
+
+    try {
+      await this.writeToPrinter(new Uint8Array([0x1B, 0x40]));
+      await this.writeText(text);
+      await this.writeToPrinter(new Uint8Array([0x1D, 0x56, 0x41, 0x03]));
+      
+      this.showSuccessToast('Printed successfully');
+      return true;
+    } catch (err: any) {
+      this.handleError(err);
+      return false;
+    }
+  }
+
+  // ==================== CANVAS CREATION ====================
+
+  /**
+   * إنشاء Canvas للإيصال الفردي - أرقام عالمية (0-9)
+   */
+  async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
+    const canvas = document.createElement('canvas');
+    canvas.width = this.CANVAS_WIDTH;
+    canvas.height = this.CANVAS_HEIGHT;
+    
+    const ctx = canvas.getContext('2d')!;
+    
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000000';
+    ctx.textBaseline = 'top';
+    
+    // Header
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 28px "Arial", sans-serif';
+    ctx.fillText('ROUAD AL-MAARIFA ACADEMY', canvas.width / 2, 10);
+    
+    ctx.font = '14px "Arial", sans-serif';
+    ctx.fillText('Algeria, Touggourt', canvas.width / 2, 45);
+    ctx.fillText('Phone: +213 673586274', canvas.width / 2, 65);
+    
+    this.drawDoubleLine(ctx, 10, 85, canvas.width - 20);
+    
+    let yPos = 105;
+    
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 20px "Arial", sans-serif';
+    ctx.fillText('PAYMENT RECEIPT', canvas.width / 2, yPos);
+    
+    yPos += 30;
+    this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
+    yPos += 10;
+    
+    // Receipt Info - using international numbers (0-9)
+    ctx.textAlign = 'right';
+    ctx.font = '16px "Arial", sans-serif';
+    
+    const infoItems = [
+      { label: 'Receipt No:', value: data.receiptNumber },
+      { label: 'Date:', value: data.date },
+      { label: 'Time:', value: data.time },
+      { label: 'Payment Method:', value: this.translatePaymentMethod(data.paymentMethod) }
+    ];
+    
+    infoItems.forEach(item => {
+      ctx.fillText(`${item.label} ${item.value}`, canvas.width - 15, yPos);
+      yPos += 25;
+    });
+    
+    yPos += 10;
+    this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
+    yPos += 15;
+    
+    // Student Info
+    ctx.font = 'bold 18px "Arial", sans-serif';
+    ctx.fillText('Student Information', canvas.width - 15, yPos);
+    yPos += 30;
+    
+    ctx.font = '16px "Arial", sans-serif';
+    
+    const studentInfo = [
+      { label: 'Name:', value: data.studentName },
+      { label: 'ID:', value: data.studentId },
+      { label: 'Class:', value: data.className },
+      { label: 'Level:', value: data.academicYear || 'N/A' },
+      { label: 'Parent Phone:', value: data.parentPhone || 'N/A' }
+    ];
+    
+    studentInfo.forEach(item => {
+      if (item.value) {
+        ctx.fillText(`${item.label} ${item.value}`, canvas.width - 15, yPos);
+        yPos += 25;
+      }
+    });
+    
+    yPos += 10;
+    this.drawDoubleLine(ctx, 10, yPos, canvas.width - 20);
+    yPos += 20;
+    
+    // Payment Details
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 20px "Arial", sans-serif';
+    ctx.fillText('Payment Details', canvas.width / 2, yPos);
+    yPos += 35;
+    
+    // Table Header
+    ctx.fillStyle = '#2C3E50';
+    ctx.fillRect(15, yPos, canvas.width - 30, 35);
+    
+    ctx.fillStyle = '#FFFFFF';
+    ctx.textAlign = 'right';
+    ctx.fillText('Item', canvas.width - 25, yPos + 10);
+    ctx.textAlign = 'center';
+    ctx.fillText('Amount (DZD)', canvas.width / 2, yPos + 10);
+    ctx.textAlign = 'left';
+    ctx.fillText('Qty', 30, yPos + 10);
+    
+    yPos += 35;
+    
+    // Data Row
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(15, yPos, canvas.width - 30, 35);
+    
+    ctx.fillStyle = '#000000';
+    ctx.textAlign = 'right';
+    ctx.font = '16px "Arial", sans-serif';
+    ctx.fillText(data.className, canvas.width - 25, yPos + 10);
+    ctx.textAlign = 'center';
+    ctx.fillText(this.formatAmount(data.amount), canvas.width / 2, yPos + 10);
+    ctx.textAlign = 'left';
+    ctx.fillText('1', 30, yPos + 10);
+    
+    yPos += 35;
+    ctx.strokeRect(15, yPos, canvas.width - 30, 35);
+    ctx.textAlign = 'right';
+    ctx.fillText(`Period: ${data.month}`, canvas.width - 25, yPos + 10);
+    
+    yPos += 50;
+    
+    // Total
+    this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
+    yPos += 20;
+    
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 22px "Arial", sans-serif';
+    ctx.fillStyle = '#000000';
+    ctx.fillText('TOTAL AMOUNT:', canvas.width / 2, yPos);
+    
+    yPos += 50;
+    this.drawSingleLine(ctx, 10, yPos, canvas.width - 20, '#FF0000');
+    yPos += 30;
+    
+    ctx.font = 'bold 28px "Arial", sans-serif';
+    ctx.fillStyle = '#E74C3C';
+    ctx.fillText(`${this.formatAmount(data.amount)} DZD`, canvas.width / 2, yPos);
+    
+    yPos += 40;
+    this.drawDecorationLine(ctx, 10, yPos, canvas.width - 20);
+    yPos += 30;
+    
+    // Notes
+    if (data.notes && data.notes.trim()) {
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 16px "Arial", sans-serif';
+      ctx.fillStyle = '#2C3E50';
+      ctx.fillText('Notes:', canvas.width - 15, yPos);
+      yPos += 25;
+      
+      ctx.font = '14px "Arial", sans-serif';
+      ctx.fillStyle = '#000000';
+      
+      const lines = this.splitTextIntoLines(ctx, data.notes, canvas.width - 30, 14);
+      lines.forEach((lineText: string) => {
+        if (yPos < canvas.height - 150) {
+          ctx.fillText(lineText.trim(), canvas.width - 15, yPos);
+          yPos += 20;
+        }
+      });
+    }
+    
+    // Footer
+    ctx.textAlign = 'center';
+    ctx.font = '14px "Arial", sans-serif';
+    ctx.fillStyle = '#2C3E50';
+    
+    const footerItems = [
+      'Education Management System',
+      `Developed by: ${this.DEVELOPER_NAME}`,
+      this.FOOTER_TEXT,
+      'Official Receipt - Please keep for reference'
+    ];
+    
+    let footerY = canvas.height - 110;
+    footerItems.forEach(item => {
+      ctx.fillText(item, canvas.width / 2, footerY);
+      footerY += 22;
+    });
+    
+    ctx.font = 'bold 16px "Arial", sans-serif';
+    ctx.fillStyle = '#27AE60';
+    ctx.fillText('Thank you for your trust', canvas.width / 2, canvas.height - 25);
+    
+    return canvas;
+  }
+
+  /**
+   * إنشاء Canvas للإيصال الجماعي - أرقام عالمية (0-9)
+   */
   async createBulkReceiptCanvas(data: BulkReceiptData): Promise<HTMLCanvasElement> {
     const paymentRowHeight = 35;
     const headerHeight = 380;
-    const notesHeight = data.notes ? this.calculateNotesHeight(data.notes, this.CANVAS_WIDTH - 30, 16) : 0;
+    const notesHeight = data.notes ? this.calculateNotesHeight(data.notes, this.CANVAS_WIDTH - 30, 14) : 0;
     const dynamicHeight = headerHeight + (data.payments.length * paymentRowHeight) + notesHeight + 150;
     
     const canvas = document.createElement('canvas');
@@ -377,49 +532,43 @@ private delay(ms: number): Promise<void> {
     
     const ctx = canvas.getContext('2d')!;
     
-    // خلفية بيضاء
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // === تنسيق النص ===
     ctx.fillStyle = '#000000';
     ctx.textBaseline = 'top';
     
-    // === رأس الإيصال ===
+    // Header
     ctx.textAlign = 'center';
-    ctx.font = 'bold 30px "Arial", sans-serif';
-    ctx.fillText('أكاديمية الرواد للتعليم والمعارف', canvas.width / 2, 10);
+    ctx.font = 'bold 28px "Arial", sans-serif';
+    ctx.fillText('ROUAD AL-MAARIFA ACADEMY', canvas.width / 2, 10);
     
-    // معلومات المؤسسة
-    ctx.font = '16px "Arial", sans-serif';
-    ctx.fillText('الجزائر ، ولاية تقرت', canvas.width / 2, 45);
-    ctx.fillText('الهاتف : 0673586274', canvas.width / 2, 65);
+    ctx.font = '14px "Arial", sans-serif';
+    ctx.fillText('Algeria, Touggourt', canvas.width / 2, 45);
+    ctx.fillText('Phone: +213 673586274', canvas.width / 2, 65);
     
-    // خط فاصل
     this.drawDoubleLine(ctx, 10, 85, canvas.width - 20);
     
-    // === معلومات الإيصال ===
     let yPos = 105;
     
     ctx.textAlign = 'center';
     ctx.font = 'bold 22px "Arial", sans-serif';
-    ctx.fillText('إيصـــــــال دفـــــــع جماعي', canvas.width / 2, yPos);
+    ctx.fillText('BULK PAYMENT RECEIPT', canvas.width / 2, yPos);
     
     yPos += 30;
     this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
     yPos += 10;
     
-    // معلومات أساسية بالأرقام العربية
+    // Info
     ctx.textAlign = 'right';
-    ctx.font = '18px "Arial", sans-serif';
+    ctx.font = '16px "Arial", sans-serif';
     
     const infoItems = [
-      { label: 'رقم الإيصال:', value: this.formatNumberArabic(data.receiptNumber) },
-      { label: 'التاريخ:', value: this.formatDateTimeArabic(data.date) },
-      { label: 'الوقت:', value: this.formatDateTimeArabic(data.time) },
-      { label: 'طريقة الدفع:', value: this.translatePaymentMethod(data.paymentMethod) },
-      { label: 'عدد الدفعات:', value: this.formatNumberArabic(data.paymentCount.toString()) },
-      { label: 'عدد الطلاب:', value: this.formatNumberArabic(data.studentCount.toString()) }
+      { label: 'Receipt No:', value: data.receiptNumber },
+      { label: 'Date:', value: data.date },
+      { label: 'Time:', value: data.time },
+      { label: 'Payment Method:', value: this.translatePaymentMethod(data.paymentMethod) },
+      { label: 'Number of Payments:', value: data.paymentCount.toString() },
+      { label: 'Number of Students:', value: data.studentCount.toString() }
     ];
     
     infoItems.forEach(item => {
@@ -431,54 +580,43 @@ private delay(ms: number): Promise<void> {
     this.drawDoubleLine(ctx, 10, yPos, canvas.width - 20);
     yPos += 20;
     
-    // === تفاصيل الدفعات ===
+    // Payment Details Table
     ctx.textAlign = 'center';
-    ctx.font = 'bold 22px "Arial", sans-serif';
-    ctx.fillText('تفاصيل الدفعات', canvas.width / 2, yPos);
+    ctx.font = 'bold 20px "Arial", sans-serif';
+    ctx.fillText('Payment Details', canvas.width / 2, yPos);
     yPos += 35;
     
-    // أبعاد الأعمدة
     const columnWidths = {
-      studentName: (canvas.width - 30) * 0.4,
+      studentName: (canvas.width - 30) * 0.40,
       className: (canvas.width - 30) * 0.25,
-      month: (canvas.width - 30) * 0.25,
-      amount: (canvas.width - 30) * 0.1
+      month: (canvas.width - 30) * 0.20,
+      amount: (canvas.width - 30) * 0.15
     };
     
-    // رأس الجدول
+    // Table Header
     ctx.fillStyle = '#2C3E50';
     ctx.fillRect(15, yPos, canvas.width - 30, 35);
     
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 16px "Arial", sans-serif';
+    ctx.font = 'bold 14px "Arial", sans-serif';
     
-    // أعمدة الجدول
     let xPos = 20;
-    
-    // عمود الشهر
     ctx.textAlign = 'left';
-    ctx.fillText('الشهر', xPos, yPos + 10);
+    ctx.fillText('Month', xPos, yPos + 10);
     xPos += columnWidths.month;
-    
-    // عمود الحصة
     ctx.textAlign = 'center';
-    ctx.fillText('الحصة', xPos + columnWidths.className / 2, yPos + 10);
+    ctx.fillText('Class', xPos + columnWidths.className / 2, yPos + 10);
     xPos += columnWidths.className;
-    
-    // عمود المبلغ (بالأرقام العربية)
     ctx.textAlign = 'center';
-    ctx.fillText('المبلغ', xPos + columnWidths.amount / 2, yPos + 10);
+    ctx.fillText('Amount', xPos + columnWidths.amount / 2, yPos + 10);
     xPos += columnWidths.amount;
-    
-    // عمود اسم الطالب
     ctx.textAlign = 'right';
-    ctx.fillText('اسم الطالب', canvas.width - 20, yPos + 10);
+    ctx.fillText('Student Name', canvas.width - 20, yPos + 10);
     
     yPos += 35;
     
-    // صفوف البيانات
+    // Data Rows
     data.payments.forEach((payment, index) => {
-      // تناوب ألوان الصفوف
       if (index % 2 === 0) {
         ctx.fillStyle = '#F8F9FA';
       } else {
@@ -487,33 +625,22 @@ private delay(ms: number): Promise<void> {
       
       ctx.fillRect(15, yPos, canvas.width - 30, 35);
       
-      // حدود الصف
       ctx.fillStyle = '#000000';
       ctx.strokeStyle = '#DEE2E6';
       ctx.lineWidth = 1;
       ctx.strokeRect(15, yPos, canvas.width - 30, 35);
       
-      // إعادة ضبط X لكل عمود
       let cellX = 20;
-      
-      // بيانات الشهر
       ctx.textAlign = 'left';
-      ctx.font = '16px "Arial", sans-serif';
+      ctx.font = '14px "Arial", sans-serif';
       ctx.fillText(payment.month, cellX, yPos + 10);
       cellX += columnWidths.month;
-      
-      // بيانات الحصة
       ctx.textAlign = 'center';
       ctx.fillText(payment.className, cellX + columnWidths.className / 2, yPos + 10);
       cellX += columnWidths.className;
-      
-      // بيانات المبلغ (بالأرقام العربية)
       ctx.textAlign = 'center';
-      const amountText = this.formatAmountArabic(payment.amount);
-      ctx.fillText(amountText, cellX + columnWidths.amount / 2, yPos + 10);
+      ctx.fillText(this.formatAmount(payment.amount), cellX + columnWidths.amount / 2, yPos + 10);
       cellX += columnWidths.amount;
-      
-      // بيانات اسم الطالب
       ctx.textAlign = 'right';
       ctx.fillText(payment.studentName, canvas.width - 20, yPos + 10);
       
@@ -522,14 +649,14 @@ private delay(ms: number): Promise<void> {
     
     yPos += 20;
     
-    // === الإجمالي ===
+    // Total
     this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
     yPos += 20;
     
     ctx.textAlign = 'center';
-    ctx.font = 'bold 24px "Arial", sans-serif';
+    ctx.font = 'bold 22px "Arial", sans-serif';
     ctx.fillStyle = '#000000';
-    ctx.fillText('المجموع الإجمالي:', canvas.width / 2, yPos);
+    ctx.fillText('GRAND TOTAL:', canvas.width / 2, yPos);
     
     yPos += 50;
     this.drawSingleLine(ctx, 10, yPos, canvas.width - 20, '#FF0000');
@@ -537,418 +664,73 @@ private delay(ms: number): Promise<void> {
     
     ctx.font = 'bold 28px "Arial", sans-serif';
     ctx.fillStyle = '#E74C3C';
-    const totalAmountText = this.formatAmountArabic(data.totalAmount);
-    ctx.fillText(`${totalAmountText} دينار جزائري`, canvas.width / 2, yPos);
+    ctx.fillText(`${this.formatAmount(data.totalAmount)} DZD`, canvas.width / 2, yPos);
     
     yPos += 40;
     
-    // === الملاحظات ===
+    // Notes
     if (data.notes && data.notes.trim()) {
       ctx.textAlign = 'right';
-      ctx.font = 'bold 18px "Arial", sans-serif';
+      ctx.font = 'bold 16px "Arial", sans-serif';
       ctx.fillStyle = '#2C3E50';
-      ctx.fillText('ملاحظات:', canvas.width - 15, yPos);
+      ctx.fillText('Notes:', canvas.width - 15, yPos);
       yPos += 25;
       
-      ctx.font = '16px "Arial", sans-serif';
+      ctx.font = '14px "Arial", sans-serif';
       ctx.fillStyle = '#000000';
-      
-      const lines = this.splitTextIntoLines(ctx, data.notes, canvas.width - 30, 16);
-      
+      const lines = this.splitTextIntoLines(ctx, data.notes, canvas.width - 30, 14);
       lines.forEach((lineText: string) => {
         if (yPos < canvas.height - 150) {
           ctx.fillText(lineText.trim(), canvas.width - 15, yPos);
-          yPos += 22;
+          yPos += 20;
         }
       });
-      
-      yPos += 10;
     }
     
-    // === التذييل ===
+    // Footer
     ctx.textAlign = 'center';
-    ctx.font = '16px "Arial", sans-serif';
+    ctx.font = '14px "Arial", sans-serif';
     ctx.fillStyle = '#2C3E50';
     
     const footerItems = [
-      'دفع جماعي - نظام إدارة التعليم',
-      'مطور بواسطة: ريدوكس',
-      'هذا إيصال رسمي - يرجى الاحتفاظ به للمراجعة',
-      `عدد الدفعات: ${this.formatNumberArabic(data.paymentCount.toString())} | عدد الطلاب: ${this.formatNumberArabic(data.studentCount.toString())}`
+      'Bulk Payment - Education Management System',
+      `Developed by: ${this.DEVELOPER_NAME}`,
+      'Official Receipt - Please keep for reference',
+      `Payments: ${data.paymentCount} | Students: ${data.studentCount}`
     ];
     
-    let footerY = canvas.height - 120;
+    let footerY = canvas.height - 110;
     footerItems.forEach(item => {
       ctx.fillText(item, canvas.width / 2, footerY);
-      footerY += 25;
+      footerY += 22;
     });
     
-    // === رسالة الشكر ===
-    ctx.font = 'bold 18px "Arial", sans-serif';
+    ctx.font = 'bold 16px "Arial", sans-serif';
     ctx.fillStyle = '#27AE60';
-    ctx.fillText('شكراً لثقتكم thank for your trust ', canvas.width / 2, canvas.height - 30);
+    ctx.fillText('Thank you for your trust', canvas.width / 2, canvas.height - 25);
     
     return canvas;
   }
 
-/**
- * طباعة إيصال واحد لدفعات متعددة
- */
+  // ==================== IMAGE PROCESSING ====================
 
-
-private formatAmountEnglish(amount: number): string {
-  // تنسيق الأرقام بالإنجليزية مع فواصل
-  return amount.toLocaleString('en-US') + ' د.ج';
-}
-private splitTextIntoLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, fontSize: number): string[] {
-  ctx.font = `${fontSize}px "Arial", sans-serif`;
-  const words = text.split(' ');
-  let line = '';
-  const lines: string[] = [];
-  
-  for (const word of words) {
-    const testLine = line + word + ' ';
-    const metrics = ctx.measureText(testLine);
-    
-    if (metrics.width > maxWidth && line !== '') {
-      lines.push(line);
-      line = word + ' ';
-    } else {
-      line = testLine;
-    }
-  }
-  
-  if (line) {
-    lines.push(line);
-  }
-  
-  return lines;
-}
-private calculateNotesHeight(notes: string, maxWidth: number, fontSize: number): number {
-  // حساب ارتفاع الملاحظات ديناميكياً
-  const tempCanvas = document.createElement('canvas');
-  const tempCtx = tempCanvas.getContext('2d')!;
-  tempCtx.font = `${fontSize}px "Arial", sans-serif`;
-  
-  const lines = this.splitTextIntoLines(tempCtx, notes, maxWidth, fontSize);
-  return (lines.length * 22) + 40; // 22px لكل سطر + 40px للرأس والهامش
-}
-
-
-
-async printBulkReceipt(data: BulkReceiptData): Promise<boolean> {
-  if (!this.isConnected) {
-    const connected = await this.connectToThermalPrinter();
-    if (!connected) {
-      this.showError('فشل الاتصال بالطابعة');
-      return false;
-    }
-  }
-
-  try {
-    this.showLoading('جاري إنشاء الإيصال الجماعي...');
-
-    // إنشاء Canvas للإيصال الجماعي
-    const canvas = await this.createBulkReceiptCanvas(data);
-    
-    // تحويل Canvas إلى صورة نقطية
-    const rasterData = this.canvasToRaster(canvas);
-    
-    this.showLoading('جاري الطباعة...');
-    
-    // طباعة الصورة النقطية
-    const success = await this.printRasterImage(rasterData, canvas);
-    
-    if (success) {
-      this.showSuccessToast('تم طباعة الإيصال الجماعي بنجاح');
-      return true;
-    } else {
-      throw new Error('فشل الطباعة');
-    }
-
-  } catch (err: any) {
-    this.handleError(err);
-    return false;
-  }
-}
-
-  /**
-   * إنشاء وإعداد Canvas للفاتورة بتصميم احترافي
-   */
-/**
- * إنشاء وإعداد Canvas للفاتورة بتصميم احترافي
- */
-async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
-  const canvas = document.createElement('canvas');
-  canvas.width = this.CANVAS_WIDTH;
-  canvas.height = this.CANVAS_HEIGHT;
-  
-  const ctx = canvas.getContext('2d')!;
-  
-  // خلفية بيضاء
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
-  // === تنسيق النص ===
-  ctx.fillStyle = '#000000';
-  ctx.textBaseline = 'top';
-  
-  // === رأس الإيصال ===
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 30px "Arial", sans-serif';
-  ctx.fillText('أكاديمية الرواد للتعليم والمعارف', canvas.width / 2, 10);
-  
-  // معلومات المؤسسة
-  ctx.font = '16px "Arial", sans-serif';
-  ctx.fillText('الجزائر ، ولاية تقرت', canvas.width / 2, 45);
-  ctx.fillText('الهاتف : 0673586274', canvas.width / 2, 65);
-  
-  // خط فاصل
-  this.drawDoubleLine(ctx, 10, 85, canvas.width - 20);
-  
-  // === معلومات الإيصال ===
-  let yPos = 105;
-  
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 22px "Arial", sans-serif';
-  ctx.fillText('إيصـــــــال دفـــــــع', canvas.width / 2, yPos);
-  
-  yPos += 30;
-  this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
-  yPos += 10;
-  
-  // معلومات أساسية بالأرقام العربية
-  ctx.textAlign = 'right';
-  ctx.font = '18px "Arial", sans-serif';
-  
-  const infoItems = [
-    { label: 'رقم الإيصال:', value: this.formatNumberArabic(data.receiptNumber) },
-    { label: 'التاريخ:', value: this.formatDateTimeArabic(data.date) },
-    { label: 'الوقت:', value: this.formatDateTimeArabic(data.time) },
-    { label: 'طريقة الدفع:', value: this.translatePaymentMethod(data.paymentMethod) }
-  ];
-  
-  infoItems.forEach(item => {
-    ctx.fillText(`${item.label} ${item.value}`, canvas.width - 15, yPos);
-    yPos += 25;
-  });
-  
-  yPos += 10;
-  this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
-  yPos += 15;
-  
-  // === معلومات الطالب ===
-  ctx.font = 'bold 20px "Arial", sans-serif';
-  ctx.fillText('معلومات الطالب', canvas.width - 15, yPos);
-  yPos += 30;
-  
-  ctx.font = '18px "Arial", sans-serif';
-  
-  const studentInfo = [
-    { label: 'الاســـم:', value: data.studentName },
-    { label: 'رقم التسجيل:', value: this.formatNumberArabic(data.studentId) },
-    { label: 'الصف:', value: data.className },
-    { label: 'المستوى:', value: data.academicYear || 'غير محدد' },
-    { label: 'هاتف ولي الأمر:', value: this.formatNumberArabic(data.parentPhone || 'غير محدد') }
-  ];
-  
-  studentInfo.forEach(item => {
-    if (item.value) {
-      ctx.fillText(`${item.label} ${item.value}`, canvas.width - 15, yPos);
-      yPos += 25;
-    }
-  });
-  
-  yPos += 10;
-  this.drawDoubleLine(ctx, 10, yPos, canvas.width - 20);
-  yPos += 20;
-  
-  // === تفاصيل الدفع ===
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 22px "Arial", sans-serif';
-  ctx.fillText('تفاصيل الدفع', canvas.width / 2, yPos);
-  yPos += 35;
-  
-  // رأس الجدول
-  ctx.fillStyle = '#2C3E50';
-  ctx.fillRect(15, yPos, canvas.width - 30, 35);
-  
-  ctx.fillStyle = '#FFFFFF';
-  ctx.textAlign = 'right';
-  ctx.fillText('البند', canvas.width - 25, yPos + 10);
-  
-  ctx.textAlign = 'center';
-  ctx.fillText('المبلغ (دج)', canvas.width / 2, yPos + 10);
-  
-  ctx.textAlign = 'left';
-  ctx.fillText('الكمية', 30, yPos + 10);
-  
-  yPos += 35;
-  
-  // صف البيانات - المبلغ بالأرقام العربية
-  ctx.fillStyle = '#FFFFFF';
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(15, yPos, canvas.width - 30, 35);
-  
-  ctx.fillStyle = '#000000';
-  ctx.textAlign = 'right';
-  ctx.font = '18px "Arial", sans-serif';
-  ctx.fillText(data.className, canvas.width - 25, yPos + 10);
-  
-  ctx.textAlign = 'center';
-  ctx.fillText(this.formatAmountArabic(data.amount), canvas.width / 2, yPos + 10);
-  
-  ctx.textAlign = 'left';
-  ctx.fillText('1', 30, yPos + 10);
-  
-  yPos += 35;
-  
-  // الفترة
-  ctx.strokeRect(15, yPos, canvas.width - 30, 35);
-  ctx.textAlign = 'right';
-  ctx.fillText(`لفترة: ${data.month}`, canvas.width - 25, yPos + 10);
-  
-  yPos += 50;
-  
-  // === الإجمالي - منفصل عن الجدول ===
-  this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
-  yPos += 20;
-  
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 24px "Arial", sans-serif';
-  ctx.fillStyle = '#000000';
-  ctx.fillText('الإجمالي المستحق:', canvas.width / 2, yPos);
-  
-  yPos += 50;
-  this.drawSingleLine(ctx, 10, yPos, canvas.width - 20, '#FF0000');
-  yPos += 30;
-  
-  ctx.font = 'bold 28px "Arial", sans-serif';
-  ctx.fillStyle = '#E74C3C';
-  ctx.fillText(this.formatAmountArabic(data.amount), canvas.width / 2, yPos);
-  
-  yPos += 40;
-  
-  // خط فاصل زخرفي
-  this.drawDecorationLine(ctx, 10, yPos, canvas.width - 20);
-  yPos += 30;
-  
-  // === الملاحظات ===
-  if (data.notes && data.notes.trim()) {
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 18px "Arial", sans-serif';
-    ctx.fillStyle = '#2C3E50';
-    ctx.fillText('ملاحظات:', canvas.width - 15, yPos);
-    yPos += 25;
-    
-    ctx.font = '16px "Arial", sans-serif';
-    ctx.fillStyle = '#000000';
-    
-    // تقسيم النص إذا كان طويلاً
-    const maxWidth = canvas.width - 30;
-    const words = data.notes.split(' ');
-    let line = '';
-    const lines: string[] = [];
-    
-    for (const word of words) {
-      const testLine = line + word + ' ';
-      const metrics = ctx.measureText(testLine);
-      
-      if (metrics.width > maxWidth && line !== '') {
-        lines.push(line);
-        line = word + ' ';
-      } else {
-        line = testLine;
-      }
-    }
-    
-    if (line) {
-      lines.push(line);
-    }
-    
-    // رسم الأسطر
-    lines.forEach((lineText: string, index: number) => {
-      if (yPos < canvas.height - 150) {
-        ctx.fillText(lineText.trim(), canvas.width - 15, yPos);
-        yPos += 22;
-      }
-    });
-    
-    yPos += 10;
-  }
-  
-  // === QR Code ===
-  const qrCanvas = this.generateQRCode(this.QR_CODE_TEXT);
-  const qrSize = 80;
-  const qrX = canvas.width - qrSize - 20;
-  const qrY = canvas.height - qrSize - 120;
-  
-  ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
-  
-  ctx.textAlign = 'center';
-  ctx.font = '12px "Arial", sans-serif';
-  ctx.fillStyle = '#666666';
-  ctx.fillText('المسح للتحقق', qrX + qrSize/2, qrY + qrSize + 15);
-  
-  // === التذييل ===
-  ctx.textAlign = 'center';
-  ctx.font = '16px "Arial", sans-serif';
-  ctx.fillStyle = '#2C3E50';
-  
-  const footerItems = [
-    'نظام إدارة التعليم',
-    'مطور بواسطة: ريدوكس',
-    this.FOOTER_TEXT,
-    'هذا إيصال رسمي - يرجى الاحتفاظ به للمراجعة'
-  ];
-  
-  let footerY = canvas.height - 90;
-  footerItems.forEach(item => {
-    ctx.fillText(item, canvas.width / 2, footerY);
-    footerY += 40;
-  });
-  
-  // === رسالة الشكر ===
-  ctx.font = 'bold 18px "Arial", sans-serif';
-  ctx.fillStyle = '#27AE60';
-  ctx.fillText('شكراً لثقتكم الغالية', canvas.width / 2, canvas.height - 20);
-  
-  return canvas;
-}
-
-
-  /**
-   * تحويل الأرقام إلى عربية صحيحة
-   */
-
-
-  /**
-   * تحسين تحويل Canvas إلى صورة نقطية للطابعة الحرارية
-   */
   private canvasToRaster(canvas: HTMLCanvasElement): Uint8Array {
     const ctx = canvas.getContext('2d')!;
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
     
-    // حساب عرض الصورة بالبايت
     const widthBytes = Math.ceil(canvas.width / 8);
     const rasterData = new Uint8Array(widthBytes * canvas.height);
-    
-    // تعبئة كل البايتات بالصفر
     rasterData.fill(0);
     
     for (let y = 0; y < canvas.height; y++) {
       for (let x = 0; x < canvas.width; x++) {
         const i = (y * canvas.width + x) * 4;
-        
-        // تحويل RGB إلى grayscale
         const red = data[i];
         const green = data[i + 1];
         const blue = data[i + 2];
         const gray = Math.floor((red * 0.3 + green * 0.59 + blue * 0.11));
         
-        // إذا كان اللون داكن (العتبة يمكن ضبطها)
         if (gray < 200) {
           const byteIndex = Math.floor(y * widthBytes + x / 8);
           const bitIndex = 7 - (x % 8);
@@ -961,139 +743,61 @@ async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
   }
 
   /**
-   * تحسين الطباعة للطابعات الحرارية
+   * طباعة الصورة النقطية
    */
-  private async printRasterImage(rasterData: Uint8Array, canvas: HTMLCanvasElement): Promise<boolean> {
-    try {
-      if (!this.writer) {
-        throw new Error('الطابعة غير متصلة');
-      }
+  private async printRasterImage(rasterData: Uint8Array, canvas: HTMLCanvasElement): Promise<void> {
+    if (!this.device || this.endpointNumber === null) {
+      throw new Error('Printer is not connected');
+    }
 
-      const widthBytes = Math.ceil(canvas.width / 8);
-      const height = canvas.height;
+    const widthBytes = Math.ceil(canvas.width / 8);
+    const height = canvas.height;
 
-      // رأس أمر الطباعة النقطية لطابعات ESC/POS
-      const header = new Uint8Array([
-        0x1D, 0x76, 0x30, 0x00, // أمر طباعة الصورة النقطية
-        widthBytes & 0xFF,
-        (widthBytes >> 8) & 0xFF,
-        height & 0xFF,
-        (height >> 8) & 0xFF
-      ]);
+    const header = new Uint8Array([
+      0x1D, 0x76, 0x30, 0x00,
+      widthBytes & 0xFF,
+      (widthBytes >> 8) & 0xFF,
+      height & 0xFF,
+      (height >> 8) & 0xFF
+    ]);
 
-      // تهيئة الطابعة
-      await this.writer.write(new Uint8Array([
-        0x1B, 0x40, // تهيئة الطابعة
-        0x1B, 0x33, 0x24, // ضبط تباعد الأسطر
-      ]));
+    await this.writeToPrinter(new Uint8Array([0x1B, 0x40]));
+    await this.writeToPrinter(new Uint8Array([0x1B, 0x33, 0x24]));
+    await this.writeToPrinter(new Uint8Array([0x1D, 0x57, (this.CANVAS_WIDTH / 8) & 0xFF, 0x00]));
+    await this.writeToPrinter(header);
 
-      // تحديد عرض الطباعة (576 نقطة لـ 80 مم)
-      await this.writer.write(new Uint8Array([0x1D, 0x57, (this.CANVAS_WIDTH / 8) & 0xFF, 0x00]));
-
-      // إرسال رأس الصورة
-      await this.writer.write(header);
-
-      // إرسال بيانات الصورة على شكل قطع
-      const CHUNK_SIZE = 1024;
-      for (let i = 0; i < rasterData.length; i += CHUNK_SIZE) {
-        const chunk = rasterData.slice(i, i + CHUNK_SIZE);
-        await this.writer.write(chunk);
-        // تأخير بسيط لضمان استقرار البيانات
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
-
-      // قص الورقة (إذا كانت الطابعة تدعم)
-      await this.writer.write(new Uint8Array([0x1D, 0x56, 0x41, 0x03]));
-
-      // تقدم الورقة لقطعها
-      await this.writer.write(new Uint8Array([0x1B, 0x64, 0x05]));
-
-      return true;
-
-    } catch (error) {
-      console.error('❌ خطأ في طباعة الصورة النقطية:', error);
-      throw error;
+    const CHUNK_SIZE = 1024;
+    for (let i = 0; i < rasterData.length; i += CHUNK_SIZE) {
+      const chunk = rasterData.slice(i, i + CHUNK_SIZE);
+      await this.writeToPrinter(chunk);
+      await new Promise(resolve => setTimeout(resolve, 10));
     }
   }
 
-  /**
-   * طباعة إيصال احترافي مع الصورة النقطية
-   */
-  async printProfessionalReceipt(data: ReceiptData): Promise<boolean> {
-    if (!this.isConnected) {
-      const connected = await this.connectToThermalPrinter();
-      if (!connected) {
-        this.showError('فشل الاتصال بالطابعة');
-        return false;
-      }
-    }
+  // ==================== DRAWING HELPERS ====================
 
-    try {
-      this.showLoading('جاري إنشاء الإيصال...');
-
-      // إنشاء Canvas للفاتورة
-      const canvas = await this.createReceiptCanvas(data);
-      
-      // تحويل Canvas إلى صورة نقطية
-      const rasterData = this.canvasToRaster(canvas);
-      
-      this.showLoading('جاري الطباعة...');
-      
-      // طباعة الصورة النقطية
-      const success = await this.printRasterImage(rasterData, canvas);
-      
-      if (success) {
-        this.showSuccessToast('تم طباعة الإيصال بنجاح');
-        return true;
-      } else {
-        throw new Error('فشل الطباعة');
-      }
-
-    } catch (err: any) {
-      this.handleError(err);
-      return false;
-    }
-  }
-
-  // ===== الدوال المساعدة للرسم =====
-
-  /**
-   * رسم خط مفرد
-   */
   private drawSingleLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, color: string = '#000000'): void {
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
-    
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + width, y);
     ctx.stroke();
   }
   
-  /**
-   * رسم خط مزدوج
-   */
   private drawDoubleLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, color: string = '#000000'): void {
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
-    
-    // الخط العلوي
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + width, y);
     ctx.stroke();
-    
-    // الخط السفلي
     ctx.beginPath();
     ctx.moveTo(x, y + 2);
     ctx.lineTo(x + width, y + 2);
     ctx.stroke();
   }
   
-  
-  /**
-   * رسم خط زخرفي
-   */
   private drawDecorationLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number): void {
     const segmentWidth = 10;
     const gapWidth = 5;
@@ -1112,33 +816,74 @@ async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
     ctx.stroke();
   }
 
+  // ==================== FORMATTING HELPERS ====================
+
+  /**
+   * تنسيق المبلغ بالأرقام العالمية (0-9)
+   */
+  private formatAmount(amount: number): string {
+    return amount.toLocaleString('en-US');
+  }
+
   /**
    * ترجمة طريقة الدفع
    */
   private translatePaymentMethod(method: string): string {
     const methods: { [key: string]: string } = {
-      'cash': 'نقداً',
-      'bank': 'تحويل بنكي',
-      'card': 'بطاقة ائتمان',
-      'check': 'شيك',
-      'online': 'دفع إلكتروني',
-      'mobile': 'دفع محمول'
+      'cash': 'Cash',
+      'bank': 'Bank Transfer',
+      'card': 'Credit Card',
+      'check': 'Check',
+      'online': 'Online Payment',
+      'mobile': 'Mobile Payment'
     };
     return methods[method.toLowerCase()] || method;
   }
 
-  // ===== دوال العرض والإخطار =====
+  /**
+   * تقسيم النص إلى أسطر
+   */
+  private splitTextIntoLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, fontSize: number): string[] {
+    ctx.font = `${fontSize}px "Arial", sans-serif`;
+    const words = text.split(' ');
+    let line = '';
+    const lines: string[] = [];
+    
+    for (const word of words) {
+      const testLine = line + word + ' ';
+      const metrics = ctx.measureText(testLine);
+      if (metrics.width > maxWidth && line !== '') {
+        lines.push(line);
+        line = word + ' ';
+      } else {
+        line = testLine;
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  /**
+   * حساب ارتفاع الملاحظات
+   */
+  private calculateNotesHeight(notes: string, maxWidth: number, fontSize: number): number {
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d')!;
+    tempCtx.font = `${fontSize}px "Arial", sans-serif`;
+    const lines = this.splitTextIntoLines(tempCtx, notes, maxWidth, fontSize);
+    return (lines.length * 20) + 40;
+  }
+
+  // ==================== UI HELPERS ====================
 
   private showConnectionError(err: any): void {
-    let errorMessage = '❌ خطأ في الاتصال بالطابعة: ';
+    let errorMessage = '❌ Connection error: ';
     if (err.message.includes('permission') || err.name === 'SecurityError') {
-      errorMessage += 'يجب منح الصلاحية للوصول إلى الطابعة';
+      errorMessage += 'Please grant permission to access the printer';
     } else if (err.message.includes('supported')) {
-      errorMessage += 'هذه الميزة غير مدعومة في متصفحك. الرجاء استخدام Chrome أو Edge';
+      errorMessage += 'WebUSB is not supported in this browser. Please use Chrome or Edge';
     } else if (err.message.includes('No device selected')) {
-      errorMessage += 'لم يتم اختيار طابعة';
-    } else if (err.message.includes('baudRate')) {
-      errorMessage += 'معدل الباود غير صحيح. تأكد من ضبط الطابعة على 115200 باود';
+      errorMessage += 'No printer was selected';
     } else {
       errorMessage += err.message;
     }
@@ -1146,10 +891,10 @@ async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
     this.ngZone.run(() => {
       Swal.fire({
         icon: 'error',
-        title: 'خطأ',
+        title: 'Error',
         text: errorMessage,
-        confirmButtonText: 'حسناً',
-        footer: '<small>تأكد من أن الطابعة متصلة وتعمل بشكل صحيح</small>'
+        confirmButtonText: 'OK',
+        footer: '<small>Make sure the printer is connected via USB and working properly</small>'
       });
     });
   }
@@ -1158,7 +903,7 @@ async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
     this.ngZone.run(() => {
       Swal.fire({
         icon: 'success',
-        title: '✅ نجاح',
+        title: '✅ Success',
         text: message,
         timer: 2000,
         showConfirmButton: false,
@@ -1182,529 +927,26 @@ async createReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
   }
 
   private handleError(err: any): void {
-    console.error('❌ خطأ في الطابعة:', err);
-    
+    console.error('❌ Printer error:', err);
     this.ngZone.run(() => {
       Swal.fire({
         icon: 'error',
-        title: '❌ خطأ',
-        text: 'حدث خطأ أثناء الطباعة: ' + err.message,
-        confirmButtonText: 'حسناً'
+        title: '❌ Error',
+        text: 'Printing error: ' + err.message,
+        confirmButtonText: 'OK'
       });
     });
-    
     this.isConnected = false;
   }
 
-   private showError(message: string): void {
+  private showError(message: string): void {
     this.ngZone.run(() => {
       Swal.fire({
         icon: 'error',
-        title: 'خطأ',
+        title: 'Error',
         text: message,
-        confirmButtonText: 'حسناً'
+        confirmButtonText: 'OK'
       });
     });
-  }
-
-  // ===== الدوال العامة =====
-
-  /**
-   * قطع الاتصال بالطابعة
-   */
-  async disconnect(): Promise<void> {
-    try {
-      if (this.writer) {
-        await this.writer.releaseLock();
-        this.writer = null;
-      }
-      
-      if (this.reader) {
-        await this.reader.releaseLock();
-        this.reader = null;
-      }
-      
-      if (this.port) {
-        await this.port.close();
-        this.port = null;
-      }
-      
-      this.isConnected = false;
-      console.log('تم قطع الاتصال بالطابعة');
-      
-    } catch (err) {
-      console.error('خطأ في قطع الاتصال:', err);
-    }
-  }
-
-  /**
-   * التحقق من حالة الاتصال
-   */
-  checkConnectionStatus(): boolean {
-    return this.isConnected;
-  }
-
-  /**
-   * الحصول على حالة الطابعة
-   */
-  getPrinterStatus(): any {
-    return {
-      isConnected: this.isConnected,
-      port: this.port ? 'متصل' : 'غير متصل',
-      timestamp: new Date().toLocaleString('en-US'),
-      width: this.PRINT_WIDTH,
-      height: this.PRINT_HEIGHT,
-      academy: this.COMPANY_NAME,
-      developer: this.DEVELOPER_NAME
-    };
-  }
-
-  /**
-   * إنشاء إيصال دفع شهري
-   */
-  async printMonthlyPaymentReceipt(paymentData: any): Promise<boolean> {
-    const receiptData: ReceiptData = {
-      receiptNumber: `PAY-${Date.now().toString().slice(-8)}`,
-      date: new Date().toLocaleDateString('en-US'),
-      time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      studentName: paymentData.studentName || 'طالب',
-      studentId: paymentData.studentId || 'بدون رقم',
-      className: paymentData.className || 'مادة دراسية',
-      month: paymentData.month || 'شهر',
-      amount: paymentData.amount || 0,
-      paymentMethod: paymentData.paymentMethod || 'cash',
-      academicYear: paymentData.academicYear || '',
-      parentPhone: paymentData.parentPhone || '',
-      notes: 'تم سداد القسط الشهري بنجاح. نتمنى للطالب التوفيق والنجاح.'
-    };
-
-    return await this.printProfessionalReceipt(receiptData);
-  }
-
-  /**
-   * طباعة تقرير شهري للطالب
-   */
-  async printStudentMonthlyReport(studentData: any, attendanceData: any, paymentData: any): Promise<boolean> {
-    try {
-      const currentDate = new Date();
-      const receiptData: ReceiptData = {
-        receiptNumber: `RPT-${currentDate.getTime().toString().slice(-8)}`,
-        date: currentDate.toLocaleDateString('en-US'),
-        time: currentDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        studentName: studentData.name || 'طالب',
-        studentId: studentData.studentId || 'بدون رقم',
-        className: 'تقرير شهري شامل',
-        month: currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-        amount: paymentData.totalPaid || 0,
-        paymentMethod: 'تقرير',
-        academicYear: studentData.academicYear || '',
-        parentPhone: studentData.parentPhone || '',
-        notes: `نسبة الحضور: ${attendanceData.attendanceRate || 0}%\nحضور: ${attendanceData.present || 0} | غياب: ${attendanceData.absent || 0} | تأخر: ${attendanceData.late || 0}\nالمبلغ المدفوع: ${paymentData.totalPaid || 0} د.ج | المتبقي: ${paymentData.pending || 0} د.ج`
-      };
-
-      return await this.printProfessionalReceipt(receiptData);
-    } catch (error) {
-      console.error('خطأ في طباعة التقرير:', error);
-      return false;
-    }
-  }
-
-  /**
-   * طباعة صفحة اختبار متطورة
-   */
-  async printAdvancedTestPage(): Promise<boolean> {
-    if (!this.isConnected) {
-      const connected = await this.connectToThermalPrinter();
-      if (!connected) return false;
-    }
-
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = this.CANVAS_WIDTH;
-      canvas.height = 600;
-      
-      const ctx = canvas.getContext('2d')!;
-      
-      // خلفية
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#000000';
-      
-      // عنوان الصفحة
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 32px "Arial", sans-serif';
-      ctx.fillText('✨ صفحة اختبار الطابعة ✨', canvas.width / 2, 30);
-      
-      // معلومات الاختبار
-      ctx.font = '18px "Arial", sans-serif';
-      ctx.fillText(`العرض: ${this.CANVAS_WIDTH}px | الارتفاع: 600px`, canvas.width / 2, 70);
-      ctx.fillText('مقاس الورق: 80 مم | تصميم عربي', canvas.width / 2, 95);
-      
-      this.drawDoubleLine(ctx, 10, 110, canvas.width - 20);
-      
-      // اختبار الأرقام العربية
-      ctx.textAlign = 'right';
-      ctx.font = 'bold 24px "Arial", sans-serif';
-      ctx.fillText('اختبار الأرقام العربية:', canvas.width - 15, 130);
-      
-      ctx.font = '20px "Arial", sans-serif';
-      ctx.fillText(`الأرقام العادية: 1234567890`, canvas.width - 15, 160);
-      ctx.fillText(`الأرقام العربية: ${this.formatArabicNumber('1234567890')}`, canvas.width - 15, 190);
-      
-      this.drawSingleLine(ctx, 10, 210, canvas.width - 20);
-      
-      // اختبار الجدول
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 24px "Arial", sans-serif';
-      ctx.fillText('اختبار الجدول', canvas.width / 2, 230);
-      
-      // جدول بسيط
-      const tableY = 260;
-      ctx.fillStyle = '#2C3E50';
-      ctx.fillRect(15, tableY, canvas.width - 30, 35);
-      
-      ctx.fillStyle = '#FFFFFF';
-      ctx.textAlign = 'right';
-      ctx.fillText('البند', canvas.width - 25, tableY + 10);
-      
-      ctx.textAlign = 'center';
-      ctx.fillText('المبلغ', canvas.width / 2, tableY + 10);
-      
-      ctx.fillStyle = '#FFFFFF';
-      ctx.strokeStyle = '#000000';
-      ctx.strokeRect(15, tableY + 35, canvas.width - 30, 35);
-      
-      ctx.fillStyle = '#000000';
-      ctx.textAlign = 'right';
-      ctx.fillText('حصة رياضيات', canvas.width - 25, tableY + 45);
-      
-      ctx.textAlign = 'center';
-      ctx.fillText(this.formatArabicNumber('50000'), canvas.width / 2, tableY + 45);
-      
-      this.drawSingleLine(ctx, 10, tableY + 85, canvas.width - 20);
-      
-      // الإجمالي منفصل
-      const totalY = tableY + 105;
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 22px "Arial", sans-serif';
-      ctx.fillText('الإجمالي:', canvas.width / 2, totalY);
-      
-      ctx.font = 'bold 26px "Arial", sans-serif';
-      ctx.fillStyle = '#E74C3C';
-      ctx.fillText(`${this.formatArabicNumber('50000')} د.ج`, canvas.width / 2, totalY + 30);
-      
-      // رسالة النجاح
-      ctx.font = 'bold 28px "Arial", sans-serif';
-      ctx.fillStyle = '#27AE60';
-      ctx.fillText('✅ اختبار ناجح ✅', canvas.width / 2, 450);
-      
-      ctx.font = '20px "Arial", sans-serif';
-      ctx.fillStyle = '#000000';
-      ctx.fillText('التصميم الجديد بدون تداخل', canvas.width / 2, 490);
-      ctx.fillText('الأرقام العربية صحيحة', canvas.width / 2, 515);
-      
-      // التذييل
-      ctx.font = '16px "Arial", sans-serif';
-      ctx.fillStyle = '#666666';
-      ctx.fillText(this.COMPANY_NAME, canvas.width / 2, 550);
-      ctx.fillText(`نظام ${this.DEVELOPER_NAME}`, canvas.width / 2, 570);
-      
-      // تحويل وطباعة
-      const rasterData = this.canvasToRaster(canvas);
-      const success = await this.printRasterImage(rasterData, canvas);
-      
-      if (success) {
-        this.showSuccessToast('تم طباعة صفحة الاختبار بنجاح');
-        return true;
-      }
-      
-      return false;
-      
-    } catch (err: any) {
-      this.handleError(err);
-      return false;
-    }
-  }
-
-  /**
-   * اختبار سريع للطابعة
-   */
-  async quickTest(): Promise<boolean> {
-    try {
-      const testData: ReceiptData = {
-        receiptNumber: 'TEST-001',
-        date: new Date().toLocaleDateString('en-US'),
-        time: new Date().toLocaleTimeString('en-US'),
-        studentName: 'محمد أحمد علي',
-        studentId: 'STD-2024-001',
-        className: 'رياضيات - المستوى الأول',
-        month: 'يناير 2024',
-        amount: 50000,
-        paymentMethod: 'cash',
-        academicYear: '1AS',
-        parentPhone: '0551234567',
-        notes: 'هذا إيصال اختباري للتحقق من عمل الطابعة والأرقام العربية بشكل صحيح'
-      };
-
-      return await this.printProfessionalReceipt(testData);
-    } catch (error) {
-      console.error('فشل الاختبار السريع:', error);
-      return false;
-    }
-  }
-
-  /**
-   * طباعة رسالة ترحيبية
-   */
-  async printWelcomeMessage(): Promise<boolean> {
-    if (!this.isConnected) {
-      const connected = await this.connectToThermalPrinter();
-      if (!connected) return false;
-    }
-
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = this.CANVAS_WIDTH;
-      canvas.height = 400;
-      
-      const ctx = canvas.getContext('2d')!;
-      
-      // خلفية
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#000000';
-      
-      // رسالة الترحيب
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 30px "Arial", sans-serif';
-      ctx.fillText('مرحباً بكم في', canvas.width / 2, 30);
-      
-      ctx.font = 'bold 26px "Arial", sans-serif';
-      ctx.fillText('نظام إدارة التعليم', canvas.width / 2, 70);
-      
-      this.drawDoubleLine(ctx, 10, 100, canvas.width - 20);
-      
-      // ميزات النظام
-      ctx.textAlign = 'right';
-      ctx.font = '20px "Arial", sans-serif';
-      let yPos = 130;
-      
-      const features = [
-        '✓ إدارة الطلاب والشعب',
-        '✓ نظام الحضور والغياب',
-        '✓ إدارة المدفوعات المالية',
-        '✓ تقارير تفصيلية',
-        '✓ طباعة إيصالات احترافية'
-      ];
-      
-      features.forEach(feature => {
-        ctx.fillText(feature, canvas.width - 15, yPos);
-        yPos += 30;
-      });
-      
-      this.drawSingleLine(ctx, 10, yPos, canvas.width - 20);
-      yPos += 20;
-      
-      // رسالة الختام
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 24px "Arial", sans-serif';
-      ctx.fillText('تتمنى لكم', canvas.width / 2, yPos);
-      
-      ctx.font = '20px "Arial", sans-serif';
-      ctx.fillText('تجربة تعليمية ممتعة ومفيدة', canvas.width / 2, yPos + 30);
-      
-      ctx.font = '18px "Arial", sans-serif';
-      ctx.fillStyle = '#2C3E50';
-      ctx.fillText('نحو مستقبل زاهر بالعلم والمعرفة', canvas.width / 2, yPos + 60);
-      
-      // الشعار
-      ctx.font = '16px "Arial", sans-serif';
-      ctx.fillStyle = '#666666';
-      ctx.fillText(this.COMPANY_NAME, canvas.width / 2, yPos + 90);
-      ctx.fillText(`مطور بواسطة: ${this.DEVELOPER_NAME}`, canvas.width / 2, yPos + 110);
-      
-      // تحويل وطباعة
-      const rasterData = this.canvasToRaster(canvas);
-      const success = await this.printRasterImage(rasterData, canvas);
-      
-      if (success) {
-        this.showSuccessToast('تم طباعة رسالة الترحيب بنجاح');
-        return true;
-      }
-      
-      return false;
-      
-    } catch (err) {
-      console.error('خطأ في طباعة رسالة الترحيب:', err);
-      return false;
-    }
-  }
-
-  /**
-   * عرض معاينة الإيصال قبل الطباعة
-   */
-  async previewReceipt(data: ReceiptData): Promise<void> {
-    try {
-      const canvas = await this.createReceiptCanvas(data);
-      
-      // تحويل Canvas إلى صورة
-      const imageUrl = canvas.toDataURL('image/png');
-      
-      // فتح نافذة جديدة للمعاينة
-      const previewWindow = window.open('', '_blank');
-      if (previewWindow) {
-        previewWindow.document.write(`
-          <!DOCTYPE html>
-          <html dir="rtl">
-          <head>
-            <meta charset="UTF-8">
-            <title>معاينة الإيصال</title>
-            <style>
-              body { 
-                font-family: 'Arial', sans-serif; 
-                padding: 20px; 
-                background: #f5f5f5;
-                text-align: center;
-              }
-              .preview-container {
-                max-width: 576px;
-                margin: 0 auto;
-                background: white;
-                padding: 20px;
-                border-radius: 10px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-              }
-              img { 
-                max-width: 100%; 
-                height: auto;
-                border: 1px solid #ddd;
-              }
-              .controls {
-                margin-top: 20px;
-                padding: 15px;
-                background: #f8f9fa;
-                border-radius: 5px;
-              }
-              button {
-                padding: 10px 20px;
-                margin: 0 5px;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                font-size: 16px;
-              }
-              .btn-print {
-                background: #28a745;
-                color: white;
-              }
-              .btn-close {
-                background: #dc3545;
-                color: white;
-              }
-              .features {
-                text-align: right;
-                margin-top: 15px;
-                padding: 10px;
-                background: #e9ecef;
-                border-radius: 5px;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="preview-container">
-              <h2>معاينة الإيصال - التصميم الجديد</h2>
-              <img src="${imageUrl}" alt="معاينة الإيصال">
-              
-              <div class="features">
-                <h4>مميزات التصميم الجديد:</h4>
-                <ul style="text-align: right; padding-right: 20px;">
-                  <li>تصميم منظم بدون تداخل</li>
-                  <li>استخدام الأرقام العربية الصحيحة</li>
-                  <li>فصل الإجمالي عن الجدول بوضوح</li>
-                  <li>مقاس الورق: 80 مم</li>
-                  <li>خطوط واضحة وقراءة سهلة</li>
-                </ul>
-              </div>
-              
-              <div class="controls">
-                <button class="btn-print" onclick="window.print()">🖨️ طباعة المعاينة</button>
-                <button class="btn-close" onclick="window.close()">✖ إغلاق</button>
-              </div>
-              
-              <p style="margin-top: 15px; color: #666; font-size: 14px;">
-                مقاس الورق: 80 مم × ارتفاع ديناميكي<br>
-                الأرقام: عربية صحيحة (٠١٢٣٤٥٦٧٨٩)<br>
-                التصميم: احترافي بدون تداخل
-              </p>
-            </div>
-          </body>
-          </html>
-        `);
-        previewWindow.document.close();
-      }
-    } catch (error) {
-      console.error('خطأ في عرض المعاينة:', error);
-      Swal.fire('خطأ', 'فشل في عرض معاينة الإيصال', 'error');
-    }
-  }
-
-  /**
-   * اختبار التصميم الجديد
-   */
-  async testNewReceiptDesign(): Promise<boolean> {
-    try {
-      const testData: ReceiptData = {
-        receiptNumber: 'TEST-001',
-        date: new Date().toLocaleDateString('en-US'),
-        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        studentName: 'محمد أحمد علي',
-        studentId: 'STD-2024-001',
-        className: 'رياضيات - المستوى الأول',
-        month: 'يناير 2024',
-        amount: 75000,
-        paymentMethod: 'bank',
-        academicYear: '1AS',
-        parentPhone: '0551234567',
-        notes: 'الدفعة الأولى من أصل 3 دفعات - نتمنى للطالب النجاح والتوفيق في مسيرته التعليمية'
-      };
-
-      return await this.printProfessionalReceipt(testData);
-    } catch (error) {
-      console.error('فشل اختبار التصميم الجديد:', error);
-      return false;
-    }
-  }
-
-  /**
-   * طباعة إيصال بالبيانات المخصصة
-   */
-  async printCustomReceipt(
-    studentName: string,
-    studentId: string,
-    className: string,
-    month: string,
-    amount: number,
-    paymentMethod: string = 'cash',
-    additionalNotes?: string
-  ): Promise<boolean> {
-    try {
-      const receiptData: ReceiptData = {
-        receiptNumber: `CUST-${Date.now().toString().slice(-8)}`,
-        date: new Date().toLocaleDateString('en-US'),
-        time: new Date().toLocaleTimeString('en-US ', { hour: '2-digit', minute: '2-digit' }),
-        studentName,
-        studentId,
-        className,
-        month,
-        amount,
-        paymentMethod,
-        notes: additionalNotes || 'دفعة نقدية'
-      };
-
-      return await this.printProfessionalReceipt(receiptData);
-    } catch (error) {
-      console.error('فشل في طباعة الإيصال المخصص:', error);
-      return false;
-    }
   }
 }

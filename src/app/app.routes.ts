@@ -5,7 +5,6 @@ import { LiveClass } from './services/live-classes.service';
 import { LessonManagementComponent } from './components/lesson-management/lesson-management.component';
 import { StudentsManagementComponent } from './students-management/students-management.component';
 import { RoomsManagementComponent } from './rooms-management-component/rooms-management-component.component';
-import { PaymentsManagementComponent } from './payments-management/payments-management.component';
 import { CardsManagementComponent } from './cards-management/cards-management.component';
 import { LiveClassComponent } from './live-class/live-class.component';
 import { TeachersManagementComponent } from './teachers-management/teachers-management.component';
@@ -43,7 +42,6 @@ export const routes: Routes = [
       { path: 'add-student-to-classes-modal/:id', component: AddStudentToClassesModalComponent },
          { path: 'teachers-management', component: TeachersManagementComponent },
       { path: 'rooms-management', component: RoomsManagementComponent },
-      { path: 'payments-management', component: PaymentsManagementComponent },
       { path: 'cards-management', component: CardsManagementComponent },
       {path : 'messages', component : MessagesDashboardEnhancedComponent},
       { 

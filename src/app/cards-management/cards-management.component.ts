@@ -1,8 +1,8 @@
-// cards-management.component.ts
+// ==================== cards-management.component.ts ====================
 import { Component, OnInit, OnDestroy, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
 import { catchError, Observable, throwError, of } from 'rxjs';
 import { environment } from '../../environments/environment.development';
 
@@ -14,6 +14,9 @@ interface Student {
   birthDate?: string;
   parentName?: string;
   academicYear?: string;
+  schoolId?: string;
+  status?: string;
+  active?: boolean;
 }
 
 interface Card {
@@ -1195,10 +1198,18 @@ export class CardsManagementComponent implements OnInit, OnDestroy {
   isCardDetected = false;
   detectionStatus = '';
 
+  // School ID
+  private schoolId: string | null = null;
+
   constructor(private http: HttpClient) {}
 
   ngOnInit() {
     console.log('CardsManagementComponent initialized');
+    
+    // Get schoolId from localStorage
+    this.schoolId = localStorage.getItem('schoolId') || null;
+    console.log('🏫 School ID from localStorage:', this.schoolId);
+    
     this.loadCards();
     this.loadStudents();
   }
@@ -1214,6 +1225,15 @@ export class CardsManagementComponent implements OnInit, OnDestroy {
 
   get unassignedCardsCount(): number {
     return this.cards.filter(card => !this.isCardAssigned(card)).length;
+  }
+
+  // ==================== HEADER HELPERS ====================
+  private getHeaders(): HttpHeaders {
+    const token = localStorage.getItem('token');
+    return new HttpHeaders({
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    });
   }
 
   // ==================== CARD OPERATIONS ====================
@@ -1252,12 +1272,23 @@ export class CardsManagementComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ==================== API CALLS ====================
+  // ==================== API CALLS (محدثة مع schoolId) ====================
+  
   loadCards() {
     this.loading = true;
     console.log('Loading cards...');
     
-    this.http.get<Card[]>(`${environment.apiUrl}/cards`)
+    // إضافة schoolId إلى الطلب
+    let url = `${environment.apiUrl}/cards`;
+    const params = new HttpParams();
+    
+    if (this.schoolId) {
+      url += `?schoolId=${this.schoolId}`;
+    }
+    
+    console.log('🔍 Loading cards from:', url);
+    
+    this.http.get<Card[]>(url, { headers: this.getHeaders() })
       .pipe(catchError(error => {
         console.error('Error loading cards:', error);
         this.showError('حدث خطأ أثناء تحميل البطاقات');
@@ -1279,7 +1310,15 @@ export class CardsManagementComponent implements OnInit, OnDestroy {
   loadStudents() {
     console.log('Loading students...');
     
-    this.http.get<Student[]>(`${environment.apiUrl}/students`)
+    // إضافة schoolId إلى الطلب
+    let url = `${environment.apiUrl}/students`;
+    if (this.schoolId) {
+      url += `?schoolId=${this.schoolId}`;
+    }
+    
+    console.log('🔍 Loading students from:', url);
+    
+    this.http.get<Student[]>(url, { headers: this.getHeaders() })
       .pipe(catchError(error => {
         console.error('Error loading students:', error);
         this.showError('حدث خطأ أثناء تحميل الطلاب');
@@ -1304,14 +1343,19 @@ export class CardsManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const cardData = { 
+    // إضافة schoolId إلى البيانات
+    const cardData: any = { 
       uid: this.newCardUid,
       student: this.selectedStudentId || null
     };
+    
+    if (this.schoolId) {
+      cardData.schoolId = this.schoolId;
+    }
 
     console.log('Creating card:', cardData);
     
-    this.http.post<Card>(`${environment.apiUrl}/cards`, cardData)
+    this.http.post<Card>(`${environment.apiUrl}/cards`, cardData, { headers: this.getHeaders() })
       .pipe(catchError(error => {
         console.error('Error creating card:', error);
         this.showError(error.error?.error || 'حدث خطأ أثناء إنشاء البطاقة');
@@ -1334,11 +1378,18 @@ export class CardsManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // إضافة schoolId إلى البيانات
+    const updateData: any = { 
+      student: this.selectedStudentId 
+    };
+    
+    if (this.schoolId) {
+      updateData.schoolId = this.schoolId;
+    }
+
     console.log(`Assigning card ${this.selectedCard._id} to student ${this.selectedStudentId}`);
     
-    this.http.put<Card>(`${environment.apiUrl}/cards/${this.selectedCard._id}`, {
-      student: this.selectedStudentId
-    })
+    this.http.put<Card>(`${environment.apiUrl}/cards/${this.selectedCard._id}`, updateData, { headers: this.getHeaders() })
       .pipe(catchError(error => {
         console.error('Error assigning card:', error);
         this.showError(error.error?.error || 'حدث خطأ أثناء تعيين البطاقة');
@@ -1362,7 +1413,13 @@ export class CardsManagementComponent implements OnInit, OnDestroy {
 
     console.log(`Unassigning card ${cardId}`);
     
-    this.http.put(`${environment.apiUrl}/cards/${cardId}`, { student: null })
+    // إضافة schoolId إلى البيانات
+    const updateData: any = { student: null };
+    if (this.schoolId) {
+      updateData.schoolId = this.schoolId;
+    }
+    
+    this.http.put(`${environment.apiUrl}/cards/${cardId}`, updateData, { headers: this.getHeaders() })
       .pipe(catchError(error => {
         console.error('Error unassigning card:', error);
         this.showError(error.error?.error || 'حدث خطأ أثناء إلغاء تعيين البطاقة');
@@ -1384,7 +1441,12 @@ export class CardsManagementComponent implements OnInit, OnDestroy {
 
     console.log(`Deleting card ${cardId}`);
     
-    this.http.delete(`${environment.apiUrl}/cards/${cardId}`)
+    let url = `${environment.apiUrl}/cards/${cardId}`;
+    if (this.schoolId) {
+      url += `?schoolId=${this.schoolId}`;
+    }
+    
+    this.http.delete(url, { headers: this.getHeaders() })
       .pipe(catchError(error => {
         console.error('Error deleting card:', error);
         this.showError(error.error?.error || 'حدث خطأ أثناء حذف البطاقة');
@@ -1407,7 +1469,12 @@ export class CardsManagementComponent implements OnInit, OnDestroy {
 
     console.log(`Checking card UID: ${this.searchUid}`);
     
-    this.http.get<any>(`${environment.apiUrl}/cards/uid/${this.searchUid}`)
+    let url = `${environment.apiUrl}/cards/uid/${this.searchUid}`;
+    if (this.schoolId) {
+      url += `?schoolId=${this.schoolId}`;
+    }
+    
+    this.http.get<any>(url, { headers: this.getHeaders() })
       .pipe(catchError(error => {
         console.error('Error checking card:', error);
         this.showError('البطاقة غير مسجلة');

@@ -1,11 +1,12 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient, HttpClientModule } from '@angular/common/http';
-
+import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../environments/environment.development';
+
 export interface Classroom {
   _id?: string;
+  schoolId?: string;
   name: string;
   capacity: number;
   floor: number;
@@ -14,22 +15,36 @@ export interface Classroom {
   color: string;
   equipment: string[];
   status: 'available' | 'occupied' | 'maintenance';
+  description?: string;
+  floorArea?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 @Component({
-  selector: 'app-rooms-management-component',
+  selector: 'app-rooms-management',
   standalone: true,
   imports: [CommonModule, FormsModule, HttpClientModule],
   template: `
     <div class="rooms-container">
+      <!-- School Info Header -->
+      <div class="school-header" *ngIf="school">
+        <div class="school-info">
+          <i class="fas fa-school"></i>
+          <div>
+            <h2>{{ school.name }}</h2>
+            <p>{{ school.email }} | {{ school.phone }}</p>
+          </div>
+          <span class="school-id">#{{ schoolId }}</span>
+        </div>
+      </div>
+
       <!-- Page Header -->
       <div class="page-header">
         <div class="header-content">
           <div class="title-section">
             <h1><i class="fas fa-chalkboard"></i> إدارة الغرف الدراسية</h1>
-            <p class="subtitle">إدارة وتنظيم جميع الغرف الدراسية في المدرسة</p>
+            <p class="subtitle">إدارة وتنظيم جميع الغرف الدراسية في {{ getSchoolDisplayName() }}</p>
           </div>
           <button class="btn btn-primary btn-add" (click)="openAddDialog()">
             <i class="fas fa-plus-circle"></i> إضافة غرفة جديدة
@@ -206,6 +221,10 @@ export interface Classroom {
               <label>التجهيزات</label>
               <span>{{ selectedRoom.equipment.join(', ') }}</span>
             </div>
+            <div class="detail-item" *ngIf="selectedRoom.schoolId">
+              <label>المدرسة</label>
+              <span>{{ getSchoolDisplayName() }}</span>
+            </div>
           </div>
           <div class="panel-actions">
             <button class="btn btn-primary" (click)="changeRoomStatus(selectedRoom, getNextStatus(selectedRoom.status))">
@@ -222,7 +241,8 @@ export interface Classroom {
       <div class="dialog-overlay" *ngIf="isDialogOpen">
         <div class="dialog-box">
           <div class="dialog-header">
-            <h2><i class="fas" [class.fa-plus-circle]="!editingRoom" [class.fa-edit]="editingRoom"></i> 
+            <h2>
+              <i class="fas" [class.fa-plus-circle]="!editingRoom" [class.fa-edit]="editingRoom"></i> 
               {{ editingRoom ? 'تعديل الغرفة' : 'إضافة غرفة جديدة' }}
             </h2>
             <button class="btn btn-close" (click)="closeDialog()">
@@ -230,6 +250,17 @@ export interface Classroom {
             </button>
           </div>
           <div class="dialog-body">
+            <!-- School Info Badge -->
+            <div class="school-info-badge" *ngIf="school">
+              <i class="fas fa-school"></i>
+              <span>{{ school.name }}</span>
+              <span class="badge">ID: {{ schoolId }}</span>
+            </div>
+            <div class="alert alert-warning" *ngIf="!schoolId">
+              <i class="fas fa-exclamation-triangle"></i>
+              ⚠️ لم يتم تحديد المدرسة. يرجى تسجيل الدخول أولاً.
+            </div>
+
             <div class="form-group">
               <label>اسم الغرفة <span class="required">*</span></label>
               <input type="text" class="form-control" [(ngModel)]="formData.name" 
@@ -288,7 +319,7 @@ export interface Classroom {
           </div>
           <div class="dialog-footer">
             <button class="btn btn-secondary" (click)="closeDialog()">إلغاء</button>
-            <button class="btn btn-primary" (click)="saveRoom()">
+            <button class="btn btn-primary" (click)="saveRoom()" [disabled]="!schoolId || !isFormValid()">
               <i class="fas fa-save"></i> {{ editingRoom ? 'حفظ التغييرات' : 'إضافة الغرفة' }}
             </button>
           </div>
@@ -318,6 +349,86 @@ export interface Classroom {
       padding: 20px;
       max-width: 1400px;
       margin: 0 auto;
+    }
+
+    .school-header {
+      background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+      padding: 16px 24px;
+      border-radius: var(--radius);
+      margin-bottom: 24px;
+      color: white;
+    }
+
+    .school-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .school-info i {
+      font-size: 32px;
+      opacity: 0.8;
+    }
+
+    .school-info h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .school-info p {
+      margin: 0;
+      opacity: 0.8;
+      font-size: 14px;
+    }
+
+    .school-id {
+      background: rgba(255,255,255,0.2);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      margin-right: auto;
+    }
+
+    .school-info-badge {
+      background: var(--bg-light);
+      padding: 8px 16px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      border: 1px solid var(--border-color);
+    }
+
+    .school-info-badge i {
+      color: var(--primary-color);
+    }
+
+    .school-info-badge .badge {
+      background: var(--primary-color);
+      color: white;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .alert-warning {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #f59e0b;
+    }
+
+    .alert-warning i {
+      color: #f59e0b;
     }
 
     .page-header {
@@ -381,10 +492,15 @@ export interface Classroom {
       color: white;
     }
 
-    .btn-primary:hover {
+    .btn-primary:hover:not(:disabled) {
       background: #3651d4;
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
 
     .btn-secondary {
@@ -549,10 +665,6 @@ export interface Classroom {
 
     .form-control:focus {
       outline: none;
-    }
-
-    .form-control::placeholder {
-      color: var(--text-light);
     }
 
     .loading-state {
@@ -1063,27 +1175,13 @@ export interface Classroom {
         grid-template-columns: 1fr;
       }
     }
-
-    .dialog-box::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .dialog-box::-webkit-scrollbar-track {
-      background: var(--bg-light);
-    }
-
-    .dialog-box::-webkit-scrollbar-thumb {
-      background: var(--border-color);
-      border-radius: 3px;
-    }
-
-    .dialog-box::-webkit-scrollbar-thumb:hover {
-      background: var(--text-light);
-    }
   `]
 })
 export class RoomsManagementComponent implements OnInit {
   private apiUrl = environment.apiUrl;
+
+  schoolId: string | null = null;
+  school: any = null;
 
   rooms: Classroom[] = [];
   filteredRooms: Classroom[] = [];
@@ -1125,13 +1223,78 @@ export class RoomsManagementComponent implements OnInit {
   constructor(private http: HttpClient) {}
 
   ngOnInit(): void {
+    this.loadSchoolData();
     this.loadRooms();
+  }
+
+  loadSchoolData(): void {
+    try {
+      const userStr = localStorage.getItem('user');
+      const schoolStr = localStorage.getItem('school');
+      
+      console.log('🔍 تحميل بيانات المدرسة...');
+      
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        this.schoolId = user?.schoolId || null;
+        console.log('🏫 schoolId من الجلسة:', this.schoolId);
+      }
+      
+      if (schoolStr) {
+        this.school = JSON.parse(schoolStr);
+        console.log('🏫 بيانات المدرسة:', this.school);
+      }
+
+      // محاولة الحصول على schoolId من school إذا لم يكن موجوداً
+      if (!this.schoolId && this.school) {
+        this.schoolId = this.school._id;
+        console.log('🏫 تم استخراج schoolId من school:', this.schoolId);
+      }
+
+      if (!this.schoolId) {
+        console.warn('⚠️ لا يوجد schoolId في الجلسة');
+        // محاولة قراءة من التوكن
+        const token = localStorage.getItem('token');
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            if (payload.schoolId) {
+              this.schoolId = payload.schoolId;
+              console.log('🏫 تم استخراج schoolId من التوكن:', this.schoolId);
+            }
+          } catch (e) {
+            console.error('❌ خطأ في فك التوكن:', e);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ خطأ في تحميل بيانات المدرسة:', error);
+    }
   }
 
   loadRooms(): void {
     this.isLoading = true;
-    this.http.get<Classroom[]>(`${this.apiUrl}/classrooms`).subscribe({
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('❌ لا يوجد توكن');
+      this.isLoading = false;
+      return;
+    }
+
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+
+    // إرسال schoolId كـ query param
+    let url = `${this.apiUrl}/classrooms`;
+    if (this.schoolId) {
+      url += `?schoolId=${this.schoolId}`;
+    }
+
+    console.log('📤 جلب الغرف من:', url);
+
+    this.http.get<Classroom[]>(url, { headers }).subscribe({
       next: (rooms) => {
+        console.log(`✅ تم جلب ${rooms.length} غرفة للمدرسة ${this.schoolId}`);
         this.rooms = rooms;
         this.filteredRooms = [...rooms];
         this.updateStatistics();
@@ -1139,7 +1302,8 @@ export class RoomsManagementComponent implements OnInit {
         this.isLoading = false;
       },
       error: (error) => {
-        console.error('Error loading rooms:', error);
+        console.error('❌ خطأ في جلب الغرف:', error);
+        console.error('❌ تفاصيل الخطأ:', error.error);
         this.isLoading = false;
         this.rooms = [];
         this.filteredRooms = [];
@@ -1189,6 +1353,14 @@ export class RoomsManagementComponent implements OnInit {
   }
 
   openAddDialog(): void {
+    // التحقق من وجود schoolId
+    if (!this.schoolId) {
+      alert('⚠️ يجب تسجيل الدخول أولاً أو تحديد المدرسة');
+      // محاولة تحميل البيانات مرة أخرى
+      this.loadSchoolData();
+      return;
+    }
+
     this.editingRoom = false;
     this.formData = {
       name: '',
@@ -1214,16 +1386,58 @@ export class RoomsManagementComponent implements OnInit {
     this.editingRoom = false;
   }
 
+  isFormValid(): boolean {
+    return !!(this.formData.name && 
+              this.formData.name.trim() && 
+              this.formData.building && 
+              this.formData.building.trim() && 
+              this.formData.floor > 0 && 
+              this.formData.capacity > 0);
+  }
+
   saveRoom(): void {
-    if (!this.formData.name || !this.formData.building || !this.formData.floor || !this.formData.capacity) {
-      alert('الرجاء ملء جميع الحقول المطلوبة');
+    // التحقق من صحة البيانات
+    if (!this.isFormValid()) {
+      alert('⚠️ الرجاء ملء جميع الحقول المطلوبة');
       return;
     }
 
+    // التحقق من وجود schoolId
+    if (!this.schoolId) {
+      alert('⚠️ يجب تسجيل الدخول أولاً');
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('⚠️ يرجى تسجيل الدخول أولاً');
+      return;
+    }
+
+    const headers = new HttpHeaders()
+      .set('Authorization', `Bearer ${token}`)
+      .set('Content-Type', 'application/json');
+
+    // تأكد من إرسال schoolId بشكل صحيح
+    const roomData = {
+      schoolId: this.schoolId,
+      name: this.formData.name.trim(),
+      capacity: Number(this.formData.capacity),
+      floor: Number(this.formData.floor),
+      building: this.formData.building.trim(),
+      location: this.formData.location || '',
+      color: this.formData.color || '#4361ee',
+      equipment: this.formData.equipment || [],
+      status: this.formData.status || 'available'
+    };
+
+    console.log('📤 إرسال بيانات الغرفة:', roomData);
+
     if (this.editingRoom && this.formData._id) {
-      // Update existing room
-      this.http.put<Classroom>(`${this.apiUrl}/classrooms/${this.formData._id}`, this.formData).subscribe({
+      // تحديث غرفة موجودة
+      this.http.put<Classroom>(`${this.apiUrl}/classrooms/${this.formData._id}`, roomData, { headers }).subscribe({
         next: (updatedRoom) => {
+          console.log('✅ تم تحديث الغرفة:', updatedRoom);
           const index = this.rooms.findIndex(r => r._id === updatedRoom._id);
           if (index !== -1) {
             this.rooms[index] = updatedRoom;
@@ -1232,27 +1446,41 @@ export class RoomsManagementComponent implements OnInit {
           this.updateStatistics();
           this.extractFilterOptions();
           this.closeDialog();
-          alert('تم تحديث الغرفة بنجاح');
+          alert('✅ تم تحديث الغرفة بنجاح');
         },
         error: (error) => {
-          console.error('Error updating room:', error);
-          alert('حدث خطأ أثناء تحديث الغرفة');
+          console.error('❌ خطأ في تحديث الغرفة:', error);
+          console.error('❌ تفاصيل الخطأ:', error.error);
+          const errorMsg = error.error?.message || error.error?.error || 'حدث خطأ غير معروف';
+          alert(`❌ حدث خطأ أثناء تحديث الغرفة: ${errorMsg}`);
         }
       });
     } else {
-      // Create new room
-      this.http.post<Classroom>(`${this.apiUrl}/classrooms`, this.formData).subscribe({
+      // إضافة غرفة جديدة
+      this.http.post<Classroom>(`${this.apiUrl}/classrooms`, roomData, { headers }).subscribe({
         next: (newRoom) => {
+          console.log('✅ تم إضافة الغرفة:', newRoom);
           this.rooms.push(newRoom);
           this.filteredRooms = [...this.rooms];
           this.updateStatistics();
           this.extractFilterOptions();
           this.closeDialog();
-          alert('تم إضافة الغرفة بنجاح');
+          alert(`✅ تم إضافة الغرفة "${newRoom.name}" بنجاح في مدرسة ${this.school?.name || ''}`);
         },
         error: (error) => {
-          console.error('Error creating room:', error);
-          alert('حدث خطأ أثناء إضافة الغرفة');
+          console.error('❌ خطأ في إضافة الغرفة:', error);
+          console.error('❌ تفاصيل الخطأ:', error.error);
+          
+          let errorMsg = 'حدث خطأ غير معروف';
+          if (error.error?.message) {
+            errorMsg = error.error.message;
+          } else if (error.error?.error) {
+            errorMsg = error.error.error;
+          } else if (error.status === 400) {
+            errorMsg = 'بيانات غير صالحة. تأكد من إدخال جميع الحقول المطلوبة بشكل صحيح.';
+          }
+          
+          alert(`❌ حدث خطأ أثناء إضافة الغرفة: ${errorMsg}`);
         }
       });
     }
@@ -1260,8 +1488,17 @@ export class RoomsManagementComponent implements OnInit {
 
   deleteRoom(id: string): void {
     if (!id) return;
-    if (confirm('هل أنت متأكد من حذف هذه الغرفة؟')) {
-      this.http.delete(`${this.apiUrl}/classrooms/${id}`).subscribe({
+    
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('⚠️ يرجى تسجيل الدخول أولاً');
+      return;
+    }
+
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+
+    if (confirm('⚠️ هل أنت متأكد من حذف هذه الغرفة؟')) {
+      this.http.delete(`${this.apiUrl}/classrooms/${id}`, { headers }).subscribe({
         next: () => {
           this.rooms = this.rooms.filter(r => r._id !== id);
           this.filteredRooms = [...this.rooms];
@@ -1270,11 +1507,12 @@ export class RoomsManagementComponent implements OnInit {
           if (this.selectedRoom?._id === id) {
             this.selectedRoom = null;
           }
-          alert('تم حذف الغرفة بنجاح');
+          alert('✅ تم حذف الغرفة بنجاح');
         },
         error: (error) => {
-          console.error('Error deleting room:', error);
-          alert('حدث خطأ أثناء حذف الغرفة');
+          console.error('❌ خطأ في حذف الغرفة:', error);
+          const errorMsg = error.error?.message || error.error?.error || 'حدث خطأ غير معروف';
+          alert(`❌ حدث خطأ أثناء حذف الغرفة: ${errorMsg}`);
         }
       });
     }
@@ -1285,8 +1523,16 @@ export class RoomsManagementComponent implements OnInit {
   }
 
   changeRoomStatus(room: Classroom, newStatus: 'available' | 'occupied' | 'maintenance'): void {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('⚠️ يرجى تسجيل الدخول أولاً');
+      return;
+    }
+
+    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
+
     const updatedRoom = { ...room, status: newStatus };
-    this.http.put<Classroom>(`${this.apiUrl}/classrooms/${room._id}`, updatedRoom).subscribe({
+    this.http.put<Classroom>(`${this.apiUrl}/classrooms/${room._id}`, updatedRoom, { headers }).subscribe({
       next: (result) => {
         const index = this.rooms.findIndex(r => r._id === result._id);
         if (index !== -1) {
@@ -1297,20 +1543,21 @@ export class RoomsManagementComponent implements OnInit {
         if (this.selectedRoom?._id === result._id) {
           this.selectedRoom = result;
         }
+        alert(`✅ تم تغيير حالة الغرفة إلى ${this.getStatusText(newStatus)}`);
       },
       error: (error) => {
-        console.error('Error changing room status:', error);
-        alert('حدث خطأ أثناء تغيير حالة الغرفة');
+        console.error('❌ خطأ في تغيير حالة الغرفة:', error);
+        alert('❌ حدث خطأ أثناء تغيير حالة الغرفة');
       }
     });
   }
 
   getStatusText(status: string): string {
     switch(status) {
-      case 'available': return 'متاحة';
-      case 'occupied': return 'مشغولة';
-      case 'maintenance': return 'قيد الصيانة';
-      default: return 'غير معروف';
+      case 'available': return '🟢 متاحة';
+      case 'occupied': return '🔴 مشغولة';
+      case 'maintenance': return '🟡 قيد الصيانة';
+      default: return '❓ غير معروف';
     }
   }
 
@@ -1334,5 +1581,9 @@ export class RoomsManagementComponent implements OnInit {
     } else {
       this.formData.equipment.push(item);
     }
+  }
+
+  getSchoolDisplayName(): string {
+    return this.school?.name || 'المدرسة';
   }
 }

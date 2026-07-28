@@ -1,12 +1,13 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
-import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { HttpClient, HttpClientModule, HttpHeaders, HttpParams } from '@angular/common/http';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { environment } from '../../environments/environment';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+import { forkJoin, debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 
-// Interfaces
+// ==================== INTERFACES ====================
 interface Student {
   _id: string;
   name: string;
@@ -15,6 +16,7 @@ interface Student {
   parentEmail: string;
   academicYear: string;
   status: string;
+  schoolId?: string;
 }
 
 interface Payment {
@@ -51,6 +53,7 @@ interface Class {
   schedule: Array<{ day: string; time: string; classroom?: { name: string; }; }>;
   students: Student[];
   createdAt: Date;
+  schoolId?: string;
 }
 
 interface AttendanceRecord {
@@ -86,6 +89,10 @@ interface AttendanceStats {
   averageAttendance: number;
 }
 
+// ==============================================
+// المكون الرئيسي
+// ==============================================
+
 @Component({
   selector: 'app-lesson-detail',
   standalone: true,
@@ -111,9 +118,13 @@ interface AttendanceStats {
             </div>
           </div>
           <div class="header-actions">
-            <button class="action-btn secondary" (click)="openAddStudentPopup()">
+            <button class="action-btn primary" (click)="openAddStudentPopup()">
               <i class="fas fa-user-plus"></i>
               <span>إضافة طالب</span>
+            </button>
+            <button class="action-btn secondary" (click)="openAddPaymentPopup()">
+              <i class="fas fa-money-bill-wave"></i>
+              <span>دفعة جديدة</span>
             </button>
           </div>
         </div>
@@ -215,21 +226,38 @@ interface AttendanceStats {
 
           <!-- Students Tab -->
           <div class="tab-pane" [class.active]="activeTab === 'students'">
+            <!-- Search Bar -->
+            <div class="search-section">
+              <div class="search-box">
+                <i class="fas fa-search search-icon"></i>
+                <input 
+                  type="text" 
+                  [(ngModel)]="studentSearchTerm" 
+                  (input)="filterStudents()"
+                  placeholder="بحث عن طالب بالاسم أو الكود..."
+                  class="search-input"
+                />
+                <button *ngIf="studentSearchTerm" class="clear-search" (click)="clearStudentSearch()">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+
             <!-- Desktop Table -->
             <div class="desktop-table">
               <div class="table-responsive">
                 <table class="data-table">
                   <thead>
-                     <tr>
+                    <tr>
                       <th>اسم الطالب</th>
                       <th>كود الطالب</th>
                       <th>السنة الدراسية</th>
                       <th>حالة الدفع</th>
                       <th>الإجراءات</th>
-                     </tr>
+                    </tr>
                   </thead>
                   <tbody>
-                    <tr *ngFor="let student of lesson?.students">
+                    <tr *ngFor="let student of filteredStudents">
                       <td class="student-name" (click)="openStudentDetails(student._id)">{{ student.name }}</td>
                       <td><span class="student-id">{{ student.studentId }}</span></td>
                       <td>{{ student.academicYear }}</td>
@@ -249,8 +277,10 @@ interface AttendanceStats {
                         </div>
                       </td>
                     </tr>
-                    <tr *ngIf="!lesson?.students?.length">
-                      <td colspan="5" class="empty-table">لا يوجد طلاب مسجلين</td>
+                    <tr *ngIf="!filteredStudents.length">
+                      <td colspan="5" class="empty-table">
+                        {{ studentSearchTerm ? 'لا توجد نتائج مطابقة للبحث' : 'لا يوجد طلاب مسجلين' }}
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -259,7 +289,7 @@ interface AttendanceStats {
 
             <!-- Mobile Cards -->
             <div class="mobile-cards">
-              <div *ngFor="let student of lesson?.students" class="student-card">
+              <div *ngFor="let student of filteredStudents" class="student-card">
                 <div class="card-header">
                   <div class="student-avatar">{{ student.name.charAt(0) }}</div>
                   <div class="student-info">
@@ -288,9 +318,9 @@ interface AttendanceStats {
                   </div>
                 </div>
               </div>
-              <div *ngIf="!lesson?.students?.length" class="empty-state">
+              <div *ngIf="!filteredStudents.length" class="empty-state">
                 <i class="fas fa-users-slash"></i>
-                <p>لا يوجد طلاب مسجلين</p>
+                <p>{{ studentSearchTerm ? 'لا توجد نتائج مطابقة للبحث' : 'لا يوجد طلاب مسجلين' }}</p>
               </div>
             </div>
           </div>
@@ -322,7 +352,7 @@ interface AttendanceStats {
               <div class="table-responsive">
                 <table class="data-table">
                   <thead>
-                     <tr>
+                    <tr>
                       <th>الطالب</th>
                       <th>المبلغ</th>
                       <th>الشهر</th>
@@ -330,7 +360,7 @@ interface AttendanceStats {
                       <th>الوسيلة</th>
                       <th>الحالة</th>
                       <th>الإجراءات</th>
-                     </tr>
+                    </tr>
                   </thead>
                   <tbody>
                     <tr *ngFor="let p of paginatedPayments">
@@ -487,7 +517,7 @@ interface AttendanceStats {
               <div class="table-responsive">
                 <table class="data-table">
                   <thead>
-                     <tr>
+                    <tr>
                       <th>الطالب</th>
                       <th>كود الطالب</th>
                       <th>إجمالي الحصص</th>
@@ -497,7 +527,7 @@ interface AttendanceStats {
                       <th>نسبة الحضور</th>
                       <th>آخر حضور</th>
                       <th></th>
-                     </tr>
+                    </tr>
                   </thead>
                   <tbody>
                     <tr *ngFor="let record of attendanceRecords">
@@ -588,27 +618,39 @@ interface AttendanceStats {
           </div>
         </div>
 
-        <!-- Popups - keep same as before -->
-        <div class="popup-overlay" *ngIf="showAddStudentPopup" (click)="closeAddStudentPopup($event)">
-          <div class="popup-container" (click)="$event.stopPropagation()">
-            <div class="popup-header">
+        <!-- ==================== DIALOGS ==================== -->
+
+        <!-- Add Student Dialog -->
+        <div class="dialog-overlay" *ngIf="showAddStudentPopup" (click)="closeAddStudentPopup($event)">
+          <div class="dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header">
               <h3><i class="fas fa-user-plus"></i> إضافة طالب للحصة</h3>
-              <button class="close-btn" (click)="closeAddStudentPopup()">&times;</button>
+              <button class="dialog-close" (click)="closeAddStudentPopup()">&times;</button>
             </div>
-            <div class="popup-body">
+            <div class="dialog-body">
+              <div class="search-box small">
+                <i class="fas fa-search search-icon"></i>
+                <input 
+                  type="text" 
+                  [(ngModel)]="availableStudentSearchTerm" 
+                  (input)="filterAvailableStudents()"
+                  placeholder="بحث عن طالب..."
+                  class="search-input"
+                />
+              </div>
               <form [formGroup]="addStudentForm">
                 <div class="form-group">
                   <label>اختر الطالب</label>
-                  <select formControlName="studentId" class="form-control">
+                  <select formControlName="studentId" class="form-control" size="8">
                     <option value="">-- اختر طالب --</option>
-                    <option *ngFor="let s of availableStudents" [value]="s._id">
-                      {{ s.name }} ({{ s.studentId }})
+                    <option *ngFor="let s of filteredAvailableStudents" [value]="s._id">
+                      {{ s.name }} ({{ s.studentId }}) - {{ s.academicYear }}
                     </option>
                   </select>
                 </div>
               </form>
             </div>
-            <div class="popup-footer">
+            <div class="dialog-footer">
               <button class="btn-cancel" (click)="closeAddStudentPopup()">إلغاء</button>
               <button class="btn-save" (click)="enrollStudent()" [disabled]="addStudentForm.invalid">
                 <i class="fas fa-check"></i> تأكيد
@@ -617,20 +659,21 @@ interface AttendanceStats {
           </div>
         </div>
 
-        <div class="popup-overlay" *ngIf="showAddPaymentPopup" (click)="closeAddPaymentPopup($event)">
-          <div class="popup-container" (click)="$event.stopPropagation()">
-            <div class="popup-header">
+        <!-- Add Payment Dialog -->
+        <div class="dialog-overlay" *ngIf="showAddPaymentPopup" (click)="closeAddPaymentPopup($event)">
+          <div class="dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header">
               <h3><i class="fas fa-money-bill-wave"></i> تسجيل دفعة جديدة</h3>
-              <button class="close-btn" (click)="closeAddPaymentPopup()">&times;</button>
+              <button class="dialog-close" (click)="closeAddPaymentPopup()">&times;</button>
             </div>
-            <div class="popup-body">
+            <div class="dialog-body">
               <form [formGroup]="paymentForm">
                 <div class="form-group">
                   <label>الطالب</label>
                   <select formControlName="studentId" class="form-control">
                     <option value="">-- اختر الطالب --</option>
                     <option *ngFor="let s of lesson?.students" [value]="s._id">
-                      {{ s.name }}
+                      {{ s.name }} ({{ s.studentId }})
                     </option>
                   </select>
                 </div>
@@ -658,7 +701,7 @@ interface AttendanceStats {
                 </div>
               </form>
             </div>
-            <div class="popup-footer">
+            <div class="dialog-footer">
               <button class="btn-cancel" (click)="closeAddPaymentPopup()">إلغاء</button>
               <button class="btn-save" (click)="processPayment()" [disabled]="paymentForm.invalid">
                 <i class="fas fa-check"></i> تأكيد
@@ -667,13 +710,14 @@ interface AttendanceStats {
           </div>
         </div>
 
-        <div class="popup-overlay" *ngIf="showEditPaymentPopup" (click)="closeEditPaymentPopup($event)">
-          <div class="popup-container" (click)="$event.stopPropagation()">
-            <div class="popup-header">
+        <!-- Edit Payment Dialog -->
+        <div class="dialog-overlay" *ngIf="showEditPaymentPopup" (click)="closeEditPaymentPopup($event)">
+          <div class="dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header">
               <h3><i class="fas fa-edit"></i> تعديل الدفعة</h3>
-              <button class="close-btn" (click)="closeEditPaymentPopup()">&times;</button>
+              <button class="dialog-close" (click)="closeEditPaymentPopup()">&times;</button>
             </div>
-            <div class="popup-body">
+            <div class="dialog-body">
               <form [formGroup]="editPaymentForm">
                 <div class="form-group">
                   <label>المبلغ (د.ج)</label>
@@ -701,56 +745,59 @@ interface AttendanceStats {
                 </div>
               </form>
             </div>
-            <div class="popup-footer">
+            <div class="dialog-footer">
               <button class="btn-cancel" (click)="closeEditPaymentPopup()">إلغاء</button>
               <button class="btn-save" (click)="updatePayment()">حفظ التغييرات</button>
             </div>
           </div>
         </div>
 
-        <div class="popup-overlay" *ngIf="showCancelPaymentPopup" (click)="closeCancelPaymentPopup($event)">
-          <div class="popup-container" (click)="$event.stopPropagation()">
-            <div class="popup-header">
+        <!-- Cancel Payment Dialog -->
+        <div class="dialog-overlay" *ngIf="showCancelPaymentPopup" (click)="closeCancelPaymentPopup($event)">
+          <div class="dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header">
               <h3><i class="fas fa-undo-alt"></i> إلغاء الدفعة</h3>
-              <button class="close-btn" (click)="closeCancelPaymentPopup()">&times;</button>
+              <button class="dialog-close" (click)="closeCancelPaymentPopup()">&times;</button>
             </div>
-            <div class="popup-body">
+            <div class="dialog-body">
               <p>هل أنت متأكد من إلغاء هذه الدفعة؟ سيتم إعادة حالة الدفعة إلى "معلق".</p>
               <div class="form-group" style="margin-top: 15px;">
                 <label>سبب الإلغاء (اختياري)</label>
                 <textarea [(ngModel)]="cancelReason" class="form-control" rows="2" placeholder="أدخل سبب الإلغاء..."></textarea>
               </div>
             </div>
-            <div class="popup-footer">
+            <div class="dialog-footer">
               <button class="btn-cancel" (click)="closeCancelPaymentPopup()">إلغاء</button>
               <button class="btn-save" (click)="cancelPayment()">تأكيد الإلغاء</button>
             </div>
           </div>
         </div>
 
-        <div class="popup-overlay" *ngIf="showDeleteConfirmPopup" (click)="closeDeleteConfirmPopup($event)">
-          <div class="popup-container" (click)="$event.stopPropagation()">
-            <div class="popup-header">
+        <!-- Delete Confirmation Dialog -->
+        <div class="dialog-overlay" *ngIf="showDeleteConfirmPopup" (click)="closeDeleteConfirmPopup($event)">
+          <div class="dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header">
               <h3><i class="fas fa-trash-alt"></i> حذف الدفعة</h3>
-              <button class="close-btn" (click)="closeDeleteConfirmPopup()">&times;</button>
+              <button class="dialog-close" (click)="closeDeleteConfirmPopup()">&times;</button>
             </div>
-            <div class="popup-body">
+            <div class="dialog-body">
               <p>هل أنت متأكد من حذف هذه الدفعة؟ لا يمكن التراجع عن هذا الإجراء.</p>
             </div>
-            <div class="popup-footer">
+            <div class="dialog-footer">
               <button class="btn-cancel" (click)="closeDeleteConfirmPopup()">إلغاء</button>
               <button class="btn-save" style="background-color: #ef4444;" (click)="confirmDeletePayment()">تأكيد الحذف</button>
             </div>
           </div>
         </div>
 
-        <div class="popup-overlay" *ngIf="showMarkPaidPopup" (click)="closeMarkPaidPopup($event)">
-          <div class="popup-container" (click)="$event.stopPropagation()">
-            <div class="popup-header">
+        <!-- Mark as Paid Dialog -->
+        <div class="dialog-overlay" *ngIf="showMarkPaidPopup" (click)="closeMarkPaidPopup($event)">
+          <div class="dialog" (click)="$event.stopPropagation()">
+            <div class="dialog-header">
               <h3><i class="fas fa-check-circle"></i> تسديد الدفعة</h3>
-              <button class="close-btn" (click)="closeMarkPaidPopup()">&times;</button>
+              <button class="dialog-close" (click)="closeMarkPaidPopup()">&times;</button>
             </div>
-            <div class="popup-body">
+            <div class="dialog-body">
               <p>تأكيد تسديد الدفعة بقيمة <strong>{{ selectedPayment?.amount | number }} د.ج</strong> للطالب <strong>{{ getStudentName(selectedPayment?.student) }}</strong> لشهر <strong>{{ selectedPayment?.month }}</strong>؟</p>
               <div class="form-group" style="margin-top: 15px;">
                 <label>طريقة الدفع</label>
@@ -761,17 +808,19 @@ interface AttendanceStats {
                 </select>
               </div>
             </div>
-            <div class="popup-footer">
+            <div class="dialog-footer">
               <button class="btn-cancel" (click)="closeMarkPaidPopup()">إلغاء</button>
               <button class="btn-save" (click)="confirmMarkAsPaid()">تأكيد التسديد</button>
             </div>
           </div>
         </div>
 
+        <!-- Loading Overlay -->
         <div class="loading-overlay" *ngIf="loading">
           <div class="spinner"></div>
         </div>
 
+        <!-- Toast Messages -->
         <div class="toast success" *ngIf="successMessage">
           <i class="fas fa-check-circle"></i> {{ successMessage }}
         </div>
@@ -782,25 +831,11 @@ interface AttendanceStats {
     </div>
   `,
   styles: [`
-    /* All styles remain the same as in your original code */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    /* ==================== STYLES ==================== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    :host {
-      display: block;
-      width: 100%;
-      max-width: 100%;
-      overflow-x: hidden;
-    }
-
-    .lesson-detail-wrapper {
-      width: 100%;
-      max-width: 100%;
-      overflow-x: hidden;
-    }
+    :host { display: block; width: 100%; max-width: 100%; overflow-x: hidden; }
+    .lesson-detail-wrapper { width: 100%; max-width: 100%; overflow-x: hidden; }
 
     .lesson-detail-container {
       max-width: 100%;
@@ -812,7 +847,6 @@ interface AttendanceStats {
       direction: rtl;
     }
 
-    /* Colors */
     :host {
       --primary: #4361ee;
       --primary-dark: #3a56d4;
@@ -831,27 +865,74 @@ interface AttendanceStats {
       --radius-sm: 8px;
     }
 
-    /* Header */
+    /* ==================== SEARCH SECTION ==================== */
+    .search-section {
+      margin-bottom: 16px;
+    }
+
+    .search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+      background: white;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      transition: all 0.3s ease;
+    }
+
+    .search-box:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+    }
+
+    .search-box.small {
+      margin-bottom: 12px;
+    }
+
+    .search-icon {
+      position: absolute;
+      right: 12px;
+      color: var(--text-light);
+      font-size: 0.9rem;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 40px 10px 12px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      background: transparent;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .clear-search {
+      position: absolute;
+      left: 12px;
+      background: none;
+      border: none;
+      color: var(--text-light);
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 50%;
+      transition: all 0.2s;
+    }
+
+    .clear-search:hover {
+      background: var(--bg);
+      color: var(--danger);
+    }
+
+    /* ==================== HEADER ==================== */
     .page-header {
       display: flex;
       flex-direction: column;
       gap: 16px;
       margin-bottom: 20px;
     }
-
     @media (min-width: 768px) {
-      .page-header {
-        flex-direction: row;
-        justify-content: space-between;
-        align-items: center;
-      }
-    }
-
-    .header-actions {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      width: 100%;
+      .page-header { flex-direction: row; justify-content: space-between; align-items: center; }
     }
     .header-right {
       display: flex;
@@ -859,891 +940,397 @@ interface AttendanceStats {
       gap: 12px;
       width: 100%;
     }
-    .title-section {
-      flex: 1;
-    }
+    .title-section { flex: 1; }
     .back-btn {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: white;
-      border: 1px solid var(--border);
-      color: var(--primary);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 40px; height: 40px; border-radius: 50%;
+      background: white; border: 1px solid var(--border);
+      color: var(--primary); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
     }
-
-    .title-section h1 {
-      font-size: 1.25rem;
-      font-weight: 600;
-      margin: 0;
-    }
-
+    .title-section h1 { font-size: 1.25rem; font-weight: 600; margin: 0; }
     .subject-badge {
-      background: var(--primary-light);
-      color: var(--primary);
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 0.75rem;
+      background: var(--primary-light); color: var(--primary);
+      padding: 4px 10px; border-radius: 20px; font-size: 0.75rem;
     }
-
-    .header-actions {
-      display: flex;
-      gap: 8px;
-    }
-
+    .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .action-btn {
-      padding: 8px 16px;
-      border-radius: var(--radius-sm);
-      border: none;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-      font-size: 0.8rem;
+      padding: 8px 16px; border-radius: var(--radius-sm);
+      border: none; font-weight: 600;
+      display: flex; align-items: center; gap: 6px;
+      cursor: pointer; font-size: 0.8rem;
     }
+    .action-btn.primary { background: var(--primary); color: white; }
+    .action-btn.secondary { background: white; border: 1px solid var(--border); }
 
-    .action-btn.primary {
-      background: var(--primary);
-      color: white;
-    }
-
-    .action-btn.secondary {
-      background: white;
-      border: 1px solid var(--border);
-    }
-
-    /* Stats Scroll Container */
+    /* ==================== STATS ==================== */
     .stats-scroll-container {
-      width: 100%;
-      overflow-x: auto;
-      overflow-y: hidden;
-      margin-bottom: 20px;
-      -webkit-overflow-scrolling: touch;
+      width: 100%; overflow-x: auto; overflow-y: hidden;
+      margin-bottom: 20px; -webkit-overflow-scrolling: touch;
     }
-
-    .stats-scroll-container::-webkit-scrollbar {
-      height: 4px;
-    }
-
-    .stats-scroll-container::-webkit-scrollbar-track {
-      background: var(--border);
-      border-radius: 10px;
-    }
-
-    .stats-scroll-container::-webkit-scrollbar-thumb {
-      background: var(--primary);
-      border-radius: 10px;
-    }
-
-    .stats-horizontal {
-      display: flex;
-      gap: 12px;
-      padding: 4px;
-      min-width: min-content;
-    }
-
+    .stats-scroll-container::-webkit-scrollbar { height: 4px; }
+    .stats-scroll-container::-webkit-scrollbar-track { background: var(--border); border-radius: 10px; }
+    .stats-scroll-container::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 10px; }
+    .stats-horizontal { display: flex; gap: 12px; padding: 4px; min-width: min-content; }
     .stat-card {
-      background: white;
-      padding: 12px;
-      border-radius: var(--radius);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      width: 160px;
-      flex-shrink: 0;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      background: white; padding: 12px; border-radius: var(--radius);
+      display: flex; align-items: center; gap: 10px;
+      width: 160px; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-
     .stat-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.1rem;
+      width: 44px; height: 44px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
     }
-
     .stat-icon.blue-bg { background: #e0f2fe; color: #0284c7; }
     .stat-icon.green-bg { background: #d1fae5; color: var(--success); }
     .stat-icon.orange-bg { background: #ffedd5; color: var(--warning); }
-
-    .stat-info {
-      flex: 1;
-    }
-
-    .stat-label {
-      font-size: 0.65rem;
-      color: var(--text-light);
-      display: block;
-    }
-
-    .stat-value {
-      font-size: 1rem;
-      font-weight: 700;
-    }
-
+    .stat-info { flex: 1; }
+    .stat-label { font-size: 0.65rem; color: var(--text-light); display: block; }
+    .stat-value { font-size: 1rem; font-weight: 700; }
     .green-text { color: var(--success); }
     .orange-text { color: var(--warning); }
 
+    /* ==================== TABS ==================== */
     .tabs-scroll-container {
-      width: 100%;
-      overflow-x: auto;
-      margin: 0 -16px 0 -16px;
-      padding: 0 16px;
+      width: 100%; overflow-x: auto;
+      margin: 0 -16px 0 -16px; padding: 0 16px;
       -webkit-overflow-scrolling: touch;
     }
-
     .tabs-container {
-      display: flex;
-      gap: 8px;
+      display: flex; gap: 8px;
       border-bottom: 1px solid var(--border);
       min-width: max-content;
     }
-    .lesson-detail-container {
-      width: 100%;
-      max-width: 100vw;
-      overflow-x: hidden;
-      background: #f8fafc;
-      min-height: 100vh;
-      padding: 12px;
-      box-sizing: border-box;
-    }
-
-    .tabs-scroll-container::-webkit-scrollbar {
-      height: 4px;
-    }
-
-    .tabs-container {
-      display: flex;
-      gap: 4px;
-      background: white;
-      border-radius: var(--radius) var(--radius) 0 0;
-      border-bottom: 1px solid var(--border);
-      min-width: min-content;
-    }
-
     .tab-btn {
-      padding: 12px 16px;
-      background: transparent;
-      border: none;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--text-light);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-      border-bottom: 3px solid transparent;
+      padding: 12px 16px; background: transparent; border: none;
+      font-size: 0.85rem; font-weight: 600; color: var(--text-light);
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      white-space: nowrap; border-bottom: 3px solid transparent;
     }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
 
-    .tab-btn.active {
-      color: var(--primary);
-      border-bottom-color: var(--primary);
-    }
-
-    /* Tab Content */
+    /* ==================== TAB CONTENT ==================== */
     .tab-content {
-      background: white;
-      border-radius: 0 0 var(--radius) var(--radius);
-      padding: 16px;
-      border: 1px solid var(--border);
-      border-top: none;
-      width: 100%;
-      overflow-x: hidden;
+      background: white; border-radius: 0 0 var(--radius) var(--radius);
+      padding: 16px; border: 1px solid var(--border); border-top: none;
+      width: 100%; overflow-x: hidden;
     }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
 
-    .tab-pane {
-      display: none;
-    }
-
-    .tab-pane.active {
-      display: block;
-    }
-
-    /* Info Cards */
-    .info-cards {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      width: 100%;
-    }
-
+    /* ==================== INFO CARDS ==================== */
+    .info-cards { display: flex; flex-direction: column; gap: 16px; width: 100%; }
     .info-card {
-      background: white;
-      border-radius: var(--radius);
-      padding: 16px;
-      border: 1px solid var(--border);
-      width: 100%;
+      background: white; border-radius: var(--radius);
+      padding: 16px; border: 1px solid var(--border); width: 100%;
     }
-
     .info-card h3 {
-      font-size: 1rem;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 10px;
+      font-size: 1rem; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid var(--border); padding-bottom: 10px;
     }
-
-    .info-list {
-      width: 100%;
-    }
-
+    .info-list { width: 100%; }
     .info-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px dashed var(--border);
-      flex-wrap: wrap;
-      gap: 8px;
+      display: flex; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px dashed var(--border);
+      flex-wrap: wrap; gap: 8px;
     }
-
-    .info-item:last-child {
-      border-bottom: none;
-    }
-
-    .info-label {
-      color: var(--text-light);
-    }
-
-    .info-value.price {
-      color: var(--primary);
-      font-weight: 600;
-    }
-
+    .info-item:last-child { border-bottom: none; }
+    .info-label { color: var(--text-light); }
+    .info-value.price { color: var(--primary); font-weight: 600; }
     .schedule-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px;
-      background: var(--bg);
-      border-radius: var(--radius-sm);
-      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px; background: var(--bg);
+      border-radius: var(--radius-sm); margin-bottom: 8px;
       flex-wrap: wrap;
     }
-
     .schedule-day {
-      background: var(--primary);
-      color: white;
-      padding: 4px 10px;
-      border-radius: var(--radius-sm);
-      font-size: 0.75rem;
+      background: var(--primary); color: white;
+      padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem;
     }
+    .empty-message { text-align: center; color: var(--text-light); padding: 20px; }
 
-    /* Desktop Table */
-    .desktop-table {
-      display: block;
-      width: 100%;
-    }
-
-    .table-responsive {
-      overflow-x: auto;
-      width: 100%;
-    }
-
+    /* ==================== TABLES ==================== */
+    .desktop-table { display: block; width: 100%; }
+    .table-responsive { overflow-x: auto; width: 100%; }
     .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.8rem;
+      width: 100%; border-collapse: collapse; font-size: 0.8rem;
       min-width: 600px;
     }
-
     .data-table th {
-      background: #f1f5f9;
-      padding: 10px;
-      font-weight: 600;
-      color: var(--text-medium);
-      text-align: right;
+      background: #f1f5f9; padding: 10px; font-weight: 600;
+      color: var(--text-medium); text-align: right;
     }
+    .data-table td { padding: 10px; border-bottom: 1px solid var(--border); }
+    .data-table tr:hover td { background: #f8fafc; }
+    .empty-table { text-align: center; color: var(--text-light); padding: 30px !important; }
+    .student-name { cursor: pointer; color: var(--primary); font-weight: 500; }
+    .student-name:hover { text-decoration: underline; }
 
-    .data-table td {
-      padding: 10px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    /* Mobile Cards */
-    .mobile-cards {
-      display: none;
-      width: 100%;
-    }
-
+    /* ==================== MOBILE CARDS ==================== */
+    .mobile-cards { display: none; width: 100%; }
     .student-card, .payment-card, .attendance-card {
-      background: white;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      margin-bottom: 12px;
-      width: 100%;
+      background: white; border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 12px; width: 100%;
     }
-
     .card-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px;
-      background: #f8fafc;
-      border-bottom: 1px solid var(--border);
-      flex-wrap: wrap;
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px; background: #f8fafc;
+      border-bottom: 1px solid var(--border); flex-wrap: wrap;
     }
-
     .student-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--primary);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      flex-shrink: 0;
+      width: 40px; height: 40px; border-radius: 50%;
+      background: var(--primary); color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; flex-shrink: 0;
     }
-
-    .student-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .student-name {
-      font-weight: 600;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .student-id {
-      font-size: 0.7rem;
-      color: var(--text-light);
-    }
-
-    .card-body {
-      padding: 12px;
-    }
-
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px dashed var(--border);
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
+    .student-info { flex: 1; min-width: 0; }
+    .student-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .student-id { font-size: 0.7rem; color: var(--text-light); }
+    .card-body { padding: 12px; }
     .card-footer {
-      padding: 12px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      gap: 8px;
-      justify-content: flex-end;
-      flex-wrap: wrap;
+      padding: 12px; border-top: 1px solid var(--border);
+      display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap;
     }
-
-    .payment-amount {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--primary);
+    .info-row {
+      display: flex; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px dashed var(--border);
+      flex-wrap: wrap; gap: 8px;
     }
-
+    .payment-amount { font-size: 1.1rem; font-weight: 700; color: var(--primary); }
     .stats-row {
-      display: flex;
-      justify-content: space-around;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-      gap: 8px;
+      display: flex; justify-content: space-around;
+      margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
     }
-
-    .stat-item {
-      text-align: center;
-      flex: 1;
-      min-width: 60px;
-    }
-
-    .stat-label-small {
-      font-size: 0.65rem;
-      color: var(--text-light);
-      display: block;
-    }
-
-    .stat-value-small {
-      font-size: 1rem;
-      font-weight: 700;
-    }
-
+    .stat-item { text-align: center; flex: 1; min-width: 60px; }
+    .stat-label-small { font-size: 0.65rem; color: var(--text-light); display: block; }
+    .stat-value-small { font-size: 1rem; font-weight: 700; }
     .stat-item.present .stat-value-small { color: var(--success); }
     .stat-item.absent .stat-value-small { color: var(--danger); }
     .stat-item.late .stat-value-small { color: var(--warning); }
-
     .last-attendance {
-      margin-top: 8px;
-      font-size: 0.7rem;
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 8px;
+      margin-top: 8px; font-size: 0.7rem;
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
     }
-
     .empty-state {
-      text-align: center;
-      padding: 40px 20px;
-      color: var(--text-light);
+      text-align: center; padding: 40px 20px; color: var(--text-light);
     }
+    .empty-state i { font-size: 2rem; margin-bottom: 10px; opacity: 0.5; }
 
-    .empty-state i {
-      font-size: 2rem;
-      margin-bottom: 10px;
-      opacity: 0.5;
-    }
-
-    /* Status Badges */
+    /* ==================== STATUS BADGES ==================== */
     .status-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 20px;
-      font-size: 0.7rem;
-      font-weight: 600;
+      display: inline-block; padding: 4px 10px; border-radius: 20px;
+      font-size: 0.7rem; font-weight: 600;
     }
-
     .status-badge.paid { background: #d1fae5; color: #065f46; }
     .status-badge.pending { background: #fed7aa; color: #92400e; }
     .status-badge.late { background: #fee2e2; color: #991b1b; }
     .status-badge.not-paid { background: #f1f5f9; color: #475569; }
+    .status-badge.partial { background: #dbeafe; color: #1e40af; }
 
-    /* Icons Buttons */
+    /* ==================== ICON BUTTONS ==================== */
     .icon-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
-      background: white;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
+      width: 32px; height: 32px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: white;
+      cursor: pointer; display: inline-flex; align-items: center;
+      justify-content: center; transition: all 0.2s;
     }
-
     .icon-btn.whatsapp-btn { color: #25D366; border-color: #25D366; }
     .icon-btn.whatsapp-btn:hover { background: #25D366; color: white; }
     .icon-btn.blue:hover { background: var(--primary-light); color: var(--primary); }
     .icon-btn.red:hover { background: #fee2e2; color: var(--danger); }
     .icon-btn.green:hover { background: #d1fae5; color: var(--success); }
     .icon-btn.orange:hover { background: #ffedd5; color: var(--warning); }
+    .action-buttons { display: flex; gap: 4px; flex-wrap: wrap; }
 
-    .action-buttons {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-    }
-
-    /* Filter Section */
+    /* ==================== FILTERS ==================== */
     .filter-section {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 16px;
-      width: 100%;
+      display: flex; flex-wrap: wrap; gap: 12px;
+      margin-bottom: 16px; width: 100%;
     }
-
     .filter-select {
-      padding: 8px 12px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: white;
-      flex: 1;
-      min-width: 150px;
+      padding: 8px 12px; border: 1px solid var(--border);
+      border-radius: var(--radius-sm); background: white;
+      flex: 1; min-width: 150px;
     }
-
     .filter-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 16px;
-      width: 100%;
+      display: flex; flex-wrap: wrap; gap: 12px;
+      margin-bottom: 16px; width: 100%;
     }
-
     .filter-group {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex: 1;
+      display: flex; flex-direction: column; gap: 4px; flex: 1;
     }
-
-    .filter-group label {
-      font-size: 0.7rem;
-      color: var(--text-light);
-    }
-
+    .filter-group label { font-size: 0.7rem; color: var(--text-light); }
     .filter-input {
-      padding: 8px 12px;
-      border: 1px solid var(--border);
+      padding: 8px 12px; border: 1px solid var(--border);
       border-radius: var(--radius-sm);
     }
-
     .btn-secondary {
-      padding: 8px 16px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
-      background: white;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      padding: 8px 16px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: white;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
     }
-
     .payments-summary {
-      display: flex;
-      gap: 16px;
-      background: #f1f5f9;
-      padding: 8px 16px;
-      border-radius: var(--radius-sm);
-      flex-wrap: wrap;
+      display: flex; gap: 16px;
+      background: #f1f5f9; padding: 8px 16px;
+      border-radius: var(--radius-sm); flex-wrap: wrap;
     }
+    .summary-item { display: flex; gap: 8px; align-items: center; }
+    .summary-label { font-size: 0.7rem; color: var(--text-light); }
+    .summary-value { font-weight: 700; }
 
-    .summary-item {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .summary-label {
-      font-size: 0.7rem;
-      color: var(--text-light);
-    }
-
-    .summary-value {
-      font-weight: 700;
-    }
-
-    /* Attendance Stats Scroll */
+    /* ==================== ATTENDANCE STATS ==================== */
     .attendance-stats-scroll {
-      width: 100%;
-      overflow-x: auto;
-      margin-bottom: 20px;
+      width: 100%; overflow-x: auto; margin-bottom: 20px;
     }
-
     .attendance-stats {
-      display: flex;
-      gap: 12px;
-      min-width: min-content;
+      display: flex; gap: 12px; min-width: min-content;
     }
-
     .stat-mini {
-      background: #f8fafc;
-      padding: 12px;
-      border-radius: var(--radius-sm);
-      text-align: center;
-      min-width: 80px;
+      background: #f8fafc; padding: 12px; border-radius: var(--radius-sm);
+      text-align: center; min-width: 80px;
     }
-
-    .stat-mini .stat-label {
-      font-size: 0.7rem;
-      color: var(--text-light);
-      display: block;
-    }
-
-    .stat-mini .stat-value {
-      font-size: 1.1rem;
-      font-weight: 700;
-    }
-
+    .stat-mini .stat-label { font-size: 0.7rem; color: var(--text-light); display: block; }
+    .stat-mini .stat-value { font-size: 1.1rem; font-weight: 700; }
     .stat-mini.present .stat-value { color: var(--success); }
     .stat-mini.absent .stat-value { color: var(--danger); }
     .stat-mini.late .stat-value { color: var(--warning); }
 
-    /* Progress Bar */
+    /* ==================== PROGRESS BAR ==================== */
     .progress-bar-container {
-      width: 100px;
-      height: 24px;
-      background: #e9ecef;
-      border-radius: 12px;
-      overflow: hidden;
+      width: 100px; height: 24px;
+      background: #e9ecef; border-radius: 12px; overflow: hidden;
     }
-
     .progress-bar {
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.7rem;
-      font-weight: 600;
-      color: white;
-      transition: width 0.3s;
+      height: 100%; display: flex; align-items: center;
+      justify-content: center; font-size: 0.7rem; font-weight: 600;
+      color: white; transition: width 0.3s;
     }
-
     .progress-bar.good { background: var(--success); }
     .progress-bar.warning { background: var(--warning); }
     .progress-bar.bad { background: var(--danger); }
-
     .present-count { color: var(--success); font-weight: 600; }
     .absent-count { color: var(--danger); font-weight: 600; }
     .late-count { color: var(--warning); font-weight: 600; }
 
-    /* Pagination */
+    /* ==================== PAGINATION ==================== */
     .pagination {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 12px;
-      margin-top: 20px;
+      display: flex; justify-content: center; align-items: center;
+      gap: 12px; margin-top: 20px;
     }
-
     .page-btn {
-      width: 36px;
-      height: 36px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
-      background: white;
-      cursor: pointer;
+      width: 36px; height: 36px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: white; cursor: pointer;
     }
+    .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .page-info { font-weight: 600; }
 
-    .page-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .page-info {
-      font-weight: 600;
-    }
-
-    /* Popups */
-    .popup-overlay {
-      position: fixed;
-      inset: 0;
+    /* ==================== DIALOGS ==================== */
+    .dialog-overlay {
+      position: fixed; inset: 0;
       background: rgba(0,0,0,0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      padding: 16px;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 16px;
     }
-
-    .popup-container {
-      background: white;
-      width: 100%;
-      max-width: 500px;
-      border-radius: var(--radius);
-      max-height: 90vh;
-      overflow-y: auto;
+    .dialog {
+      background: white; width: 100%; max-width: 500px;
+      border-radius: var(--radius); max-height: 90vh; overflow-y: auto;
     }
-
-    .popup-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    .dialog-header {
+      padding: 16px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
     }
-
-    .popup-header h3 {
-      font-size: 1rem;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    .dialog-header h3 { font-size: 1rem; display: flex; align-items: center; gap: 8px; }
+    .dialog-close {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: none; background: transparent; font-size: 1.2rem; cursor: pointer;
     }
-
-    .close-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: none;
-      background: transparent;
-      font-size: 1.2rem;
-      cursor: pointer;
+    .dialog-body { padding: 16px; max-height: 60vh; overflow-y: auto; }
+    .dialog-footer {
+      padding: 16px; border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end; gap: 12px;
     }
-
-    .popup-body {
-      padding: 16px;
-      max-height: 60vh;
-      overflow-y: auto;
-    }
-
-    .popup-footer {
-      padding: 16px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      justify-content: flex-end;
-      gap: 12px;
-    }
-
-    .form-group {
-      margin-bottom: 16px;
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 6px;
-      font-weight: 600;
-      font-size: 0.8rem;
-    }
-
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.8rem; }
     .form-control {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid var(--border);
+      width: 100%; padding: 10px; border: 1px solid var(--border);
       border-radius: var(--radius-sm);
     }
-
-    .form-row {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .form-group.half {
-      flex: 1;
-    }
-
+    .form-control[size] { min-height: 150px; }
+    .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .form-group.half { flex: 1; }
     .btn-save, .btn-cancel {
-      padding: 8px 20px;
-      border-radius: var(--radius-sm);
-      border: none;
-      font-weight: 600;
-      cursor: pointer;
+      padding: 8px 20px; border-radius: var(--radius-sm);
+      border: none; font-weight: 600; cursor: pointer;
     }
+    .btn-save { background: var(--primary); color: white; }
+    .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-cancel { background: transparent; border: 1px solid var(--border); }
 
-    .btn-save {
-      background: var(--primary);
-      color: white;
-    }
-
-    .btn-cancel {
-      background: transparent;
-      border: 1px solid var(--border);
-    }
-
-    /* Loading */
+    /* ==================== LOADING ==================== */
     .loading-overlay {
-      position: fixed;
-      inset: 0;
+      position: fixed; inset: 0;
       background: rgba(255,255,255,0.8);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; align-items: center; justify-content: center;
       z-index: 2000;
     }
-
     .spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid var(--primary);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
+      width: 40px; height: 40px;
+      border: 4px solid #f3f3f3; border-top: 4px solid var(--primary);
+      border-radius: 50%; animation: spin 1s linear infinite;
     }
-
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
 
-    /* Toast */
+    /* ==================== TOAST ==================== */
     .toast {
-      position: fixed;
-      bottom: 16px;
-      left: 16px;
-      padding: 12px 20px;
-      border-radius: var(--radius-sm);
-      color: white;
-      z-index: 2000;
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      position: fixed; bottom: 16px; left: 16px;
+      padding: 12px 20px; border-radius: var(--radius-sm);
+      color: white; z-index: 2000;
+      display: flex; align-items: center; gap: 8px;
       animation: slideIn 0.3s;
     }
-
     .toast.success { background: var(--success); }
     .toast.error { background: var(--danger); }
-
     @keyframes slideIn {
       from { transform: translateX(-100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
     }
 
-    .empty-table {
-      text-align: center;
-      color: var(--text-light);
-      padding: 30px !important;
-    }
-
-    .empty-message {
-      text-align: center;
-      color: var(--text-light);
-      padding: 20px;
-    }
-
-    /* Responsive */
+    /* ==================== RESPONSIVE ==================== */
     @media (max-width: 768px) {
-      .lesson-detail-container {
-        padding: 12px;
-      }
-
-      .desktop-table {
-        display: none;
-      }
-
-      .mobile-cards {
-        display: block;
-      }
-
-      .header-actions {
-        width: 100%;
-      }
-
-      .action-btn {
-        flex: 1;
-        justify-content: center;
-      }
-
-      .filter-section {
-        flex-direction: column;
-      }
-
-      .filter-select {
-        width: 100%;
-      }
-
-      .filter-row {
-        flex-direction: column;
-      }
-
-      .filter-group {
-        width: 100%;
-      }
-
-      .btn-secondary {
-        width: 100%;
-        justify-content: center;
-      }
-
-      .payments-summary {
-        justify-content: space-between;
-      }
-
-      .form-row {
-        flex-direction: column;
-        gap: 0;
-      }
-
-      .popup-container {
-        width: calc(100% - 24px);
-        margin: 0 auto;
-      }
+      .desktop-table { display: none; }
+      .mobile-cards { display: block; }
+      .header-actions { width: 100%; }
+      .action-btn { flex: 1; justify-content: center; }
+      .filter-section { flex-direction: column; }
+      .filter-select { width: 100%; }
+      .filter-row { flex-direction: column; }
+      .filter-group { width: 100%; }
+      .btn-secondary { width: 100%; justify-content: center; }
+      .payments-summary { justify-content: space-between; }
+      .form-row { flex-direction: column; gap: 0; }
+      .dialog { width: calc(100% - 24px); margin: 0 auto; }
+      .info-item { flex-direction: column; align-items: flex-start; gap: 4px; }
+      .stats-horizontal { gap: 8px; }
+      .stat-card { width: 140px; padding: 10px; }
+      .tab-btn { padding: 10px 12px; font-size: 0.75rem; }
+      .tab-btn span { display: none; }
+      .tab-btn i { font-size: 1.2rem; }
+      .search-input { font-size: 0.8rem; padding: 8px 35px 8px 10px; }
     }
   `]
 })
 export class LessonDetailComponent implements OnInit {
+  // ==================== INJECTIONS ====================
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private http = inject(HttpClient);
   private fb = inject(FormBuilder);
   private sanitizer = inject(DomSanitizer);
   
+  // ==================== PROPERTIES ====================
   lessonId!: string;
   lesson: Class | null = null;
   loading = false;
@@ -1756,11 +1343,18 @@ export class LessonDetailComponent implements OnInit {
   attendanceClassesDetails: any[] = [];
   selectedAttendanceRecord?: AttendanceRecord;
   
+  // Student Search
+  studentSearchTerm: string = '';
+  filteredStudents: Student[] = [];
+  availableStudentSearchTerm: string = '';
+  filteredAvailableStudents: Student[] = [];
+  
   attendanceFilter = {
     startDate: this.getDefaultStartDate(),
     endDate: this.getDefaultEndDate()
   };
   
+  // Dialog Popup Flags (using Popup naming for template compatibility)
   showAddStudentPopup = false;
   showAddPaymentPopup = false;
   showEditPaymentPopup = false;
@@ -1769,27 +1363,37 @@ export class LessonDetailComponent implements OnInit {
   showMarkPaidPopup = false;
   showAttendanceDetailsPopup = false;
   
+  // Data
   availableStudents: Student[] = [];
   selectedPayment?: Payment;
   cancelReason = '';
   markPaidPaymentMethod = 'cash';
   
+  // Forms
   addStudentForm: FormGroup;
   paymentForm: FormGroup;
   editPaymentForm: FormGroup;
   
+  // Pagination
   currentPage = 1;
   itemsPerPage = 10;
   
+  // Statistics
   statistics = {
     totalStudents: 0
   };
   
   availableMonths: { value: string; label: string }[] = [];
   
+  // Messages
   errorMessage = '';
   successMessage = '';
-  
+
+  // School ID
+  private schoolId: string | null = null;
+  private apiUrl = 'http://localhost:5090';
+
+  // ==================== COMPUTED PROPERTIES ====================
   get totalPages(): number {
     return Math.ceil(this.filteredPayments.length / this.itemsPerPage);
   }
@@ -1799,6 +1403,7 @@ export class LessonDetailComponent implements OnInit {
     return this.filteredPayments.slice(start, start + this.itemsPerPage);
   }
 
+  // ==================== CONSTRUCTOR ====================
   constructor() {
     this.generateAvailableMonths();
     
@@ -1822,7 +1427,10 @@ export class LessonDetailComponent implements OnInit {
     });
   }
 
+  // ==================== LIFE CYCLE ====================
   ngOnInit(): void {
+    this.loadSchoolData();
+    
     this.route.params.subscribe(params => {
       this.lessonId = params['lessonId'];
       if (this.lessonId) {
@@ -1831,40 +1439,78 @@ export class LessonDetailComponent implements OnInit {
     });
   }
 
-  generateAvailableMonths(): void {
-    const months: { value: string; label: string }[] = [];
-    const today = new Date();
-    
-    // Add last 6 months
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const value = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-      const label = date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' });
-      months.push({ value, label });
+  // ==================== LOAD SCHOOL DATA ====================
+  private loadSchoolData(): void {
+    try {
+      const schoolData = localStorage.getItem('school');
+      if (schoolData) {
+        const school = JSON.parse(schoolData);
+        this.schoolId = school._id || '';
+      } else {
+        const userData = localStorage.getItem('user');
+        if (userData) {
+          const user = JSON.parse(userData);
+          if (user.schoolId) {
+            this.schoolId = user.schoolId;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading school data:', error);
     }
-    
-    // Add next 3 months
-    for (let i = 1; i <= 3; i++) {
-      const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
-      const value = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-      const label = date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' });
-      months.push({ value, label });
-    }
-    
-    // Remove duplicates and sort
-    const uniqueMonths = months.filter((month, index, self) => 
-      index === self.findIndex(m => m.value === month.value)
-    );
-    
-    this.availableMonths = [
-      { value: 'all', label: 'عرض الكل' },
-      ...uniqueMonths
-    ];
   }
 
+  private getSchoolId(): string | null {
+    if (this.schoolId) return this.schoolId;
+    
+    try {
+      const schoolData = localStorage.getItem('school');
+      if (schoolData) {
+        const school = JSON.parse(schoolData);
+        return school._id || '';
+      }
+    } catch (e) {}
+    
+    try {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        return user.schoolId || '';
+      }
+    } catch (e) {}
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(atob(base64));
+        if (payload?.schoolId) {
+          return payload.schoolId;
+        }
+      }
+    } catch (e) {}
+    
+    return null;
+  }
+
+  private getToken(): string | null {
+    return localStorage.getItem('token');
+  }
+
+  private getHeaders(): HttpHeaders {
+    const token = this.getToken();
+    return new HttpHeaders({
+      'Authorization': token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json'
+    });
+  }
+
+  // ==================== DATA LOADING ====================
+  
   loadLessonDetails(): void {
     this.loading = true;
-    this.http.get<any>(`${environment.apiUrl}/classes/${this.lessonId}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/api/classes/${this.lessonId}`).subscribe({
       next: (res) => {
         let lessonData;
         if (res && res.data) {
@@ -1880,6 +1526,7 @@ export class LessonDetailComponent implements OnInit {
         if (lessonData) {
           this.lesson = lessonData;
           this.statistics.totalStudents = lessonData.students?.length || 0;
+          this.filteredStudents = [...(lessonData.students || [])];
           this.loadPayments();
           this.loadAvailableStudents();
         } else {
@@ -1896,9 +1543,8 @@ export class LessonDetailComponent implements OnInit {
   }
 
   loadPayments(): void {
-    this.http.get<any>(`${environment.apiUrl}/payments/class/${this.lessonId}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/api/payments/class/${this.lessonId}`).subscribe({
       next: (res) => {
-        console.log('Payments response:', res);
         let paymentsData: Payment[] = [];
         
         if (res && res.success && Array.isArray(res.payments)) {
@@ -1911,10 +1557,7 @@ export class LessonDetailComponent implements OnInit {
           paymentsData = [];
         }
         
-        // Filter out payments with null student references
         this.payments = paymentsData.filter(payment => payment && payment.student !== null);
-        
-        // Enhance payments with student details
         this.payments = this.payments.map(payment => ({
           ...payment,
           studentDetails: typeof payment.student === 'object' ? payment.student : null
@@ -1935,8 +1578,8 @@ export class LessonDetailComponent implements OnInit {
     if (!this.lessonId) return;
     
     this.loading = true;
-    let url = `${environment.apiUrl}/classes/${this.lessonId}/attendance`;
-    const params = new URLSearchParams();
+    let url = `${this.apiUrl}/api/classes/${this.lessonId}/attendance`;
+    const params = new HttpParams();
     
     if (this.attendanceFilter.startDate) {
       params.append('startDate', this.attendanceFilter.startDate);
@@ -1951,7 +1594,6 @@ export class LessonDetailComponent implements OnInit {
     
     this.http.get<any>(url).subscribe({
       next: (res) => {
-        console.log('Attendance response:', res);
         if (res && res.success) {
           this.attendanceRecords = res.data?.studentsAttendance || [];
           this.attendanceStats = res.data?.statistics;
@@ -1978,13 +1620,30 @@ export class LessonDetailComponent implements OnInit {
   loadAvailableStudents(): void {
     if (!this.lesson) return;
     
-    this.http.get<any>(`${environment.apiUrl}/students`).subscribe({
-      next: (studentsResponse) => {
+    const schoolId = this.getSchoolId();
+    
+    let url = `${this.apiUrl}/api/students`;
+    if (schoolId) {
+      url += `?schoolId=${schoolId}`;
+    }
+    
+    this.http.get<any>(url, { headers: this.getHeaders() }).subscribe({
+      next: (response) => {
         let studentsList: Student[] = [];
-        if (Array.isArray(studentsResponse)) {
-          studentsList = studentsResponse;
-        } else if (studentsResponse && studentsResponse.data && Array.isArray(studentsResponse.data)) {
-          studentsList = studentsResponse.data;
+        
+        if (Array.isArray(response)) {
+          studentsList = response;
+        } else if (response.data && Array.isArray(response.data)) {
+          studentsList = response.data;
+        } else if (response.students && Array.isArray(response.students)) {
+          studentsList = response.students;
+        } else {
+          for (const key in response) {
+            if (Array.isArray(response[key])) {
+              studentsList = response[key];
+              break;
+            }
+          }
         }
         
         const enrolledIds = new Set<string>();
@@ -1997,14 +1656,52 @@ export class LessonDetailComponent implements OnInit {
         }
         
         this.availableStudents = studentsList.filter(s => s && s._id && !enrolledIds.has(s._id));
+        this.filteredAvailableStudents = [...this.availableStudents];
       },
       error: (err) => {
         console.error('Error loading students:', err);
         this.availableStudents = [];
+        this.filteredAvailableStudents = [];
+        this.showError('فشل في تحميل قائمة الطلاب');
       }
     });
   }
 
+  // ==================== STUDENT SEARCH ====================
+  
+  filterStudents(): void {
+    const term = this.studentSearchTerm.toLowerCase().trim();
+    if (!term) {
+      this.filteredStudents = [...(this.lesson?.students || [])];
+      return;
+    }
+    
+    this.filteredStudents = (this.lesson?.students || []).filter(student => {
+      return student.name.toLowerCase().includes(term) || 
+             student.studentId.toLowerCase().includes(term);
+    });
+  }
+
+  clearStudentSearch(): void {
+    this.studentSearchTerm = '';
+    this.filteredStudents = [...(this.lesson?.students || [])];
+  }
+
+  filterAvailableStudents(): void {
+    const term = this.availableStudentSearchTerm.toLowerCase().trim();
+    if (!term) {
+      this.filteredAvailableStudents = [...this.availableStudents];
+      return;
+    }
+    
+    this.filteredAvailableStudents = this.availableStudents.filter(student => {
+      return student.name.toLowerCase().includes(term) || 
+             student.studentId.toLowerCase().includes(term);
+    });
+  }
+
+  // ==================== FILTERS ====================
+  
   applyMonthFilter(): void {
     if (this.selectedMonth === 'all') {
       this.filteredPayments = [...this.payments];
@@ -2019,6 +1716,16 @@ export class LessonDetailComponent implements OnInit {
     this.currentPage = 1;
   }
 
+  resetAttendanceFilter(): void {
+    this.attendanceFilter = {
+      startDate: this.getDefaultStartDate(),
+      endDate: this.getDefaultEndDate()
+    };
+    this.loadAttendance();
+  }
+
+  // ==================== PAYMENT CALCULATIONS ====================
+  
   getTotalPaymentsAmount(): number {
     return this.filteredPayments.reduce((sum, p) => sum + (p?.amount || 0), 0);
   }
@@ -2032,31 +1739,70 @@ export class LessonDetailComponent implements OnInit {
   }
 
   getMonthPaidAmount(): number {
-    if (this.selectedMonth === 'all') {
-      return this.filteredPayments.filter(p => p?.status === 'paid').reduce((sum, p) => sum + (p?.amount || 0), 0);
-    }
     return this.filteredPayments.filter(p => p?.status === 'paid').reduce((sum, p) => sum + (p?.amount || 0), 0);
   }
 
   getMonthPendingAmount(): number {
-    if (this.selectedMonth === 'all') {
-      return this.filteredPayments.filter(p => p?.status !== 'paid').reduce((sum, p) => sum + (p?.amount || 0), 0);
-    }
     return this.filteredPayments.filter(p => p?.status !== 'paid').reduce((sum, p) => sum + (p?.amount || 0), 0);
   }
 
   getStudentPaymentStatus(studentId: string): string {
-    // Find payment for this student
     const payment = this.payments.find(p => {
       if (!p || !p.student) return false;
       const studentObj = typeof p.student === 'object' ? p.student : null;
       const studentIdFromPayment = studentObj ? studentObj._id : p.student;
       return studentIdFromPayment === studentId;
     });
-    
     return payment ? payment.status : 'not-paid';
   }
 
+  // ==================== STUDENT MANAGEMENT ====================
+  
+  enrollStudent(): void {
+    const studentId = this.addStudentForm.value.studentId;
+    if (!studentId) {
+      this.showError('يرجى اختيار طالب');
+      return;
+    }
+    
+    this.loading = true;
+    const url = `${this.apiUrl}/api/classes/${this.lessonId}/enroll/${studentId}`;
+    
+    this.http.post(url, {}, { headers: this.getHeaders() }).subscribe({
+      next: () => {
+        this.loadLessonDetails();
+        this.closeAddStudentPopup();
+        this.showSuccess('تم إضافة الطالب بنجاح');
+        this.loading = false;
+      },
+      error: (err) => {
+        console.error('Error:', err);
+        this.showError(err.error?.error || err.error?.message || 'فشل في إضافة الطالب');
+        this.loading = false;
+      }
+    });
+  }
+
+  removeStudent(studentId: string): void {
+    if (!confirm('هل أنت متأكد من إزالة هذا الطالب من الحصة؟')) return;
+    
+    this.loading = true;
+    this.http.delete(`${this.apiUrl}/api/classes/${this.lessonId}/unenroll/${studentId}`).subscribe({
+      next: () => {
+        this.loadLessonDetails();
+        this.showSuccess('تم إزالة الطالب بنجاح');
+        this.loading = false;
+      },
+      error: (err) => {
+        console.error('Error removing student:', err);
+        this.showError('فشل في إزالة الطالب');
+        this.loading = false;
+      }
+    });
+  }
+
+  // ==================== PAYMENT OPERATIONS ====================
+  
   processPayment(): void {
     if (this.paymentForm.invalid) {
       this.showError('يرجى تعبئة جميع الحقول المطلوبة');
@@ -2064,7 +1810,6 @@ export class LessonDetailComponent implements OnInit {
     }
     
     this.loading = true;
-    
     const paymentData = {
       student: this.paymentForm.value.studentId,
       class: this.lessonId,
@@ -2077,8 +1822,8 @@ export class LessonDetailComponent implements OnInit {
       paymentDate: new Date()
     };
     
-    this.http.post(`${environment.apiUrl}/payments`, paymentData).subscribe({
-      next: (res: any) => {
+    this.http.post(`${this.apiUrl}/api/payments`, paymentData, { headers: this.getHeaders() }).subscribe({
+      next: () => {
         this.loadPayments();
         this.closeAddPaymentPopup();
         this.showSuccess('تم تسجيل الدفع بنجاح');
@@ -2107,7 +1852,6 @@ export class LessonDetailComponent implements OnInit {
     if (this.editPaymentForm.invalid || !this.selectedPayment) return;
     
     this.loading = true;
-    
     const updateData = {
       amount: this.editPaymentForm.value.amount,
       paymentMethod: this.editPaymentForm.value.paymentMethod,
@@ -2115,8 +1859,8 @@ export class LessonDetailComponent implements OnInit {
       notes: this.editPaymentForm.value.notes
     };
     
-    this.http.put(`${environment.apiUrl}/payments/${this.selectedPayment._id}`, updateData).subscribe({
-      next: (res: any) => {
+    this.http.put(`${this.apiUrl}/api/payments/${this.selectedPayment._id}`, updateData, { headers: this.getHeaders() }).subscribe({
+      next: () => {
         this.loadPayments();
         this.closeEditPaymentPopup();
         this.showSuccess('تم تحديث الدفعة بنجاح');
@@ -2136,29 +1880,18 @@ export class LessonDetailComponent implements OnInit {
     this.showMarkPaidPopup = true;
   }
 
-  closeMarkPaidPopup(event?: MouseEvent): void {
-    if (event && event.target === event.currentTarget) {
-      this.showMarkPaidPopup = false;
-      this.selectedPayment = undefined;
-    } else if (!event) {
-      this.showMarkPaidPopup = false;
-      this.selectedPayment = undefined;
-    }
-  }
-
   confirmMarkAsPaid(): void {
     if (!this.selectedPayment) return;
     
     this.loading = true;
-    
     const updateData = {
       status: 'paid',
       paymentMethod: this.markPaidPaymentMethod,
       paymentDate: new Date()
     };
     
-    this.http.put(`${environment.apiUrl}/payments/${this.selectedPayment._id}`, updateData).subscribe({
-      next: (res: any) => {
+    this.http.put(`${this.apiUrl}/api/payments/${this.selectedPayment._id}`, updateData, { headers: this.getHeaders() }).subscribe({
+      next: () => {
         this.loadPayments();
         this.closeMarkPaidPopup();
         this.showSuccess('تم تسديد الدفعة بنجاح');
@@ -2172,33 +1905,14 @@ export class LessonDetailComponent implements OnInit {
     });
   }
 
-  openCancelPaymentPopup(payment: Payment): void {
-    this.selectedPayment = payment;
-    this.cancelReason = '';
-    this.showCancelPaymentPopup = true;
-  }
-
-  closeCancelPaymentPopup(event?: MouseEvent): void {
-    if (event && event.target === event.currentTarget) {
-      this.showCancelPaymentPopup = false;
-      this.selectedPayment = undefined;
-      this.cancelReason = '';
-    } else if (!event) {
-      this.showCancelPaymentPopup = false;
-      this.selectedPayment = undefined;
-      this.cancelReason = '';
-    }
-  }
-
   cancelPayment(): void {
     if (!this.selectedPayment) return;
     
     this.loading = true;
-    
-    this.http.put(`${environment.apiUrl}/payments/${this.selectedPayment._id}/cancel`, {
+    this.http.put(`${this.apiUrl}/api/payments/${this.selectedPayment._id}/cancel`, {
       reason: this.cancelReason
-    }).subscribe({
-      next: (res: any) => {
+    }, { headers: this.getHeaders() }).subscribe({
+      next: () => {
         this.loadPayments();
         this.closeCancelPaymentPopup();
         this.showSuccess('تم إلغاء الدفعة بنجاح');
@@ -2217,23 +1931,12 @@ export class LessonDetailComponent implements OnInit {
     this.showDeleteConfirmPopup = true;
   }
 
-  closeDeleteConfirmPopup(event?: MouseEvent): void {
-    if (event && event.target === event.currentTarget) {
-      this.showDeleteConfirmPopup = false;
-      this.selectedPayment = undefined;
-    } else if (!event) {
-      this.showDeleteConfirmPopup = false;
-      this.selectedPayment = undefined;
-    }
-  }
-
   confirmDeletePayment(): void {
     if (!this.selectedPayment) return;
     
     this.loading = true;
-    
-    this.http.delete(`${environment.apiUrl}/payments/${this.selectedPayment._id}`).subscribe({
-      next: (res: any) => {
+    this.http.delete(`${this.apiUrl}/api/payments/${this.selectedPayment._id}`, { headers: this.getHeaders() }).subscribe({
+      next: () => {
         this.loadPayments();
         this.closeDeleteConfirmPopup();
         this.showSuccess('تم حذف الدفعة بنجاح');
@@ -2247,6 +1950,120 @@ export class LessonDetailComponent implements OnInit {
     });
   }
 
+  // ==================== UTILITY FUNCTIONS ====================
+  
+  getStudentName(student: string | Student | null): string {
+    if (!student) return 'طالب غير محدد';
+    if (typeof student === 'object' && student !== null) {
+      return student.name;
+    }
+    if (this.lesson && this.lesson.students) {
+      const found = this.lesson.students.find(s => s._id === student);
+      return found ? found.name : 'طالب';
+    }
+    return 'طالب';
+  }
+
+  getStudentDetails(student: string | Student | null): Student | null {
+    if (!student) return null;
+    if (typeof student === 'object' && student !== null) {
+      return student;
+    }
+    if (this.lesson && this.lesson.students) {
+      return this.lesson.students.find(s => s._id === student) || null;
+    }
+    return null;
+  }
+
+  getLastAttendanceDate(record: AttendanceRecord): string {
+    if (!record.records || !record.records.length) return '---';
+    const lastRecord = [...record.records].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    )[0];
+    return this.formatDate(lastRecord.date);
+  }
+
+  getPaymentSystemText(system: string): string {
+    return system === 'monthly' ? 'شهري' : 'جولات';
+  }
+
+  getStatusText(status: string): string {
+    const map: { [key: string]: string } = {
+      'paid': 'مدفوع',
+      'pending': 'معلق',
+      'late': 'متأخر',
+      'not-paid': 'لم يدفع',
+      'partial': 'جزئي'
+    };
+    return map[status] || status;
+  }
+
+  getStatusClass(status: string): string {
+    return status;
+  }
+
+  getPaymentMethodText(method?: string): string {
+    const map: { [key: string]: string } = {
+      'cash': 'نقداً',
+      'baridimob': 'بريدي موب',
+      'bank': 'تحويل بنكي'
+    };
+    return method ? (map[method] || method) : '---';
+  }
+
+  formatPrice(price: number): string {
+    return price.toLocaleString() + ' د.ج';
+  }
+
+  formatDate(date?: string | Date): string {
+    if (!date) return '---';
+    return new Date(date).toLocaleDateString('ar-EG');
+  }
+
+  getCurrentMonth(): string {
+    return new Date().toISOString().slice(0, 7);
+  }
+
+  getDefaultStartDate(): string {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  }
+
+  getDefaultEndDate(): string {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  generateAvailableMonths(): void {
+    const months: { value: string; label: string }[] = [];
+    const today = new Date();
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const value = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+      const label = date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' });
+      months.push({ value, label });
+    }
+    
+    for (let i = 1; i <= 3; i++) {
+      const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+      const value = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+      const label = date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' });
+      months.push({ value, label });
+    }
+    
+    const uniqueMonths = months.filter((month, index, self) => 
+      index === self.findIndex(m => m.value === month.value)
+    );
+    
+    this.availableMonths = [
+      { value: 'all', label: 'عرض الكل' },
+      ...uniqueMonths
+    ];
+  }
+
+  // ==================== COMMUNICATION ====================
+  
   callParent(payment: Payment): void {
     const student = this.getStudentDetails(payment.student);
     if (student && student.parentPhone) {
@@ -2265,116 +2082,18 @@ export class LessonDetailComponent implements OnInit {
     }
   }
 
-  getStudentDetails(student: string | Student | null): Student | null {
-    if (!student) return null;
-    if (typeof student === 'object' && student !== null) {
-      return student;
-    }
-    if (this.lesson && this.lesson.students) {
-      return this.lesson.students.find(s => s._id === student) || null;
-    }
-    return null;
+  // ==================== NAVIGATION ====================
+  
+  goBack(): void {
+    this.router.navigate(['/home/lesson-management']);
   }
 
-  enrollStudent(): void {
-    const studentId = this.addStudentForm.value.studentId;
-    if (!studentId) {
-      this.showError('يرجى اختيار طالب');
-      return;
-    }
-    
-    // Debug: Check token
-    const token = localStorage.getItem('token');
-    console.log('🔑 Token present:', !!token);
-    if (token) {
-      console.log('🔑 Token starts with:', token.substring(0, 20) + '...');
-    }
-    
-    this.loading = true;
-    
-    // Use fetch for better control
-    const url = `${environment.apiUrl}/classes/${this.lessonId}/enroll/${studentId}`;
-    
-    fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': token ? `Bearer ${token}` : ''
-      },
-      body: JSON.stringify({})
-    })
-    .then(async response => {
-      const data = await response.json();
-      console.log('📥 Response:', response.status, data);
-      
-      if (!response.ok) {
-        throw new Error(data.error || data.message || 'فشل في إضافة الطالب');
-      }
-      return data;
-    })
-    .then(() => {
-      this.loadLessonDetails();
-      this.closeAddStudentPopup();
-      this.showSuccess('تم إضافة الطالب بنجاح');
-      this.loading = false;
-    })
-    .catch(error => {
-      console.error('❌ Error:', error);
-      this.showError(error.message || 'فشل في إضافة الطالب');
-      this.loading = false;
-    });
+  openStudentDetails(studentId: string): void {
+    this.router.navigate(['/home/student-management', studentId]);
   }
 
-  removeStudent(studentId: string): void {
-    if (!confirm('هل أنت متأكد من إزالة هذا الطالب من الحصة؟')) return;
-    
-    this.loading = true;
-    
-    this.http.delete(`${environment.apiUrl}/classes/${this.lessonId}/unenroll/${studentId}`).subscribe({
-      next: () => {
-        this.loadLessonDetails();
-        this.showSuccess('تم إزالة الطالب بنجاح');
-        this.loading = false;
-      },
-      error: (err) => {
-        console.error('Error removing student:', err);
-        this.showError('فشل في إزالة الطالب');
-        this.loading = false;
-      }
-    });
-  }
-
-  showAttendanceDetails(record: AttendanceRecord): void {
-    this.selectedAttendanceRecord = record;
-    this.showAttendanceDetailsPopup = true;
-  }
-
-  closeAttendanceDetailsPopup(event?: MouseEvent): void {
-    if (event && event.target === event.currentTarget) {
-      this.showAttendanceDetailsPopup = false;
-      this.selectedAttendanceRecord = undefined;
-    } else if (!event) {
-      this.showAttendanceDetailsPopup = false;
-      this.selectedAttendanceRecord = undefined;
-    }
-  }
-
-  resetAttendanceFilter(): void {
-    this.attendanceFilter = {
-      startDate: this.getDefaultStartDate(),
-      endDate: this.getDefaultEndDate()
-    };
-    this.loadAttendance();
-  }
-
-  getLastAttendanceDate(record: AttendanceRecord): string {
-    if (!record.records || !record.records.length) return '---';
-    const lastRecord = [...record.records].sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    )[0];
-    return this.formatDate(lastRecord.date);
-  }
-
+  // ==================== DIALOG POPUP CONTROLS ====================
+  
   setActiveTab(tab: string): void {
     this.activeTab = tab;
     if (tab === 'attendance' && !this.attendanceRecords.length) {
@@ -2385,16 +2104,15 @@ export class LessonDetailComponent implements OnInit {
     }
   }
 
-  goBack(): void {
-    this.router.navigate(['/home/lesson-management']);
-  }
-
   changePage(page: number): void {
     this.currentPage = page;
   }
 
+  // Add Student Popup
   openAddStudentPopup(): void {
     this.showAddStudentPopup = true;
+    this.availableStudentSearchTerm = '';
+    this.loadAvailableStudents();
   }
 
   closeAddStudentPopup(event?: MouseEvent): void {
@@ -2407,6 +2125,7 @@ export class LessonDetailComponent implements OnInit {
     }
   }
 
+  // Add Payment Popup
   openAddPaymentPopup(student?: Student): void {
     this.showAddPaymentPopup = true;
     if (student) {
@@ -2439,6 +2158,7 @@ export class LessonDetailComponent implements OnInit {
     }
   }
 
+  // Edit Payment Popup
   closeEditPaymentPopup(event?: MouseEvent): void {
     if (event && event.target === event.currentTarget) {
       this.showEditPaymentPopup = false;
@@ -2451,99 +2171,79 @@ export class LessonDetailComponent implements OnInit {
     }
   }
 
-  getCurrentMonth(): string {
-    return new Date().toISOString().slice(0, 7);
+  // Cancel Payment Popup
+  openCancelPaymentPopup(payment: Payment): void {
+    this.selectedPayment = payment;
+    this.cancelReason = '';
+    this.showCancelPaymentPopup = true;
   }
 
-  getPreviousMonth(): string {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 1);
-    return d.toISOString().slice(0, 7);
-  }
-
-  getDefaultStartDate(): string {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString().split('T')[0];
-  }
-
-  getDefaultEndDate(): string {
-    return new Date().toISOString().split('T')[0];
-  }
-
-  getStudentName(student: string | Student | null): string {
-    if (!student) return 'طالب غير محدد';
-    if (typeof student === 'object' && student !== null) {
-      return student.name;
+  closeCancelPaymentPopup(event?: MouseEvent): void {
+    if (event && event.target === event.currentTarget) {
+      this.showCancelPaymentPopup = false;
+      this.selectedPayment = undefined;
+      this.cancelReason = '';
+    } else if (!event) {
+      this.showCancelPaymentPopup = false;
+      this.selectedPayment = undefined;
+      this.cancelReason = '';
     }
-    if (this.lesson && this.lesson.students) {
-      const found = this.lesson.students.find(s => s._id === student);
-      return found ? found.name : 'طالب';
+  }
+
+  // Delete Popup
+  closeDeleteConfirmPopup(event?: MouseEvent): void {
+    if (event && event.target === event.currentTarget) {
+      this.showDeleteConfirmPopup = false;
+      this.selectedPayment = undefined;
+    } else if (!event) {
+      this.showDeleteConfirmPopup = false;
+      this.selectedPayment = undefined;
     }
-    return 'طالب';
   }
 
-  formatPrice(price: number): string {
-    return price.toLocaleString() + ' د.ج';
+  // Mark Paid Popup
+  closeMarkPaidPopup(event?: MouseEvent): void {
+    if (event && event.target === event.currentTarget) {
+      this.showMarkPaidPopup = false;
+      this.selectedPayment = undefined;
+    } else if (!event) {
+      this.showMarkPaidPopup = false;
+      this.selectedPayment = undefined;
+    }
   }
 
-  formatDate(date?: string | Date): string {
-    if (!date) return '---';
-    return new Date(date).toLocaleDateString('ar-EG');
-  }
-
-  getPaymentSystemText(system: string): string {
-    return system === 'monthly' ? 'شهري' : 'جولات';
-  }
-
-  getStatusText(status: string): string {
-    const map: { [key: string]: string } = {
-      'paid': 'مدفوع',
-      'pending': 'معلق',
-      'late': 'متأخر',
-      'not-paid': 'لم يدفع'
-    };
-    return map[status] || status;
-  }
-
-  getAttendanceStatusText(status: string): string {
-    const map: { [key: string]: string } = {
-      'present': 'حاضر',
-      'absent': 'غائب',
-      'late': 'متأخر'
-    };
-    return map[status] || status;
-  }
-
-  getPaymentMethodText(method?: string): string {
-    const map: { [key: string]: string } = {
-      'cash': 'نقداً',
-      'baridimob': 'بريدي موب',
-      'bank': 'تحويل بنكي'
-    };
-    return method ? (map[method] || method) : '---';
-  }
-
-  getStatusClass(status: string): string {
-    return status;
-  }
-
-  printReceipt(payment: Payment): void {
-    // TODO: Implement receipt printing
-    this.showSuccess('سيتم فتح نافذة الطباعة قريباً');
-  }
-
+  // ==================== TOAST MESSAGES ====================
+  
   private showSuccess(message: string): void {
     this.successMessage = message;
     setTimeout(() => this.successMessage = '', 3000);
   }
-  
-  openStudentDetails(studentId: string): void {
-    this.router.navigate(['/home/student-management', studentId]);
-  }
-  
+
   private showError(message: string): void {
     this.errorMessage = message;
     setTimeout(() => this.errorMessage = '', 3000);
+  }
+
+  // ==================== ATTENDANCE DETAILS ====================
+  
+  showAttendanceDetails(record: AttendanceRecord): void {
+    this.selectedAttendanceRecord = record;
+    this.showAttendanceDetailsPopup = true;
+  }
+
+  closeAttendanceDetailsPopup(event?: MouseEvent): void {
+    if (event && event.target === event.currentTarget) {
+      this.showAttendanceDetailsPopup = false;
+      this.selectedAttendanceRecord = undefined;
+    } else if (!event) {
+      this.showAttendanceDetailsPopup = false;
+      this.selectedAttendanceRecord = undefined;
+    }
+  }
+
+  // ==================== PRINTING ====================
+  
+  printReceipt(payment: Payment): void {
+    this.showSuccess('سيتم فتح نافذة الطباعة قريباً');
   }
 }

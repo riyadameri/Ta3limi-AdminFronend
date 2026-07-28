@@ -1,16 +1,41 @@
-import { Component, OnInit, ViewChild, ElementRef, inject } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TeachersService, Teacher } from '../services/teachers.service';
-import { ClassesService, Class } from '../classes.service';
-import { LiveClassesService, LiveClass } from '../services/live-classes.service';
-import { LessonsService } from '../services/lessons.service';
-import { AuthService } from '../services/auth.service';
+import { HttpClient, HttpClientModule } from '@angular/common/http';
+
+interface Teacher {
+  _id: string;
+  schoolId: string;
+  name: string;
+  subjects: string[];
+  phone?: string;
+  email?: string;
+  hireDate?: string;
+  active: boolean;
+  salaryPercentage?: number;
+}
+
+interface Class {
+  _id: string;
+  name: string;
+  subject: string;
+  teacher?: { _id: string; name: string };
+  students?: any[];
+}
+
+interface LiveClass {
+  _id: string;
+  class: { _id: string; name: string };
+  teacher: { _id: string; name: string };
+  date: string;
+  title?: string;
+  status: string;
+}
 
 @Component({
   selector: 'app-teachers-management',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, HttpClientModule],
   template: `
     <div class="teachers-wrapper">
       <div class="teachers-container">
@@ -32,7 +57,7 @@ import { AuthService } from '../services/auth.service';
           </div>
         </header>
 
-        <!-- Stats Row - Horizontal Scroll -->
+        <!-- Stats Row -->
         <div class="stats-scroll-container">
           <div class="stats-row">
             <div class="stat-card">
@@ -97,7 +122,7 @@ import { AuthService } from '../services/auth.service';
                   <th>تاريخ التعيين</th>
                   <th>الحالة</th>
                   <th class="text-center">الإجراءات</th>
-                 </tr>
+                </tr>
               </thead>
               <tbody>
                 <tr *ngFor="let teacher of paginatedTeachers" class="row-hover">
@@ -247,7 +272,7 @@ import { AuthService } from '../services/auth.service';
                   <div *ngFor="let s of subjectsList" 
                        class="subject-chip"
                        [class.selected]="activeTeacherForm.subjects?.includes(s)"
-                       (click)="toggleSubject(s, showAddPopup ? 'new' : 'edit')">
+                       (click)="toggleSubject(s)">
                     {{ s }}
                   </div>
                 </div>
@@ -303,7 +328,7 @@ import { AuthService } from '../services/auth.service';
                       </thead>
                       <tbody>
                         <tr *ngFor="let lc of teacherLiveClasses.slice(0, 5)">
-                          <td>{{ lc.title }}</td>
+                          <td>{{ lc.class?.name || lc.title || 'غير محدد' }}</td>
                           <td>{{ formatDate(lc.date) }}</td>
                           <td><span class="dot-status" [class.completed]="lc.status === 'completed'">{{ lc.status === 'completed' ? 'مكتملة' : 'قادمة' }}</span></td>
                         </tr>
@@ -372,7 +397,6 @@ import { AuthService } from '../services/auth.service';
       direction: rtl;
     }
 
-    /* Colors */
     :host {
       --primary: #4361ee;
       --primary-dark: #3a56d4;
@@ -389,7 +413,6 @@ import { AuthService } from '../services/auth.service';
       --radius-sm: 8px;
     }
 
-    /* Header */
     .page-header {
       display: flex;
       justify-content: space-between;
@@ -417,7 +440,6 @@ import { AuthService } from '../services/auth.service';
       gap: 8px;
     }
 
-    /* Buttons */
     .btn {
       padding: 8px 16px;
       border-radius: var(--radius-sm);
@@ -428,24 +450,33 @@ import { AuthService } from '../services/auth.service';
       gap: 8px;
       cursor: pointer;
       font-size: 0.8rem;
+      transition: all 0.2s;
     }
 
     .btn-primary {
       background: var(--primary);
       color: white;
     }
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
 
     .btn-outline {
       background: white;
       border: 1px solid var(--border);
+    }
+    .btn-outline:hover {
+      background: #f1f5f9;
     }
 
     .btn-danger {
       background: var(--danger);
       color: white;
     }
+    .btn-danger:hover {
+      background: #dc2626;
+    }
 
-    /* Stats Scroll Container */
     .stats-scroll-container {
       width: 100%;
       overflow-x: auto;
@@ -457,12 +488,10 @@ import { AuthService } from '../services/auth.service';
     .stats-scroll-container::-webkit-scrollbar {
       height: 4px;
     }
-
     .stats-scroll-container::-webkit-scrollbar-track {
       background: var(--border);
       border-radius: 10px;
     }
-
     .stats-scroll-container::-webkit-scrollbar-thumb {
       background: var(--primary);
       border-radius: 10px;
@@ -494,7 +523,6 @@ import { AuthService } from '../services/auth.service';
       justify-content: center;
       font-size: 1.2rem;
     }
-
     .stat-icon.blue { background: #e0f2fe; color: #0284c7; }
     .stat-icon.green { background: #d1fae5; color: var(--success); }
     .stat-icon.orange { background: #ffedd5; color: var(--warning); }
@@ -502,19 +530,16 @@ import { AuthService } from '../services/auth.service';
     .stat-info {
       flex: 1;
     }
-
     .stat-label {
       font-size: 0.65rem;
       color: var(--text-light);
       display: block;
     }
-
     .stat-value {
       font-size: 1rem;
       font-weight: 700;
     }
 
-    /* Filter Section */
     .filter-section {
       background: white;
       padding: 12px;
@@ -528,7 +553,6 @@ import { AuthService } from '../services/auth.service';
       position: relative;
       margin-bottom: 12px;
     }
-
     .search-box i {
       position: absolute;
       right: 12px;
@@ -536,7 +560,6 @@ import { AuthService } from '../services/auth.service';
       transform: translateY(-50%);
       color: var(--text-light);
     }
-
     .search-box input {
       width: 100%;
       padding: 10px 36px 10px 12px;
@@ -544,6 +567,9 @@ import { AuthService } from '../services/auth.service';
       border-radius: var(--radius-sm);
       outline: none;
       font-size: 0.8rem;
+    }
+    .search-box input:focus {
+      border-color: var(--primary);
     }
 
     .filter-group {
@@ -559,6 +585,11 @@ import { AuthService } from '../services/auth.service';
       border-radius: var(--radius-sm);
       background: white;
       font-size: 0.8rem;
+      min-width: 120px;
+    }
+    .form-select:focus {
+      border-color: var(--primary);
+      outline: none;
     }
 
     .btn-clear {
@@ -570,8 +601,10 @@ import { AuthService } from '../services/auth.service';
       cursor: pointer;
       font-size: 0.75rem;
     }
+    .btn-clear:hover {
+      background: #fee2e2;
+    }
 
-    /* Desktop Table */
     .desktop-table-view {
       display: block;
       width: 100%;
@@ -588,18 +621,20 @@ import { AuthService } from '../services/auth.service';
       font-size: 0.8rem;
       min-width: 700px;
     }
-
     .data-table th {
       background: #f1f5f9;
       padding: 12px;
       font-weight: 600;
       color: var(--text-medium);
       text-align: right;
+      border-bottom: 2px solid var(--border);
     }
-
     .data-table td {
       padding: 12px;
       border-bottom: 1px solid var(--border);
+    }
+    .data-table tr:last-child td {
+      border-bottom: none;
     }
 
     .row-hover:hover {
@@ -622,6 +657,11 @@ import { AuthService } from '../services/auth.service';
       align-items: center;
       justify-content: center;
       font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .teacher-name {
+      font-weight: 500;
     }
 
     .subject-tags {
@@ -640,11 +680,15 @@ import { AuthService } from '../services/auth.service';
     .contact-info {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 2px;
     }
-
     .contact-info i {
       width: 20px;
+      color: var(--text-light);
+    }
+    .email-text {
+      font-size: 0.75rem;
+      color: var(--text-light);
     }
 
     .status-badge {
@@ -652,13 +696,12 @@ import { AuthService } from '../services/auth.service';
       border-radius: 20px;
       font-size: 0.7rem;
       font-weight: 600;
+      display: inline-block;
     }
-
     .status-badge.active {
       background: #d1fae5;
       color: #065f46;
     }
-
     .status-badge.inactive {
       background: #fee2e2;
       color: #991b1b;
@@ -681,14 +724,16 @@ import { AuthService } from '../services/auth.service';
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      transition: all 0.2s;
     }
-
+    .icon-btn:hover {
+      transform: scale(1.05);
+    }
     .icon-btn.info { background: #e0f2fe; color: #0369a1; }
     .icon-btn.edit { background: #fef3c7; color: #92400e; }
     .icon-btn.delete { background: #fee2e2; color: #991b1b; }
     .icon-btn.status { background: #e0e7ff; color: #4338ca; }
 
-    /* Mobile Card View */
     .mobile-card-view {
       display: none;
       width: 100%;
@@ -699,6 +744,7 @@ import { AuthService } from '../services/auth.service';
       border: 1px solid var(--border);
       border-radius: var(--radius);
       margin-bottom: 12px;
+      overflow: hidden;
     }
 
     .card-header {
@@ -721,12 +767,12 @@ import { AuthService } from '../services/auth.service';
       justify-content: center;
       font-size: 1.2rem;
       font-weight: 600;
+      flex-shrink: 0;
     }
 
     .teacher-info-card {
       flex: 1;
     }
-
     .teacher-name-card {
       font-weight: 600;
       font-size: 0.9rem;
@@ -755,16 +801,13 @@ import { AuthService } from '../services/auth.service';
       flex-wrap: wrap;
       gap: 8px;
     }
-
     .info-row:last-child {
       border-bottom: none;
     }
-
     .info-label {
       color: var(--text-light);
       font-size: 0.75rem;
     }
-
     .info-value {
       font-weight: 500;
     }
@@ -789,29 +832,26 @@ import { AuthService } from '../services/auth.service';
       gap: 8px;
       justify-content: flex-end;
     }
-
     .card-footer .icon-btn {
       display: inline-flex;
       align-items: center;
       gap: 6px;
       width: auto;
       padding: 0 12px;
+      height: 32px;
     }
 
-    /* Empty State */
     .empty-state {
       text-align: center;
       padding: 40px;
       color: var(--text-light);
     }
-
     .empty-state i {
       font-size: 3rem;
       margin-bottom: 12px;
       opacity: 0.5;
     }
 
-    /* Pagination */
     .pagination-area {
       padding: 16px;
       display: flex;
@@ -840,8 +880,13 @@ import { AuthService } from '../services/auth.service';
       border: 1px solid var(--border);
       background: white;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-
+    .p-btn:hover:not(:disabled) {
+      background: #f1f5f9;
+    }
     .p-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
@@ -852,7 +897,6 @@ import { AuthService } from '../services/auth.service';
       font-weight: 500;
     }
 
-    /* Popup */
     .popup-overlay {
       position: fixed;
       inset: 0;
@@ -872,11 +916,9 @@ import { AuthService } from '../services/auth.service';
       max-height: 90vh;
       overflow-y: auto;
     }
-
     .popup-container.large {
       max-width: 700px;
     }
-
     .popup-container.small {
       max-width: 400px;
     }
@@ -887,10 +929,14 @@ import { AuthService } from '../services/auth.service';
       display: flex;
       justify-content: space-between;
       align-items: center;
+      position: sticky;
+      top: 0;
+      background: white;
+      z-index: 1;
     }
-
     .popup-header h3 {
       font-size: 1rem;
+      margin: 0;
     }
 
     .close-btn {
@@ -901,6 +947,12 @@ import { AuthService } from '../services/auth.service';
       background: transparent;
       font-size: 1.2rem;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .close-btn:hover {
+      background: #f1f5f9;
     }
 
     .popup-body {
@@ -913,8 +965,10 @@ import { AuthService } from '../services/auth.service';
       display: flex;
       justify-content: flex-end;
       gap: 12px;
+      position: sticky;
+      bottom: 0;
+      background: white;
     }
-
     .popup-footer.centered {
       justify-content: center;
     }
@@ -922,16 +976,15 @@ import { AuthService } from '../services/auth.service';
     .form-group {
       margin-bottom: 16px;
     }
-
     .form-group.full {
       grid-column: span 2;
     }
-
     .form-group label {
       display: block;
       margin-bottom: 6px;
       font-weight: 600;
       font-size: 0.75rem;
+      color: var(--text-medium);
     }
 
     .form-input {
@@ -941,6 +994,11 @@ import { AuthService } from '../services/auth.service';
       border-radius: var(--radius-sm);
       outline: none;
       font-size: 0.8rem;
+      background: white;
+    }
+    .form-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
     }
 
     .form-row {
@@ -948,9 +1006,9 @@ import { AuthService } from '../services/auth.service';
       gap: 12px;
       flex-wrap: wrap;
     }
-
     .form-row .form-group {
       flex: 1;
+      min-width: 120px;
     }
 
     .subject-selection {
@@ -967,11 +1025,16 @@ import { AuthService } from '../services/auth.service';
       cursor: pointer;
       font-size: 0.75rem;
       transition: all 0.2s;
+      border: 2px solid transparent;
+      user-select: none;
     }
-
+    .subject-chip:hover {
+      background: #e2e8f0;
+    }
     .subject-chip.selected {
       background: var(--primary);
       color: white;
+      border-color: var(--primary-dark);
     }
 
     .warning-icon {
@@ -984,7 +1047,6 @@ import { AuthService } from '../services/auth.service';
       text-align: center;
     }
 
-    /* Details Layout */
     .details-layout {
       display: flex;
       flex-direction: column;
@@ -1014,9 +1076,9 @@ import { AuthService } from '../services/auth.service';
 
     .profile-main h4 {
       margin-bottom: 4px;
+      font-size: 1.1rem;
     }
-
-    .hire-date {
+    .profile-main .hire-date {
       font-size: 0.7rem;
       color: var(--text-light);
     }
@@ -1032,16 +1094,15 @@ import { AuthService } from '../services/auth.service';
     .mini-card {
       text-align: center;
       flex: 1;
+      min-width: 60px;
     }
-
-    .m-val {
+    .mini-card .m-val {
       display: block;
       font-size: 1.2rem;
       font-weight: 700;
       color: var(--primary);
     }
-
-    .m-lab {
+    .mini-card .m-lab {
       font-size: 0.65rem;
       color: var(--text-light);
     }
@@ -1065,13 +1126,12 @@ import { AuthService } from '../services/auth.service';
       border-collapse: collapse;
       font-size: 0.75rem;
     }
-
     .mini-table th {
       background: #f1f5f9;
       padding: 8px;
       text-align: right;
+      font-weight: 600;
     }
-
     .mini-table td {
       padding: 8px;
       border-bottom: 1px solid var(--border);
@@ -1083,7 +1143,6 @@ import { AuthService } from '../services/auth.service';
       border-radius: 12px;
       font-size: 0.65rem;
     }
-
     .dot-status.completed {
       background: #d1fae5;
       color: #065f46;
@@ -1094,7 +1153,6 @@ import { AuthService } from '../services/auth.service';
       color: var(--text-light);
     }
 
-    /* Loading */
     .loading-overlay {
       position: fixed;
       inset: 0;
@@ -1120,7 +1178,6 @@ import { AuthService } from '../services/auth.service';
       100% { transform: rotate(360deg); }
     }
 
-    /* Responsive */
     @media (max-width: 768px) {
       .teachers-container {
         padding: 12px;
@@ -1137,7 +1194,6 @@ import { AuthService } from '../services/auth.service';
       .header-actions span {
         display: none;
       }
-
       .btn {
         padding: 8px 12px;
       }
@@ -1146,20 +1202,18 @@ import { AuthService } from '../services/auth.service';
         min-width: 120px;
         padding: 10px;
       }
-
       .stat-icon {
         width: 36px;
         height: 36px;
+        font-size: 1rem;
       }
 
       .filter-group {
         flex-direction: column;
       }
-
       .form-select {
         width: 100%;
       }
-
       .btn-clear {
         width: 100%;
       }
@@ -1191,10 +1245,9 @@ import { AuthService } from '../services/auth.service';
   `]
 })
 export class TeachersManagementComponent implements OnInit {
-  private teachersService = inject(TeachersService);
-  private classesService = inject(ClassesService);
-  private liveClassesService = inject(LiveClassesService);
-  
+  // ==========================================
+  // Data Properties
+  // ==========================================
   teachers: Teacher[] = [];
   classes: Class[] = [];
   liveClasses: LiveClass[] = [];
@@ -1204,15 +1257,31 @@ export class TeachersManagementComponent implements OnInit {
   selectedTeacher: Teacher | null = null;
   selectedTeacherId: string = '';
   
-  newTeacher: any = { name: '', subjects: [], phone: '', email: '', hireDate: new Date().toISOString().split('T')[0], active: true };
+  // ==========================================
+  // Form Properties
+  // ==========================================
+  newTeacher: any = { 
+    name: '', 
+    subjects: [], 
+    phone: '', 
+    email: '', 
+    hireDate: new Date().toISOString().split('T')[0], 
+    active: true 
+  };
   editTeacherData: any = {};
   activeTeacherForm: any = {};
 
+  // ==========================================
+  // Filter Properties
+  // ==========================================
   searchTerm: string = '';
   subjectFilter: string = '';
   statusFilter: string = 'all';
   subjectsList = ['رياضيات', 'فيزياء', 'علوم', 'لغة عربية', 'لغة فرنسية', 'لغة انجليزية', 'تاريخ', 'جغرافيا', 'فلسفة', 'إعلام آلي'];
   
+  // ==========================================
+  // UI State Properties
+  // ==========================================
   isLoading: boolean = false;
   showAddPopup: boolean = false;
   showEditModal: boolean = false;
@@ -1220,15 +1289,323 @@ export class TeachersManagementComponent implements OnInit {
   showConfirmDeleteModal: boolean = false;
   
   teacherStats: any = { totalClasses: 0, totalStudents: 0, totalLiveClasses: 0, thisMonthClasses: 0 };
+  
   currentPage: number = 1;
   itemsPerPage: number = 10;
   totalItems: number = 0;
 
+  // ==========================================
+  // API Base URL
+  // ==========================================
+  private apiUrl = 'http://localhost:5090';
+
+  // ==========================================
+  // Constructor
+  // ==========================================
+  constructor(private http: HttpClient) {}
+
+  // ==========================================
+  // Lifecycle Hooks
+  // ==========================================
   ngOnInit(): void {
     this.loadTeachers();
     this.loadClasses();
     this.loadLiveClasses();
   }
+
+  // ==========================================
+  // Helper Methods
+  // ==========================================
+  
+  private getSchoolId(): string | null {
+    try {
+      // ✅ المحاولة الأولى: من user object
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user?.schoolId) {
+          console.log('✅ schoolId من user:', user.schoolId);
+          return user.schoolId;
+        }
+      }
+
+      // ✅ المحاولة الثانية: من school object
+      const schoolStr = localStorage.getItem('school');
+      if (schoolStr) {
+        const school = JSON.parse(schoolStr);
+        if (school?._id) {
+          console.log('✅ schoolId من school:', school._id);
+          return school._id;
+        }
+      }
+
+      // ✅ المحاولة الثالثة: من token (فك تشفير JWT)
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const base64Url = token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const payload = JSON.parse(atob(base64));
+          if (payload?.schoolId) {
+            console.log('✅ schoolId من token:', payload.schoolId);
+            return payload.schoolId;
+          }
+        } catch (e) {
+          console.warn('⚠️ فشل فك تشفير token');
+        }
+      }
+
+      console.warn('⚠️ لم يتم العثور على schoolId في أي مصدر');
+      return null;
+    } catch (e) {
+      console.error('❌ خطأ في getSchoolId:', e);
+      return null;
+    }
+  }
+
+  private getToken(): string | null {
+    try {
+      return localStorage.getItem('token');
+    } catch (e) {
+      console.error('❌ خطأ في قراءة token:', e);
+      return null;
+    }
+  }
+
+  private getHeaders(): any {
+    const token = this.getToken();
+    return {
+      'Authorization': token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json'
+    };
+  }
+
+  // ==========================================
+  // Data Loading Methods
+  // ==========================================
+
+  loadTeachers(): void {
+    this.isLoading = true;
+    
+    const schoolId = this.getSchoolId();
+    
+    if (!schoolId) {
+      console.warn('⚠️ لا يوجد schoolId - محاولة جلب جميع الأساتذة');
+      this.loadAllTeachers();
+      return;
+    }
+
+    const url = `${this.apiUrl}/api/teachers/school/${schoolId}`;
+    console.log('📤 جلب أساتذة المدرسة:', url);
+    
+    this.http.get<Teacher[]>(url, { headers: this.getHeaders() }).subscribe({
+      next: (data) => {
+        console.log(`✅ تم تحميل ${data.length} أستاذ للمدرسة`);
+        this.teachers = data;
+        this.totalItems = data.length;
+        this.isLoading = false;
+        this.currentPage = 1;
+      },
+      error: (err) => {
+        console.error('❌ خطأ في تحميل الأساتذة:', err);
+        this.loadAllTeachers();
+      }
+    });
+  }
+
+  private loadAllTeachers(): void {
+    console.log('🔄 جلب جميع الأساتذة (بدون فلترة)');
+    this.http.get<Teacher[]>(`${this.apiUrl}/api/teachers`, { headers: this.getHeaders() }).subscribe({
+      next: (data) => {
+        console.log(`✅ تم تحميل ${data.length} أستاذ (جميعهم)`);
+        this.teachers = data;
+        this.totalItems = data.length;
+        this.isLoading = false;
+      },
+      error: (err) => {
+        console.error('❌ فشل تحميل الأساتذة:', err);
+        this.teachers = [];
+        this.totalItems = 0;
+        this.isLoading = false;
+      }
+    });
+  }
+
+  loadClasses(): void {
+    this.http.get<Class[]>(`${this.apiUrl}/api/classes`, { headers: this.getHeaders() }).subscribe({
+      next: (data) => {
+        this.classes = data;
+        console.log(`✅ تم تحميل ${data.length} حصة`);
+      },
+      error: (err) => {
+        console.error('❌ خطأ في تحميل الحصص:', err);
+        this.classes = [];
+      }
+    });
+  }
+  
+  loadLiveClasses(): void {
+    this.http.get<LiveClass[]>(`${this.apiUrl}/api/live-classes`, { headers: this.getHeaders() }).subscribe({
+      next: (data) => {
+        this.liveClasses = data;
+        console.log(`✅ تم تحميل ${data.length} حصة حية`);
+      },
+      error: (err) => {
+        console.error('❌ خطأ في تحميل الحصص الحية:', err);
+        this.liveClasses = [];
+      }
+    });
+  }
+
+  // ==========================================
+  // CRUD Operations
+  // ==========================================
+
+  addTeacher(): void {
+    if (!this.validateTeacherForm(this.activeTeacherForm)) return;
+    
+    const schoolId = this.getSchoolId();
+    if (!schoolId) {
+      alert('⚠️ لا يمكن إضافة أستاذ بدون تحديد المدرسة');
+      return;
+    }
+
+    this.isLoading = true;
+    
+    const teacherData = {
+      ...this.activeTeacherForm,
+      schoolId: schoolId
+    };
+    
+    console.log('📤 إرسال بيانات أستاذ جديد:', teacherData);
+    
+    this.http.post(`${this.apiUrl}/api/teachers`, teacherData, { headers: this.getHeaders() }).subscribe({
+      next: (response: any) => {
+        console.log('✅ تم إضافة الأستاذ:', response);
+        if (response.existed) {
+          alert('ℹ️ الأستاذ موجود مسبقاً في هذه المدرسة');
+        }
+        this.loadTeachers();
+        this.showAddPopup = false;
+        this.isLoading = false;
+      },
+      error: (err) => {
+        console.error('❌ خطأ في إضافة الأستاذ:', err);
+        alert('❌ حدث خطأ أثناء إضافة الأستاذ: ' + (err.error?.error || err.message));
+        this.isLoading = false;
+      }
+    });
+  }
+
+  editTeacher(): void {
+    if (!this.selectedTeacher || !this.validateTeacherForm(this.activeTeacherForm)) return;
+    
+    this.isLoading = true;
+    
+    const updateData = { ...this.activeTeacherForm };
+    delete updateData.schoolId;
+    
+    console.log('📤 تحديث بيانات الأستاذ:', updateData);
+    
+    this.http.put(`${this.apiUrl}/api/teachers/${this.selectedTeacher._id}`, updateData, { 
+      headers: this.getHeaders() 
+    }).subscribe({
+      next: (response: any) => {
+        console.log('✅ تم تحديث الأستاذ:', response);
+        this.loadTeachers();
+        this.showEditModal = false;
+        this.isLoading = false;
+      },
+      error: (err) => {
+        console.error('❌ خطأ في تحديث الأستاذ:', err);
+        alert('❌ حدث خطأ أثناء تحديث الأستاذ: ' + (err.error?.error || err.message));
+        this.isLoading = false;
+      }
+    });
+  }
+
+  deleteTeacher(): void {
+    if (!this.selectedTeacher) return;
+    
+    this.isLoading = true;
+    
+    this.http.delete(`${this.apiUrl}/api/teachers/${this.selectedTeacher._id}`, { 
+      headers: this.getHeaders() 
+    }).subscribe({
+      next: () => {
+        console.log('✅ تم حذف الأستاذ');
+        this.loadTeachers();
+        this.showConfirmDeleteModal = false;
+        this.isLoading = false;
+      },
+      error: (err) => {
+        console.error('❌ خطأ في حذف الأستاذ:', err);
+        alert('❌ حدث خطأ أثناء حذف الأستاذ: ' + (err.error?.error || err.message));
+        this.isLoading = false;
+      }
+    });
+  }
+
+  toggleTeacherStatus(teacher: Teacher): void {
+    const current = teacher.active ?? true;
+    const updateData = { ...teacher, active: !current };
+    delete (updateData as any).schoolId;
+    
+    this.http.put(`${this.apiUrl}/api/teachers/${teacher._id}`, updateData, { 
+      headers: this.getHeaders() 
+    }).subscribe({
+      next: () => {
+        console.log(`✅ تم ${!current ? 'تفعيل' : 'تعطيل'} الأستاذ`);
+        this.loadTeachers();
+      },
+      error: (err) => {
+        console.error('❌ خطأ في تغيير حالة الأستاذ:', err);
+        alert('❌ حدث خطأ أثناء تغيير حالة الأستاذ');
+      }
+    });
+  }
+
+  // ==========================================
+  // Form Methods
+  // ==========================================
+
+  validateTeacherForm(data: any): boolean {
+    if (!data.name?.trim()) {
+      alert('⚠️ الاسم مطلوب');
+      return false;
+    }
+    if (!data.subjects?.length) {
+      alert('⚠️ اختر مادة واحدة على الأقل');
+      return false;
+    }
+    return true;
+  }
+
+  resetNewTeacherForm(): void {
+    this.newTeacher = {
+      name: '',
+      subjects: [],
+      phone: '',
+      email: '',
+      hireDate: new Date().toISOString().split('T')[0],
+      active: true
+    };
+  }
+
+  toggleSubject(subject: string): void {
+    const data = this.activeTeacherForm;
+    if (!data.subjects) data.subjects = [];
+    const idx = data.subjects.indexOf(subject);
+    if (idx > -1) {
+      data.subjects.splice(idx, 1);
+    } else {
+      data.subjects.push(subject);
+    }
+  }
+
+  // ==========================================
+  // UI Methods
+  // ==========================================
 
   openAddPopup(): void {
     this.resetNewTeacherForm();
@@ -1238,81 +1615,23 @@ export class TeachersManagementComponent implements OnInit {
 
   openEditModal(teacher: Teacher): void {
     this.selectedTeacher = teacher;
-    this.editTeacherData = { 
-      ...teacher, 
-      subjects: [...teacher.subjects], 
-      hireDate: teacher.hireDate ? teacher.hireDate.split('T')[0] : new Date().toISOString().split('T')[0] 
+    this.editTeacherData = {
+      ...teacher,
+      subjects: [...teacher.subjects],
+      hireDate: teacher.hireDate ? teacher.hireDate.split('T')[0] : new Date().toISOString().split('T')[0]
     };
     this.activeTeacherForm = { ...this.editTeacherData };
     this.showEditModal = true;
   }
 
+  openDeleteModal(teacher: Teacher): void {
+    this.selectedTeacher = teacher;
+    this.showConfirmDeleteModal = true;
+  }
+
   closeAllPopups(): void {
     this.showAddPopup = false;
     this.showEditModal = false;
-  }
-
-  get activeTeachersCount(): number {
-    return this.teachers.filter(t => this.isTeacherActive(t)).length;
-  }
-
-  loadTeachers(): void {
-    this.isLoading = true;
-    this.teachersService.getTeachers().subscribe({
-      next: (data) => { 
-        this.teachers = data; 
-        this.totalItems = data.length; 
-        this.isLoading = false;
-      },
-      error: () => { this.isLoading = false; }
-    });
-  }
-
-  loadClasses(): void { 
-    this.classesService.getClasses().subscribe(data => this.classes = data); 
-  }
-  
-  loadLiveClasses(): void { 
-    this.liveClassesService.getLiveClasses().subscribe(data => this.liveClasses = data); 
-  }
-
-  get filteredTeachers(): Teacher[] {
-    let filtered = this.teachers;
-    if (this.searchTerm) {
-      const term = this.searchTerm.toLowerCase();
-      filtered = filtered.filter(t => 
-        t.name.toLowerCase().includes(term) || 
-        t.email?.toLowerCase().includes(term) ||
-        t.phone?.includes(term)
-      );
-    }
-    if (this.subjectFilter) {
-      filtered = filtered.filter(t => t.subjects?.includes(this.subjectFilter));
-    }
-    if (this.statusFilter === 'active') {
-      filtered = filtered.filter(t => this.isTeacherActive(t));
-    } else if (this.statusFilter === 'inactive') {
-      filtered = filtered.filter(t => !this.isTeacherActive(t));
-    }
-    this.totalItems = filtered.length;
-    return filtered;
-  }
-
-  get paginatedTeachers(): Teacher[] {
-    const start = (this.currentPage - 1) * this.itemsPerPage;
-    return this.filteredTeachers.slice(start, start + this.itemsPerPage);
-  }
-
-  get totalPages(): number { 
-    return Math.ceil(this.totalItems / this.itemsPerPage); 
-  }
-
-  nextPage(): void { 
-    if (this.currentPage < this.totalPages) this.currentPage++; 
-  }
-  
-  prevPage(): void { 
-    if (this.currentPage > 1) this.currentPage--; 
   }
 
   selectTeacher(teacher: Teacher): void {
@@ -1323,8 +1642,15 @@ export class TeachersManagementComponent implements OnInit {
 
   loadTeacherDetails(): void {
     if (!this.selectedTeacher) return;
-    this.teacherClasses = this.classes.filter(cls => cls.teacher && cls.teacher._id === this.selectedTeacherId);
-    this.teacherLiveClasses = this.liveClasses.filter(lc => lc.teacher && lc.teacher._id === this.selectedTeacherId);
+    
+    this.teacherClasses = this.classes.filter(cls => 
+      cls.teacher && cls.teacher._id === this.selectedTeacherId
+    );
+    
+    this.teacherLiveClasses = this.liveClasses.filter(lc => 
+      lc.teacher && lc.teacher._id === this.selectedTeacherId
+    );
+    
     this.calculateTeacherStats();
   }
 
@@ -1341,122 +1667,113 @@ export class TeachersManagementComponent implements OnInit {
     };
   }
 
-  addTeacher(): void {
-    if (!this.validateTeacherForm(this.activeTeacherForm)) return;
-    this.isLoading = true;
-    this.teachersService.createTeacher(this.activeTeacherForm).subscribe({
-      next: () => { 
-        this.loadTeachers(); 
-        this.showAddPopup = false; 
-        this.isLoading = false;
-      },
-      error: () => { this.isLoading = false; }
-    });
-  }
+  // ==========================================
+  // Filter and Pagination Methods
+  // ==========================================
 
-  editTeacher(): void {
-    if (!this.selectedTeacher || !this.validateTeacherForm(this.activeTeacherForm)) return;
-    this.isLoading = true;
-    this.teachersService.updateTeacher(this.selectedTeacher._id, this.activeTeacherForm).subscribe({
-      next: () => { 
-        this.loadTeachers(); 
-        this.showEditModal = false; 
-        this.isLoading = false;
-      },
-      error: () => { this.isLoading = false; }
-    });
-  }
-
-  deleteTeacher(): void {
-    if (!this.selectedTeacher) return;
-    this.isLoading = true;
-    this.teachersService.deleteTeacher(this.selectedTeacher._id).subscribe({
-      next: () => { 
-        this.loadTeachers(); 
-        this.showConfirmDeleteModal = false; 
-        this.isLoading = false;
-      },
-      error: () => { this.isLoading = false; }
-    });
-  }
-
-  toggleTeacherStatus(teacher: Teacher): void {
-    const current = teacher.active ?? true;
-    this.teachersService.updateTeacher(teacher._id, { ...teacher, active: !current }).subscribe(() => this.loadTeachers());
-  }
-
-  validateTeacherForm(data: any): boolean {
-    if (!data.name?.trim()) { 
-      alert('الاسم مطلوب'); 
-      return false; 
+  get filteredTeachers(): Teacher[] {
+    let filtered = this.teachers;
+    
+    if (this.searchTerm) {
+      const term = this.searchTerm.toLowerCase();
+      filtered = filtered.filter(t =>
+        t.name.toLowerCase().includes(term) ||
+        t.email?.toLowerCase().includes(term) ||
+        t.phone?.includes(term)
+      );
     }
-    if (!data.subjects?.length) { 
-      alert('اختر مادة واحدة على الأقل'); 
-      return false; 
+    
+    if (this.subjectFilter) {
+      filtered = filtered.filter(t => t.subjects?.includes(this.subjectFilter));
     }
-    return true;
+    
+    if (this.statusFilter === 'active') {
+      filtered = filtered.filter(t => this.isTeacherActive(t));
+    } else if (this.statusFilter === 'inactive') {
+      filtered = filtered.filter(t => !this.isTeacherActive(t));
+    }
+    
+    this.totalItems = filtered.length;
+    return filtered;
   }
 
-  resetNewTeacherForm(): void {
-    this.newTeacher = { 
-      name: '', 
-      subjects: [], 
-      phone: '', 
-      email: '', 
-      hireDate: new Date().toISOString().split('T')[0], 
-      active: true 
-    };
+  get paginatedTeachers(): Teacher[] {
+    const start = (this.currentPage - 1) * this.itemsPerPage;
+    return this.filteredTeachers.slice(start, start + this.itemsPerPage);
   }
 
-  openDeleteModal(teacher: Teacher): void { 
-    this.selectedTeacher = teacher; 
-    this.showConfirmDeleteModal = true; 
+  get totalPages(): number {
+    return Math.ceil(this.totalItems / this.itemsPerPage);
   }
 
-  toggleSubject(subject: string, formType: 'new' | 'edit'): void {
-    const data = this.activeTeacherForm;
-    if (!data.subjects) data.subjects = [];
-    const idx = data.subjects.indexOf(subject);
-    if (idx > -1) {
-      data.subjects.splice(idx, 1);
-    } else {
-      data.subjects.push(subject);
+  get activeTeachersCount(): number {
+    return this.teachers.filter(t => this.isTeacherActive(t)).length;
+  }
+
+  nextPage(): void {
+    if (this.currentPage < this.totalPages) this.currentPage++;
+  }
+
+  prevPage(): void {
+    if (this.currentPage > 1) this.currentPage--;
+  }
+
+  clearFilters(): void {
+    this.searchTerm = '';
+    this.subjectFilter = '';
+    this.statusFilter = 'all';
+    this.currentPage = 1;
+  }
+
+  // ==========================================
+  // Utility Methods
+  // ==========================================
+
+  formatDate(ds: string): string {
+    if (!ds) return '---';
+    try {
+      return new Date(ds).toLocaleDateString('ar-EG');
+    } catch {
+      return '---';
     }
   }
 
-  formatDate(ds: string): string { 
-    return ds ? new Date(ds).toLocaleDateString('ar-EG') : '---'; 
-  }
-  
-  isTeacherActive(t: Teacher): boolean { 
-    return t.active !== false; 
-  }
-  
-  getTeacherStatus(t: Teacher): string { 
-    return this.isTeacherActive(t) ? 'نشط' : 'غير نشط'; 
+  isTeacherActive(t: Teacher): boolean {
+    return t.active !== false;
   }
 
-  clearFilters(): void { 
-    this.searchTerm = ''; 
-    this.subjectFilter = ''; 
-    this.statusFilter = 'all'; 
-    this.currentPage = 1; 
+  getTeacherStatus(t: Teacher): string {
+    return this.isTeacherActive(t) ? 'نشط' : 'غير نشط';
   }
+
+  // ==========================================
+  // Export Methods
+  // ==========================================
 
   exportToCSV(): void {
+    if (this.filteredTeachers.length === 0) {
+      alert('⚠️ لا توجد بيانات للتصدير');
+      return;
+    }
+
+    const headers = ['الاسم', 'المواد', 'الهاتف', 'البريد الإلكتروني', 'الحالة', 'تاريخ التعيين'];
     const rows = this.filteredTeachers.map(t => [
-      t.name, 
-      t.subjects?.join('|') || '', 
-      t.phone || '', 
-      t.email || '', 
-      this.getTeacherStatus(t)
+      t.name,
+      t.subjects?.join(' | ') || '',
+      t.phone || '',
+      t.email || '',
+      this.getTeacherStatus(t),
+      this.formatDate(t.hireDate || '')
     ]);
-    const csv = 'الاسم,المواد,الهاتف,الايميل,الحالة\n' + rows.map(r => r.map(cell => `"${cell}"`).join(',')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.map(cell => `"${cell}"`).join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `teachers_export_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
   }
 }

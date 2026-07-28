@@ -3,10 +3,10 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import Swal from 'sweetalert2';
-import { AuthService } from '../services/auth.service';
+import { PrinterService, ReceiptData } from '../services/printer.service';
 
 // ==============================================
-// واجهات البيانات
+// Data Interfaces
 // ==============================================
 
 interface Student {
@@ -25,6 +25,7 @@ interface Student {
   hasPaidRegistration?: boolean;
   classes?: any[];
   new?: boolean;
+  schoolId?: string;
 }
 
 interface StudentWithAvatar extends Student {
@@ -33,7 +34,7 @@ interface StudentWithAvatar extends Student {
 }
 
 // ==============================================
-// المكون الرئيسي
+// Main Component
 // ==============================================
 
 @Component({
@@ -1217,18 +1218,22 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
 
   private apiUrl = 'http://localhost:5090';
   
-  // البيانات
+  // ✅ School Data - loaded from localStorage
+  schoolId: string = '';
+  schoolKey: string = '';
+  
+  // Data
   students: StudentWithAvatar[] = [];
   filteredStudents: StudentWithAvatar[] = [];
 
-  // حالة التحميل
+  // Loading state
   isLoading: boolean = false;
 
-  // البحث والتصفية
+  // Search & Filter
   searchTerm: string = '';
   selectedAcademicYear: string = 'all';
 
-  // النوافذ المنبثقة
+  // Modals
   showStudentModal: boolean = false;
   showPaymentModal: boolean = false;
   showBulkModal: boolean = false;
@@ -1236,7 +1241,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   isEditMode: boolean = false;
   selectedStudent: StudentWithAvatar | null = null;
 
-  // نموذج الطالب
+  // Student Form
   formData = {
     name: '',
     parentName: '',
@@ -1246,14 +1251,14 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
     registrationDate: new Date().toISOString().split('T')[0]
   };
 
-  // بيانات الدفع
+  // Payment Data
   paymentData = {
     amount: 600,
     method: 'cash',
     notes: ''
   };
 
-  // بيانات الاستيراد
+  // Bulk Import Data
   bulkData = {
     students: [
       { name: '', parentName: '', parentPhone: '', academicYear: '', birthDate: '' }
@@ -1261,7 +1266,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
     defaultYear: ''
   };
 
-  // قائمة المستويات الدراسية
+  // Academic Years List
   academicYears = [
     { value: 'all', label: 'جميع المستويات' },
     { value: '1AS', label: 'السنة الأولى ثانوي' },
@@ -1278,7 +1283,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
     { value: '5AP', label: 'السنة الخامسة ابتدائي' }
   ];
 
-  // ألوان الصور الرمزية
+  // Avatar Colors
   private avatarColors: string[] = [
     '#6C63FF', '#00C9A7', '#FF6B6B', '#FFC107',
     '#4A9EFF', '#FF6584', '#00B894', '#6C5CE7',
@@ -1291,8 +1296,8 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   // ==============================================
 
   constructor(
-    private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private printerService: PrinterService // ✅ تم إضافة PrinterService
   ) {}
 
   // ==============================================
@@ -1300,10 +1305,16 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   // ==============================================
 
   ngOnInit(): void {
-    if (!this.authService.isLoggedIn()) {
+    // Check if user is logged in
+    if (!this.isLoggedIn()) {
       this.router.navigate(['/login']);
       return;
     }
+    
+    // ✅ Load school data from localStorage first
+    this.loadSchoolData();
+    
+    // ✅ Then load students
     this.loadStudents();
   }
 
@@ -1312,52 +1323,124 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   // ==============================================
-  // ✅ HELPER: التحقق من الصلاحيات (محسّن)
+  // ✅ Auth Helpers (without AuthService)
   // ==============================================
 
-  /**
-   * التحقق من صلاحية المستخدم مع رسائل توضيحية
-   */
+  private getToken(): string | null {
+    return localStorage.getItem('token');
+  }
+
+  private isLoggedIn(): boolean {
+    return !!this.getToken();
+  }
+
+  private logout(): void {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('school');
+    localStorage.removeItem('subscription');
+    localStorage.removeItem('permissions');
+    localStorage.removeItem('loginTime');
+    this.router.navigate(['/login']);
+  }
+
+  // ==============================================
+  // ✅ HELPER: Load School Data from localStorage
+  // ==============================================
+
+  private loadSchoolData(): void {
+    try {
+      // Get school from localStorage (saved during login)
+      const schoolData = localStorage.getItem('school');
+      if (schoolData) {
+        const school = JSON.parse(schoolData);
+        this.schoolId = school._id || '';
+        this.schoolKey = school.schoolKey || '';
+        console.log('🏫 School data loaded:', { 
+          id: this.schoolId,
+          key: this.schoolKey,
+          name: school.name
+        });
+      } else {
+        console.warn('⚠️ No school data found in localStorage');
+        // Try to get from user data as fallback
+        const userData = localStorage.getItem('user');
+        if (userData) {
+          try {
+            const user = JSON.parse(userData);
+            if (user.schoolId) {
+              this.schoolId = user.schoolId;
+              console.log('🏫 School ID loaded from user data:', this.schoolId);
+            }
+          } catch (e) {
+            console.error('Error parsing user data:', e);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error loading school data:', error);
+    }
+  }
+
+  // ==============================================
+  // ✅ Get School ID (public method)
+  // ==============================================
+
+  getSchoolId(): string {
+    // Try multiple sources
+    if (this.schoolId) return this.schoolId;
+    
+    try {
+      const schoolData = localStorage.getItem('school');
+      if (schoolData) {
+        const school = JSON.parse(schoolData);
+        return school._id || '';
+      }
+    } catch (e) {}
+    
+    try {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        return user.schoolId || '';
+      }
+    } catch (e) {}
+    
+    return '';
+  }
+
+  // ==============================================
+  // ✅ HELPER: Check Permissions
+  // ==============================================
+
   private checkPermission(permission: string, actionName: string = 'هذه العملية'): boolean {
-    // ✅ الطريقة الصحيحة: جلب الصلاحيات من localStorage
     const permissionsStr = localStorage.getItem('permissions');
     const userStr = localStorage.getItem('user');
     
-    console.log('🔍 التحقق من الصلاحية:', permission);
-    console.log('📦 permissions من localStorage:', permissionsStr);
-    console.log('👤 user من localStorage:', userStr);
-    
-    // محاولة استخراج الصلاحيات من localStorage
     let permissions: any = {};
     
     if (permissionsStr) {
       try {
         permissions = JSON.parse(permissionsStr);
-        console.log('✅ تم استخراج الصلاحيات:', permissions);
       } catch (e) {
-        console.error('❌ خطأ في تحليل الصلاحيات:', e);
+        console.error('❌ Error parsing permissions:', e);
       }
     }
     
-    // إذا لم توجد صلاحيات في localStorage، حاول استخراجها من user
     if (!permissions || Object.keys(permissions).length === 0) {
       if (userStr) {
         try {
           const user = JSON.parse(userStr);
           if (user.permissions) {
             permissions = user.permissions;
-            console.log('✅ تم استخراج الصلاحيات من user:', permissions);
           }
         } catch (e) {
-          console.error('❌ خطأ في تحليل user:', e);
+          console.error('❌ Error parsing user:', e);
         }
       }
     }
     
-    // ✅ التحقق من الصلاحية المطلوبة
     const hasPermission = permissions[permission] === true;
-    
-    console.log(`🔍 صلاحية "${permission}": ${hasPermission ? '✅ متوفرة' : '❌ غير متوفرة'}`);
     
     if (!hasPermission) {
       Swal.fire({
@@ -1377,8 +1460,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   // ==============================================
 
   private getHeaders(): HeadersInit {
-    const token = this.authService.getToken();
-    const school = this.authService.getSchool();
+    const token = this.getToken();
     
     const headers: HeadersInit = {
       'Content-Type': 'application/json'
@@ -1386,10 +1468,6 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
     
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    if (school?.schoolKey) {
-      headers['x-auth-key'] = school.schoolKey;
     }
     
     return headers;
@@ -1405,7 +1483,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
     });
 
     if (response.status === 401) {
-      this.authService.logout();
+      this.logout();
       throw new Error('انتهت الجلسة');
     }
 
@@ -1418,17 +1496,26 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   // ==============================================
-  // Load Students - FIXED ✅
+  // ✅ Load Students - Filtered by School
   // ==============================================
 
   loadStudents(): void {
     this.isLoading = true;
     
-    this.handleRequest<any>(`${this.apiUrl}/api/students`)
+    // ✅ Get school ID
+    const schoolId = this.getSchoolId();
+    
+    // ✅ Build URL with schoolId filter
+    const url = schoolId 
+      ? `${this.apiUrl}/api/students?schoolId=${schoolId}`
+      : `${this.apiUrl}/api/students`;
+    
+    console.log(`📚 Loading students for school: ${schoolId || 'all'}`);
+    
+    this.handleRequest<any>(url)
       .then(response => {
         console.log('📥 API Response:', response);
         
-        // ✅ FIX: استخراج الطلاب من الاستجابة
         let studentsData: Student[] = [];
         
         if (Array.isArray(response)) {
@@ -1438,6 +1525,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
         } else if (response.students && Array.isArray(response.students)) {
           studentsData = response.students;
         } else {
+          // Try to find array in response
           for (const key in response) {
             if (Array.isArray(response[key])) {
               studentsData = response[key];
@@ -1468,11 +1556,10 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   // ==============================================
-  // Save Student (Create/Update) - FIXED ✅
+  // ✅ Save Student (Create/Update) - with School ID
   // ==============================================
 
   saveStudent(): void {
-    // ✅ التحقق من الصلاحية
     if (!this.checkPermission('canManageStudents', 'إدارة الطلاب')) {
       return;
     }
@@ -1482,15 +1569,22 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     const isEdit = this.isEditMode;
     const studentId = this.selectedStudent?._id || this.selectedStudent?.id;
+    const schoolId = this.getSchoolId();
+    
+    // Build URL with schoolId
     const url = isEdit 
-      ? `${this.apiUrl}/api/students/${studentId}`
+      ? `${this.apiUrl}/api/students/${studentId}?schoolId=${schoolId}`
       : `${this.apiUrl}/api/students`;
     const method = isEdit ? 'PUT' : 'POST';
 
+    // ✅ Add schoolId to data
     const data = {
       ...this.formData,
-      registrationDate: this.formData.registrationDate || new Date().toISOString().split('T')[0]
+      registrationDate: this.formData.registrationDate || new Date().toISOString().split('T')[0],
+      schoolId: schoolId // ✅ Important: Link student to school
     };
+
+    console.log('📝 Saving student with schoolId:', schoolId);
 
     this.handleRequest(url, {
       method,
@@ -1502,18 +1596,17 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
         this.loadStudents();
       })
       .catch(error => {
-        console.error('Error saving student:', error);
+        console.error('❌ Error saving student:', error);
         Swal.fire('خطأ', error.message || 'فشل حفظ الطالب', 'error');
         this.isLoading = false;
       });
   }
 
   // ==============================================
-  // Delete Student - FIXED ✅
+  // ✅ Delete Student - with School ID check
   // ==============================================
 
   deleteStudent(student: StudentWithAvatar): void {
-    // ✅ التحقق من الصلاحية
     if (!this.checkPermission('canManageStudents', 'حذف الطلاب')) {
       return;
     }
@@ -1536,7 +1629,10 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
     }).then(result => {
       if (result.isConfirmed) {
         this.isLoading = true;
-        this.handleRequest(`${this.apiUrl}/api/students/${studentId}`, {
+        const schoolId = this.getSchoolId();
+        const url = `${this.apiUrl}/api/students/${studentId}?schoolId=${schoolId}`;
+        
+        this.handleRequest(url, {
           method: 'DELETE'
         })
           .then(() => {
@@ -1544,7 +1640,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
             this.loadStudents();
           })
           .catch(error => {
-            console.error('Error deleting student:', error);
+            console.error('❌ Error deleting student:', error);
             Swal.fire('خطأ', error.message || 'فشل حذف الطالب', 'error');
             this.isLoading = false;
           });
@@ -1553,11 +1649,10 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   // ==============================================
-  // Process Payment - FIXED ✅
+  // ✅ Process Payment - مع طباعة الإيصال
   // ==============================================
 
-  processPayment(): void {
-    // ✅ التحقق من الصلاحية
+  async processPayment(): Promise<void> {
     if (!this.checkPermission('canManagePayments', 'إدارة المدفوعات')) {
       return;
     }
@@ -1572,28 +1667,108 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
 
     this.isLoading = true;
     
-    this.handleRequest(`${this.apiUrl}/api/students/${studentId}/pay-registration`, {
-      method: 'POST',
-      body: JSON.stringify(this.paymentData)
-    })
-      .then(() => {
-        Swal.fire('نجاح', 'تم دفع رسوم التسجيل بنجاح', 'success');
-        this.closePaymentModal();
-        this.loadStudents();
-      })
-      .catch(error => {
-        console.error('Error processing payment:', error);
-        Swal.fire('خطأ', error.message || 'فشل معالجة الدفع', 'error');
-        this.isLoading = false;
+    const schoolId = this.getSchoolId();
+    const url = `${this.apiUrl}/api/students/${studentId}/pay-registration?schoolId=${schoolId}`;
+    
+    const payload = {
+      amount: this.paymentData.amount,
+      paymentMethod: this.paymentData.method,
+      paymentDate: new Date().toISOString(),
+      notes: this.paymentData.notes,
+      schoolId: schoolId
+    };
+    
+    try {
+      const response: any = await this.handleRequest(url, {
+        method: 'POST',
+        body: JSON.stringify(payload)
       });
+      
+      console.log('✅ Payment successful:', response);
+      
+      // ✅ طباعة الإيصال
+      await this.printReceipt(response);
+      
+      // عرض رسالة النجاح
+      await Swal.fire({
+        title: 'نجاح',
+        html: `
+          <div style="text-align: center;">
+            <p style="color: #00C9A7; font-size: 18px; font-weight: 700;">✅ تم دفع رسوم التسجيل</p>
+            <p style="margin: 10px 0; color: #636E72;">
+              <strong>الطالب:</strong> ${this.selectedStudent?.name}
+            </p>
+            <p style="margin: 5px 0; color: #636E72;">
+              <strong>رقم الفاتورة:</strong> ${response.receiptNumber || 'N/A'}
+            </p>
+            <p style="margin: 5px 0; color: #636E72;">
+              <strong>المبلغ:</strong> ${this.paymentData.amount} دج
+            </p>
+          </div>
+        `,
+        icon: 'success',
+        confirmButtonColor: '#6C63FF'
+      });
+      
+      this.closePaymentModal();
+      this.loadStudents();
+    } catch (error: any) {
+      console.error('❌ Payment error:', error);
+      Swal.fire('خطأ', error.message || 'فشل معالجة الدفع', 'error');
+      this.isLoading = false;
+    }
   }
 
   // ==============================================
-  // Bulk Import - FIXED ✅
+  // ✅ دالة طباعة الإيصال
+  // ==============================================
+
+  private async printReceipt(paymentResponse: any): Promise<void> {
+    try {
+      // تحقق من اتصال الطابعة
+      if (!this.printerService.checkConnectionStatus()) {
+        const connected = await this.printerService.connectToThermalPrinter();
+        if (!connected) {
+          console.warn('⚠️ Cannot print: printer not connected');
+          return;
+        }
+      }
+
+      // بناء بيانات الإيصال
+      const receiptData: ReceiptData = {
+        receiptNumber: paymentResponse.receiptNumber || `R${Date.now()}`,
+        date: new Date().toLocaleDateString('en-US'),
+        time: new Date().toLocaleTimeString('en-US'),
+        studentName: this.selectedStudent?.name || 'Unknown',
+        studentId: this.selectedStudent?.studentId || 'N/A',
+        className: this.getAcademicYearName(this.selectedStudent?.academicYear),
+        month: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        amount: this.paymentData.amount,
+        paymentMethod: this.paymentData.method,
+        academicYear: this.selectedStudent?.academicYear,
+        parentPhone: this.selectedStudent?.parentPhone,
+        notes: this.paymentData.notes || 'رسوم تسجيل'
+      };
+
+      // طباعة الإيصال
+      const printed = await this.printerService.printProfessionalReceipt(receiptData);
+      
+      if (printed) {
+        console.log('✅ Receipt printed successfully');
+      } else {
+        console.warn('⚠️ Receipt printing failed');
+      }
+    } catch (error) {
+      console.error('❌ Error printing receipt:', error);
+      // لا نعرض خطأ للمستخدم حتى لا يفسد تجربة الدفع الناجح
+    }
+  }
+
+  // ==============================================
+  // ✅ Bulk Import - with School ID
   // ==============================================
 
   importStudents(): void {
-    // ✅ التحقق من الصلاحية
     if (!this.checkPermission('canManageStudents', 'استيراد الطلاب')) {
       return;
     }
@@ -1618,11 +1793,16 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   private processBulkImport(): void {
     this.isLoading = true;
     
+    const schoolId = this.getSchoolId();
+    
     const students = this.bulkData.students.map(s => ({
       ...s,
       academicYear: s.academicYear || this.bulkData.defaultYear,
-      registrationDate: new Date().toISOString().split('T')[0]
+      registrationDate: new Date().toISOString().split('T')[0],
+      schoolId: schoolId // ✅ Add schoolId to imported students
     }));
+
+    console.log(`📥 Importing ${students.length} students to school ${schoolId}`);
 
     let successCount = 0;
     let errorCount = 0;
@@ -1751,7 +1931,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   // ==============================================
-  // Modal Controls - FIXED ✅
+  // Modal Controls
   // ==============================================
 
   private toggleBodyScroll(disable: boolean): void {
@@ -1762,7 +1942,6 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   openAddStudent(): void {
-    // ✅ التحقق من الصلاحية
     if (!this.checkPermission('canManageStudents', 'إضافة طلاب')) {
       return;
     }
@@ -1775,7 +1954,6 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   editStudent(student: StudentWithAvatar): void {
-    // ✅ التحقق من الصلاحية
     if (!this.checkPermission('canManageStudents', 'تعديل الطلاب')) {
       return;
     }
@@ -1802,7 +1980,6 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   openPayment(student: StudentWithAvatar): void {
-    // ✅ التحقق من الصلاحية
     if (!this.checkPermission('canManagePayments', 'إدارة المدفوعات')) {
       return;
     }
@@ -1825,7 +2002,6 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   openBulkImport(): void {
-    // ✅ التحقق من الصلاحية
     if (!this.checkPermission('canManageStudents', 'استيراد الطلاب')) {
       return;
     }

@@ -1,11 +1,12 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { forkJoin } from 'rxjs';
 import { NotificationsComponent } from '../../notifications/notifications/notifications.component';
 import { RouterModule } from '@angular/router';
 import { environment } from '../../../../environments/environment.development';
+
 @Component({
   selector: 'app-header',
   standalone: true,
@@ -18,7 +19,7 @@ import { environment } from '../../../../environments/environment.development';
             <i class="fas fa-graduation-cap"></i>
           </div>
           <div class="brand-text">
-            <span class="app-name">نظام المنارة</span>
+            <span class="app-name">{{ schoolName }}</span>
             <span class="app-status">لوحة التحكم التعليمية</span>
           </div>
         </div>
@@ -711,58 +712,216 @@ import { environment } from '../../../../environments/environment.development';
   `]
 })
 export class HeaderComponent implements OnInit {
-  private apiUrl = environment.apiUrl ;
+  private apiUrl = environment.apiUrl;
 
-  
   @ViewChild('notificationsComponent') notificationsComponent!: NotificationsComponent;
 
+  // إحصائيات المدرسة
   studentCount: number = 0;
   teacherCount: number = 0;
   lessonCount: number = 0;
+  
+  // بيانات المستخدم
   userName: string = 'جاري التحميل...';
   userRole: string = '';
   userAvatar: string = 'https://ui-avatars.com/api/?name=User&background=random';
+  
+  // بيانات المدرسة
+  schoolName: string = 'نظام المنارة';
+  schoolId: string = '';
+  schoolKey: string = '';
+  
+  // الإشعارات
   notificationCount: number = 0;
   searchTerm: any;
   
   isRinging: boolean = false;
   isLoadingNotifications: boolean = false;
+  isLoading: boolean = true;
 
   constructor(private http: HttpClient) {}
 
   ngOnInit(): void {
-    this.loadStats();
+    this.loadSchoolData();
     this.loadUserData();
+    this.loadStats();
     this.loadNotificationCount();
     
+    // تحديث الإحصائيات كل 5 دقائق
+    setInterval(() => this.loadStats(), 300000);
     setInterval(() => this.checkForNewNotifications(), 60000);
   }
 
+  /**
+   * ✅ جلب بيانات المدرسة من localStorage
+   */
+  loadSchoolData(): void {
+    try {
+      const schoolData = localStorage.getItem('school');
+      if (schoolData) {
+        const school = JSON.parse(schoolData);
+        this.schoolName = school.name || 'نظام المنارة';
+        this.schoolId = school._id || '';
+        this.schoolKey = school.schoolKey || '';
+        console.log('🏫 تم تحميل بيانات المدرسة:', { 
+          name: this.schoolName, 
+          id: this.schoolId,
+          key: this.schoolKey 
+        });
+      } else {
+        console.warn('⚠️ لم يتم العثور على بيانات المدرسة في localStorage');
+        this.schoolName = 'نظام المنارة';
+      }
+    } catch (error) {
+      console.error('❌ خطأ في تحميل بيانات المدرسة:', error);
+      this.schoolName = 'نظام المنارة';
+    }
+  }
+
+  /**
+   * ✅ جلب الإحصائيات الخاصة بالمدرسة فقط
+   */
   loadStats(): void {
+    this.isLoading = true;
+
+    // التأكد من وجود schoolId
+    if (!this.schoolId && !this.schoolKey) {
+      console.warn('⚠️ لا يوجد schoolId أو schoolKey، سيتم استخدام الطريقة العامة');
+      this.loadStatsLegacy();
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    // ✅ استخدام نقطة النهاية الموحدة مع schoolId
+    const params = new URLSearchParams();
+    if (this.schoolId) {
+      params.set('schoolId', this.schoolId);
+    } else if (this.schoolKey) {
+      params.set('schoolKey', this.schoolKey);
+    }
+
+    const url = `${this.apiUrl}/dashboard/stats?${params.toString()}`;
+    
+    this.http.get<{ success: boolean; data: { students: number; teachers: number; classes: number } }>(url, { headers })
+      .subscribe({
+        next: (response) => {
+          if (response.success) {
+            this.studentCount = response.data.students || 0;
+            this.teacherCount = response.data.teachers || 0;
+            this.lessonCount = response.data.classes || 0;
+            console.log('📊 تم تحديث الإحصائيات:', {
+              students: this.studentCount,
+              teachers: this.teacherCount,
+              classes: this.lessonCount
+            });
+          }
+          this.isLoading = false;
+        },
+        error: (err) => {
+          console.error('❌ خطأ في جلب إحصائيات المدرسة:', err);
+          this.loadStatsLegacy();
+        }
+      });
+  }
+
+  /**
+   * ✅ الطريقة القديمة (كحل احتياطي) - مع إضافة schoolId كـ query parameter
+   */
+  private loadStatsLegacy(): void {
+    const token = localStorage.getItem('token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    // إضافة schoolId إلى جميع الطلبات
+    const params = new URLSearchParams();
+    if (this.schoolId) {
+      params.set('schoolId', this.schoolId);
+    }
+
     forkJoin({
-      students: this.http.get<{ count: number }>(`${this.apiUrl}/count/students`),
-      teachers: this.http.get<{ count: number }>(`${this.apiUrl}/count/teachers`),
-      classes: this.http.get<{ count: number }>(`${this.apiUrl}/count/classes`)
+      students: this.http.get<{ count: number }>(`${this.apiUrl}/count/students?${params.toString()}`, { headers }),
+      teachers: this.http.get<{ count: number }>(`${this.apiUrl}/count/teachers?${params.toString()}`, { headers }),
+      classes: this.http.get<{ count: number }>(`${this.apiUrl}/count/classes?${params.toString()}`, { headers })
     }).subscribe({
       next: (res) => {
-        this.studentCount = res.students.count;
-        this.teacherCount = res.teachers.count;
-        this.lessonCount = res.classes.count;
+        this.studentCount = res.students.count || 0;
+        this.teacherCount = res.teachers.count || 0;
+        this.lessonCount = res.classes.count || 0;
+        this.isLoading = false;
+        console.log('📊 تم تحديث الإحصائيات (طريقة احتياطية):', {
+          students: this.studentCount,
+          teachers: this.teacherCount,
+          classes: this.lessonCount
+        });
       },
-      error: (err) => console.error('Error fetching stats:', err)
+      error: (err) => {
+        console.error('❌ خطأ في جلب الإحصائيات:', err);
+        this.isLoading = false;
+        this.studentCount = 0;
+        this.teacherCount = 0;
+        this.lessonCount = 0;
+      }
     });
   }
 
+  /**
+   * جلب بيانات المستخدم من localStorage
+   */
   loadUserData(): void {
-    setTimeout(() => {
+    try {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        this.userName = user.fullName || user.username || 'مستخدم';
+        this.userRole = this.getRoleLabel(user.role || '');
+        this.userAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(this.userName)}&background=4361ee&color=fff`;
+      } else {
+        this.userName = 'ياسر خيشه';
+        this.userRole = 'مدير النظام';
+        this.userAvatar = 'https://ui-avatars.com/api/?name=ياسر+خيشه&background=4361ee&color=fff';
+      }
+    } catch (error) {
+      console.error('❌ خطأ في تحميل بيانات المستخدم:', error);
       this.userName = 'ياسر خيشه';
       this.userRole = 'مدير النظام';
       this.userAvatar = 'https://ui-avatars.com/api/?name=ياسر+خيشه&background=4361ee&color=fff';
-    }, 800);
+    }
   }
 
+  /**
+   * تحويل الدور إلى تسمية عربية
+   */
+  private getRoleLabel(role: string): string {
+    const roleMap: { [key: string]: string } = {
+      'admin': 'مدير النظام',
+      'super_admin': 'مدير عام',
+      'manager': 'مدير',
+      'secretary': 'سكرتير',
+      'accountant': 'محاسب',
+      'teacher': 'أستاذ',
+      'student': 'طالب'
+    };
+    return roleMap[role] || role;
+  }
+
+  /**
+   * جلب عدد الإشعارات
+   */
   loadNotificationCount(): void {
-    this.http.get<{ count: number }>(`${this.apiUrl}/notifications/count`).subscribe({
+    const token = localStorage.getItem('token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    this.http.get<{ count: number }>(`${this.apiUrl}/notifications/count`, { headers }).subscribe({
       next: (data) => {
         const oldCount = this.notificationCount;
         this.notificationCount = data.count || 0;
@@ -772,21 +931,30 @@ export class HeaderComponent implements OnInit {
         }
       },
       error: (err) => {
-        console.error('Error loading notification count:', err);
-        this.notificationCount = 3;
+        console.error('❌ خطأ في جلب عدد الإشعارات:', err);
+        this.notificationCount = 0;
       }
     });
   }
 
+  /**
+   * التحقق من وجود إشعارات جديدة
+   */
   checkForNewNotifications(): void {
-    this.http.get<boolean>(`${this.apiUrl}/notifications/check-new`).subscribe({
+    const token = localStorage.getItem('token');
+    let headers = new HttpHeaders();
+    if (token) {
+      headers = headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    this.http.get<boolean>(`${this.apiUrl}/notifications/check-new`, { headers }).subscribe({
       next: (hasNew) => {
         if (hasNew) {
           this.ringBell();
           this.loadNotificationCount();
         }
       },
-      error: (err) => console.error('Error checking new notifications:', err)
+      error: (err) => console.error('❌ خطأ في التحقق من الإشعارات:', err)
     });
   }
 

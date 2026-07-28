@@ -1,119 +1,226 @@
-<div class="login-page-wrapper" dir="rtl">
-  <!-- خلفيات زخرفية -->
+<div class="login-container" dir="rtl">
+  <!-- الخلفية المتحركة -->
   <div class="bg-shape shape-1"></div>
   <div class="bg-shape shape-2"></div>
+  <div class="bg-shape shape-3"></div>
 
-  <!-- البطاقة الرئيسية -->
-  <div class="login-card-container">
-    <!-- القسم الأيسر - العلامة التجارية -->
-    <div class="login-visual">
-      <div class="visual-content">
-        <span class="greeting-tag">{{ getGreeting() }}</span>
-        <h1>مدرسة الرواد</h1>
-        <p>نظام الإدارة الموحد للمؤسسات التعليمية</p>
-        <div class="visual-icon">
-          <i class="fas fa-user-shield"></i>
+  <div class="login-wrapper">
+    <!-- الجانب الأيمن: الترحيب والإحصائيات (يختفي على الشاشات الصغيرة جداً ويدمج بذكاء) -->
+    <div class="login-info-section">
+      <div class="brand-header">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" width="40" height="40" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+            <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+          </svg>
+        </div>
+        <h1>نظام الإدارة المدرسية</h1>
+      </div>
+      <p class="subtitle">منصة متكاملة لإدارة المنظومة التعليمية بكفاءة وسرعة عالية</p>
+      
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </div>
+          <div class="stat-details">
+            <span class="stat-value">{{ stats.teachers }}</span>
+            <span class="stat-label">المعلمون</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <div class="stat-details">
+            <span class="stat-value">{{ stats.students }}</span>
+            <span class="stat-label">الطلاب</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon">
+            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+          </div>
+          <div class="stat-details">
+            <span class="stat-value">{{ stats.classes }}</span>
+            <span class="stat-label">الفصول</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- القسم الأيمن - نموذج تسجيل الدخول -->
-    <div class="login-form-area">
-      <div class="form-header">
-        <h2>تسجيل الدخول</h2>
-        <p>مرحباً بك مجدداً! يرجى إدخال بياناتك</p>
+    <!-- الجانب الأيسر: بطاقة تسجيل الدخول -->
+    <div class="login-card-section">
+      <div class="login-card">
+        <div class="card-header">
+          <span class="greeting-badge">{{ getGreeting() }}</span>
+          <h2>تسجيل الدخول</h2>
+          <p>أدخل بيانات الحساب للمتابعة إلى لوحة التحكم</p>
+        </div>
+
+        <div *ngIf="errorMessage" class="error-alert">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span>{{ errorMessage }}</span>
+        </div>
+
+        <form (ngSubmit)="login()" class="login-form">
+          <!-- قسم معرف المدرسة (مع التبديل الذكي) -->
+          <div class="form-group">
+            <label>المؤسسة التعليمية</label>
+            
+            <div *ngIf="isSchoolKeySaved; else schoolInput" class="saved-school-card">
+              <div class="school-info">
+                <div class="school-icon">
+                  <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+                    <path d="M3 21h18M9 8h1M9 12h1M9 16h1M14 8h1M14 12h1M14 16h1M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/>
+                  </svg>
+                </div>
+                <div>
+                  <span class="school-code">{{ schoolKey }}</span>
+                  <span class="school-status">المدرسة المحددة حاليا</span>
+                </div>
+              </div>
+              <button type="button" class="change-school-btn" (click)="changeSchool()" title="تسجيل الدخول لمدرسة أخرى">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M17 1l4 4-4 4"/>
+                  <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                  <path d="M7 23l-4-4 4-4"/>
+                  <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                </svg>
+                <span>مدرسة أخرى</span>
+              </button>
+            </div>
+
+            <ng-template #schoolInput>
+              <div class="input-container">
+                <div class="input-icon">
+                  <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+                    <path d="M3 21h18M9 8h1M9 12h1M9 16h1M14 8h1M14 12h1M14 16h1M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"/>
+                  </svg>
+                </div>
+                <input 
+                  type="text" 
+                  id="schoolKey"
+                  [(ngModel)]="schoolKey" 
+                  name="schoolKey"
+                  placeholder="أدخل معرف المدرسة (School Key)" 
+                  (keypress)="onSchoolKeyPress($event)"
+                  required
+                  autofocus>
+              </div>
+            </ng-template>
+          </div>
+
+          <!-- اسم المستخدم -->
+          <div class="form-group">
+            <label for="username">اسم المستخدم</label>
+            <div class="input-container">
+              <div class="input-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
+              <input 
+                type="text" 
+                id="username" 
+                [(ngModel)]="username" 
+                name="username"
+                placeholder="أدخل اسم المستخدم" 
+                (keypress)="onUsernameKeyPress($event)"
+                required>
+            </div>
+          </div>
+
+          <!-- كلمة المرور -->
+          <div class="form-group">
+            <label for="password">كلمة المرور</label>
+            <div class="input-container">
+              <div class="input-icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <input 
+                [type]="passwordFieldType" 
+                id="password" 
+                [(ngModel)]="password" 
+                name="password"
+                placeholder="أدخل كلمة المرور" 
+                (keypress)="onPasswordKeyPress($event)"
+                required>
+              <button type="button" class="password-toggle" (click)="togglePasswordVisibility()" tabindex="-1">
+                <svg *ngIf="!showPassword" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg *ngIf="showPassword" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- خيارات إضافية -->
+          <div class="form-actions">
+            <label class="custom-checkbox">
+              <input type="checkbox" [(ngModel)]="rememberMe" name="rememberMe">
+              <span class="checkmark"></span>
+              <span class="label-text">تذكر بياناتي</span>
+            </label>
+            <a href="javascript:void(0)" class="forgot-link" (click)="forgotPassword()">نسيت كلمة المرور؟</a>
+          </div>
+
+          <!-- أزرار الدخول -->
+          <div class="buttons-group">
+            <button type="submit" class="btn btn-primary" [disabled]="isLoading || !isFormValid()">
+              <span *ngIf="!isLoading">دخول إلى النظام</span>
+              <span *ngIf="isLoading" class="loader"></span>
+            </button>
+
+            <button type="button" class="btn btn-secondary" [disabled]="isLoading || !isFormValid()" (click)="redirectToAccountingInterface()">
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none">
+                <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
+                <line x1="8" y1="6" x2="16" y2="6"/>
+                <line x1="16" y1="14" x2="16" y2="18"/>
+                <path d="M16 10h.01"/>
+                <path d="M12 10h.01"/>
+                <path d="M8 10h.01"/>
+                <path d="M12 14h.01"/>
+                <path d="M8 14h.01"/>
+                <path d="M12 18h.01"/>
+                <path d="M8 18h.01"/>
+              </svg>
+              <span>واجهة المحاسبة</span>
+            </button>
+          </div>
+        </form>
+
+        <div class="card-footer">
+          <p>جميع الحقوق محفوظة &copy; {{ currentYear }}</p>
+        </div>
       </div>
-
-      <form (ngSubmit)="login()" #loginForm="ngForm">
-        <!-- مفتاح المدرسة -->
-        <div class="input-group-custom">
-          <label for="schoolKey">🔑 مفتاح المدرسة <span class="required">*</span></label>
-          <div class="input-wrapper">
-            <i class="fas fa-school icon-prefix"></i>
-            <input 
-              type="text" 
-              id="schoolKey" 
-              name="schoolKey" 
-              [(ngModel)]="schoolKey" 
-              placeholder="أدخل مفتاح المدرسة"
-              (keypress)="onSchoolKeyPress($event)"
-              required>
-          </div>
-          <small class="hint">مثال: SCH-XXXXX-XXXXX</small>
-        </div>
-
-        <!-- اسم المستخدم -->
-        <div class="input-group-custom">
-          <label for="username">👤 اسم المستخدم <span class="required">*</span></label>
-          <div class="input-wrapper">
-            <i class="fas fa-user icon-prefix"></i>
-            <input 
-              type="text" 
-              id="username" 
-              name="username" 
-              [(ngModel)]="username" 
-              placeholder="أدخل اسم المستخدم"
-              (keypress)="onUsernameKeyPress($event)"
-              required>
-          </div>
-        </div>
-
-        <!-- كلمة المرور -->
-        <div class="input-group-custom">
-          <div class="label-row">
-            <label for="password">🔒 كلمة المرور <span class="required">*</span></label>
-            <a href="javascript:void(0)" (click)="forgotPassword()" class="forgot-link">نسيت كلمة المرور؟</a>
-          </div>
-          <div class="input-wrapper">
-            <i class="fas fa-lock icon-prefix"></i>
-            <input 
-              [type]="passwordFieldType" 
-              id="password" 
-              name="password" 
-              [(ngModel)]="password" 
-              placeholder="••••••••"
-              (keypress)="onPasswordKeyPress($event)"
-              required>
-            <i class="fas" 
-               [class.fa-eye]="passwordFieldType === 'password'" 
-               [class.fa-eye-slash]="passwordFieldType === 'text'"
-               (click)="togglePasswordVisibility()" 
-               class="icon-suffix"></i>
-          </div>
-        </div>
-
-        <!-- خيارات إضافية -->
-        <div class="form-options">
-          <label class="checkbox-container">
-            <input type="checkbox" name="rememberMe" [(ngModel)]="rememberMe">
-            <span class="checkmark"></span>
-            تذكرني
-          </label>
-        </div>
-
-        <!-- رسالة الخطأ -->
-        <div *ngIf="errorMessage" class="error-message">
-          <i class="fas fa-exclamation-circle"></i>
-          {{ errorMessage }}
-        </div>
-
-        <!-- أزرار الإجراء -->
-        <div class="action-buttons">
-          <button type="submit" class="btn-primary" [disabled]="isLoading || !isFormValid()">
-            <span *ngIf="!isLoading">🚀 دخول للنظام</span>
-            <span *ngIf="isLoading" class="loader-dots">⏳ جاري التحميل</span>
-          </button>
-          
-          <button type="button" class="btn-outline" (click)="redirectToAccountingInterface()" [disabled]="isLoading || !isFormValid()">
-            <i class="fas fa-calculator"></i> واجهة المحاسبة
-          </button>
-        </div>
-      </form>
-
-      <!-- التذييل -->
-      <footer class="form-footer">
-        <p>&copy; {{ currentYear }} مدرسة الرواد. جميع الحقوق محفوظة.</p>
-      </footer>
     </div>
   </div>
 </div>

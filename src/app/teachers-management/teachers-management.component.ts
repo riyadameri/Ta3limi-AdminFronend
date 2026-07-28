@@ -1297,7 +1297,7 @@ export class TeachersManagementComponent implements OnInit {
   // ==========================================
   // API Base URL
   // ==========================================
-  private apiUrl = 'http://localhost:5090';
+  private apiUrl = '';
 
   // ==========================================
   // Constructor

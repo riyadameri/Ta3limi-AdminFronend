@@ -181,7 +181,7 @@ export class HomeComponent implements OnInit {
     this.setupKeyboardListeners();
   }
 
-  @HostListener('window:resize', ['$event'])
+  @HostListener('window:resize')
   onResize(): void {
     this.checkScreenSize();
   }

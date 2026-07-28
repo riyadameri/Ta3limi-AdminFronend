@@ -12,7 +12,7 @@ import { CommonModule } from '@angular/common';
   styleUrls: ['./login.component.css']
 })
 export class LoginComponent implements OnInit {
-  private apiUrl = 'http://localhost:5090';
+  private apiUrl = ''; // Adjust this to your backend API URL if needed
   
   username: string = '';
   password: string = '';

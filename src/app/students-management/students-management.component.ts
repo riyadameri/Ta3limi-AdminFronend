@@ -1216,7 +1216,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   // Properties
   // ==============================================
 
-  private apiUrl = 'http://localhost:5090';
+  private apiUrl = '';
   
   // ✅ School Data - loaded from localStorage
   schoolId: string = '';

@@ -1125,7 +1125,7 @@ export class LessonManagementComponent implements OnInit {
   selectedLessons = new Set<string>();
   
   // ✅ عنوان API
-  private apiUrl = 'http://localhost:5090';
+  private apiUrl = '';
 
   // ==========================================
   // المُنشئ

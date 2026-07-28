@@ -36,7 +36,7 @@ export interface LoginResponse {
   providedIn: 'root'
 })
 export class AuthService {
-  private apiUrl = environment.apiUrl || 'http://localhost:5090';
+  private apiUrl = environment.apiUrl || '';
   private tokenKey = 'token';
   private userKey = 'user';
   private schoolKey = 'school';

@@ -1391,7 +1391,7 @@ export class LessonDetailComponent implements OnInit {
 
   // School ID
   private schoolId: string | null = null;
-  private apiUrl = 'http://localhost:5090';
+  private apiUrl = '';
 
   // ==================== COMPUTED PROPERTIES ====================
   get totalPages(): number {

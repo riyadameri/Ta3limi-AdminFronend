@@ -1,9 +1,11 @@
+// ==================== students-management.component.ts - النسخة المحدثة ====================
 import { Component, OnInit, HostListener, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import Swal from 'sweetalert2';
 import { PrinterService, ReceiptData } from '../services/printer.service';
+import { environment } from '../../environments/environment.development';
 
 // ==============================================
 // Data Interfaces
@@ -26,16 +28,15 @@ interface Student {
   classes?: any[];
   new?: boolean;
   schoolId?: string;
+  // ✅ حقول جديدة
+  username?: string;
+  studentAccountCreated?: boolean;
 }
 
 interface StudentWithAvatar extends Student {
   avatarInitials?: string;
   avatarColor?: string;
 }
-
-// ==============================================
-// Main Component
-// ==============================================
 
 @Component({
   selector: 'app-students-management',
@@ -57,7 +58,7 @@ interface StudentWithAvatar extends Student {
               </svg>
             </div>
             <div class="brand-info">
-              <span class="brand-name">المنارة</span>
+              <span class="brand-name">رواد المعرفة</span>
               <span class="brand-sub">إدارة الطلاب</span>
             </div>
           </div>
@@ -72,7 +73,7 @@ interface StudentWithAvatar extends Student {
               type="text" 
               [(ngModel)]="searchTerm" 
               (input)="filterStudents()"
-              placeholder="البحث عن طالب بالاسم أو المعرف..." 
+              placeholder="🔍 البحث عن طالب بالاسم أو المعرف..." 
               class="search-input"
             />
           </div>
@@ -146,21 +147,21 @@ interface StudentWithAvatar extends Student {
       <!-- ========== FILTERS ========== -->
       <div class="filter-bar">
         <div class="filter-group">
-          <label>السنة الدراسية</label>
+          <label>📚 السنة الدراسية</label>
           <select [(ngModel)]="selectedAcademicYear" (change)="filterStudents()" class="filter-select">
             <option value="all">جميع المستويات</option>
             <option *ngFor="let year of academicYears" [value]="year.value">{{ year.label }}</option>
           </select>
         </div>
         <button *ngIf="searchTerm || selectedAcademicYear !== 'all'" class="btn-clear" (click)="clearFilters()">
-          مسح التصفية
+          🗑️ مسح التصفية
         </button>
       </div>
 
       <!-- ========== LOADING ========== -->
       <div *ngIf="isLoading" class="loading-container">
         <div class="spinner"></div>
-        <p>جاري تحميل الطلاب...</p>
+        <p>⏳ جاري تحميل الطلاب...</p>
       </div>
 
       <!-- ========== STUDENTS GRID ========== -->
@@ -175,7 +176,7 @@ interface StudentWithAvatar extends Student {
               <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
               <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
-            <p>لا يوجد طلاب</p>
+            <p>📭 لا يوجد طلاب</p>
             <span>حاول تعديل البحث أو التصفية</span>
           </div>
 
@@ -197,11 +198,19 @@ interface StudentWithAvatar extends Student {
                   </svg>
                   {{ student.studentId || 'غير محدد' }}
                 </div>
+                <!-- ✅ عرض اسم المستخدم إذا كان موجوداً -->
+                <div *ngIf="student.username" class="student-username-badge">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                  {{ student.username }}
+                </div>
               </div>
               <div class="card-status">
                 <span class="status-badge" [class.status-paid]="student.hasPaidRegistration" [class.status-unpaid]="!student.hasPaidRegistration">
                   <span class="status-dot"></span>
-                  {{ student.hasPaidRegistration ? 'مدفوع' : 'غير مدفوع' }}
+                  {{ student.hasPaidRegistration ? '✅ مدفوع' : '⏳ غير مدفوع' }}
                 </span>
               </div>
             </div>
@@ -370,21 +379,25 @@ interface StudentWithAvatar extends Student {
         </div>
         <div class="payment-info" *ngIf="selectedStudent">
           <div class="payment-student">
-            <span class="payment-label">الطالب:</span>
+            <span class="payment-label">👤 الطالب:</span>
             <strong>{{ selectedStudent.name }}</strong>
           </div>
           <div class="payment-student">
-            <span class="payment-label">المستوى:</span>
+            <span class="payment-label">📚 المستوى:</span>
             <span>{{ getAcademicYearName(selectedStudent.academicYear) }}</span>
+          </div>
+          <div class="payment-student" *ngIf="selectedStudent.username">
+            <span class="payment-label">👤 اسم المستخدم:</span>
+            <span style="color: #6C63FF; font-weight: 600;">{{ selectedStudent.username }}</span>
           </div>
         </div>
         <form (ngSubmit)="processPayment()">
           <div class="form-group">
-            <label>المبلغ (دج)</label>
+            <label>💰 المبلغ (دج)</label>
             <input type="number" [(ngModel)]="paymentData.amount" name="amount" required min="100" />
           </div>
           <div class="form-group">
-            <label>طريقة الدفع</label>
+            <label>💳 طريقة الدفع</label>
             <select [(ngModel)]="paymentData.method" name="method">
               <option value="cash">نقدي</option>
               <option value="bank">تحويل بنكي</option>
@@ -393,7 +406,7 @@ interface StudentWithAvatar extends Student {
             </select>
           </div>
           <div class="form-group">
-            <label>ملاحظات</label>
+            <label>📝 ملاحظات</label>
             <textarea [(ngModel)]="paymentData.notes" name="notes" rows="2" placeholder="ملاحظات اختيارية..."></textarea>
           </div>
           <div class="modal-footer">
@@ -439,7 +452,7 @@ interface StudentWithAvatar extends Student {
           </button>
         </div>
         <div class="form-group">
-          <label>المستوى الدراسي الافتراضي</label>
+          <label>📚 المستوى الدراسي الافتراضي</label>
           <select [(ngModel)]="bulkData.defaultYear" class="filter-select">
             <option value="">اختر المستوى الافتراضي...</option>
             <option *ngFor="let year of academicYears" [value]="year.value">{{ year.label }}</option>
@@ -449,11 +462,11 @@ interface StudentWithAvatar extends Student {
           <table>
             <thead>
               <tr>
-                <th>الاسم *</th>
-                <th>ولي الأمر</th>
-                <th>الهاتف</th>
-                <th>المستوى</th>
-                <th>تاريخ الميلاد</th>
+                <th>👤 الاسم *</th>
+                <th>👨‍👦 ولي الأمر</th>
+                <th>📱 الهاتف</th>
+                <th>📚 المستوى</th>
+                <th>🎂 تاريخ الميلاد</th>
                 <th style="width:40px;"></th>
               </tr>
             </thead>
@@ -808,6 +821,18 @@ interface StudentWithAvatar extends Student {
       width: fit-content;
     }
     .student-id-badge svg { color: var(--gray); }
+    .student-username-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.65rem;
+      color: var(--primary);
+      background: #EDE7FF;
+      padding: 2px 10px;
+      border-radius: 20px;
+      margin-top: 2px;
+      width: fit-content;
+    }
     .card-status { display: flex; align-items: center; flex-shrink: 0; }
     .status-badge {
       display: inline-flex;
@@ -1216,7 +1241,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   // Properties
   // ==============================================
 
-  private apiUrl = '';
+  private apiUrl = environment.apiUrl; // Replace with your actual API URL
   
   // ✅ School Data - loaded from localStorage
   schoolId: string = '';
@@ -1297,7 +1322,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
 
   constructor(
     private router: Router,
-    private printerService: PrinterService // ✅ تم إضافة PrinterService
+    private printerService: PrinterService
   ) {}
 
   // ==============================================
@@ -1305,16 +1330,12 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   // ==============================================
 
   ngOnInit(): void {
-    // Check if user is logged in
     if (!this.isLoggedIn()) {
       this.router.navigate(['/login']);
       return;
     }
     
-    // ✅ Load school data from localStorage first
     this.loadSchoolData();
-    
-    // ✅ Then load students
     this.loadStudents();
   }
 
@@ -1323,7 +1344,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   // ==============================================
-  // ✅ Auth Helpers (without AuthService)
+  // ✅ Auth Helpers
   // ==============================================
 
   private getToken(): string | null {
@@ -1345,12 +1366,11 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   // ==============================================
-  // ✅ HELPER: Load School Data from localStorage
+  // ✅ Load School Data from localStorage
   // ==============================================
 
   private loadSchoolData(): void {
     try {
-      // Get school from localStorage (saved during login)
       const schoolData = localStorage.getItem('school');
       if (schoolData) {
         const school = JSON.parse(schoolData);
@@ -1362,8 +1382,6 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
           name: school.name
         });
       } else {
-        console.warn('⚠️ No school data found in localStorage');
-        // Try to get from user data as fallback
         const userData = localStorage.getItem('user');
         if (userData) {
           try {
@@ -1383,11 +1401,10 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   // ==============================================
-  // ✅ Get School ID (public method)
+  // ✅ Get School ID
   // ==============================================
 
   getSchoolId(): string {
-    // Try multiple sources
     if (this.schoolId) return this.schoolId;
     
     try {
@@ -1410,7 +1427,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   // ==============================================
-  // ✅ HELPER: Check Permissions
+  // ✅ Check Permissions
   // ==============================================
 
   private checkPermission(permission: string, actionName: string = 'هذه العملية'): boolean {
@@ -1502,13 +1519,10 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   loadStudents(): void {
     this.isLoading = true;
     
-    // ✅ Get school ID
     const schoolId = this.getSchoolId();
-    
-    // ✅ Build URL with schoolId filter
     const url = schoolId 
-      ? `${this.apiUrl}/api/students?schoolId=${schoolId}`
-      : `${this.apiUrl}/api/students`;
+      ? `${this.apiUrl}/students?schoolId=${schoolId}`
+      : `${this.apiUrl}/students`;
     
     console.log(`📚 Loading students for school: ${schoolId || 'all'}`);
     
@@ -1525,7 +1539,6 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
         } else if (response.students && Array.isArray(response.students)) {
           studentsData = response.students;
         } else {
-          // Try to find array in response
           for (const key in response) {
             if (Array.isArray(response[key])) {
               studentsData = response[key];
@@ -1536,7 +1549,6 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
 
         console.log(`✅ Found ${studentsData.length} students`);
         
-        // Map students with avatars
         this.students = studentsData.map(student => ({
           ...student,
           avatarColor: this.getAvatarColor(student),
@@ -1571,17 +1583,15 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
     const studentId = this.selectedStudent?._id || this.selectedStudent?.id;
     const schoolId = this.getSchoolId();
     
-    // Build URL with schoolId
     const url = isEdit 
-      ? `${this.apiUrl}/api/students/${studentId}?schoolId=${schoolId}`
-      : `${this.apiUrl}/api/students`;
+      ? `${this.apiUrl}/students/${studentId}?schoolId=${schoolId}`
+      : `${this.apiUrl}/students`;
     const method = isEdit ? 'PUT' : 'POST';
 
-    // ✅ Add schoolId to data
     const data = {
       ...this.formData,
       registrationDate: this.formData.registrationDate || new Date().toISOString().split('T')[0],
-      schoolId: schoolId // ✅ Important: Link student to school
+      schoolId: schoolId
     };
 
     console.log('📝 Saving student with schoolId:', schoolId);
@@ -1590,8 +1600,37 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
       method,
       body: JSON.stringify(data)
     })
-      .then(() => {
-        Swal.fire('نجاح', isEdit ? 'تم تحديث الطالب بنجاح' : 'تم تسجيل الطالب بنجاح', 'success');
+      .then((response: any) => {
+        const message = isEdit ? 'تم تحديث الطالب بنجاح' : 'تم تسجيل الطالب بنجاح';
+        
+        // ✅ عرض بيانات الاعتماد إذا كانت موجودة
+        if (response.credentials) {
+          Swal.fire({
+            title: '✅ نجاح',
+            html: `
+              <div style="text-align: right;">
+                <p style="color: #00C9A7; font-size: 18px; font-weight: 700;">${message}</p>
+                <div style="background: #F8F9FA; padding: 12px; border-radius: 8px; margin: 10px 0;">
+                  <h4 style="margin: 0 0 10px 0; color: #2D3436;">🔑 بيانات تسجيل الدخول</h4>
+                  <p style="margin: 5px 0;">
+                    <strong>👤 اسم المستخدم:</strong> 
+                    <span style="color: #6C63FF; font-weight: 700;">${response.credentials.username}</span>
+                  </p>
+                  <p style="margin: 5px 0;">
+                    <strong>🔑 كلمة المرور:</strong> 
+                    <span style="color: #FF6B6B; font-weight: 700;">${response.credentials.password}</span>
+                  </p>
+                </div>
+                <p style="font-size: 12px; color: #636E72;">⚠️ يرجى حفظ بيانات تسجيل الدخول في مكان آمن</p>
+              </div>
+            `,
+            icon: 'success',
+            confirmButtonColor: '#6C63FF'
+          });
+        } else {
+          Swal.fire('نجاح', message, 'success');
+        }
+        
         this.closeModal();
         this.loadStudents();
       })
@@ -1603,7 +1642,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   // ==============================================
-  // ✅ Delete Student - with School ID check
+  // ✅ Delete Student
   // ==============================================
 
   deleteStudent(student: StudentWithAvatar): void {
@@ -1630,7 +1669,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
       if (result.isConfirmed) {
         this.isLoading = true;
         const schoolId = this.getSchoolId();
-        const url = `${this.apiUrl}/api/students/${studentId}?schoolId=${schoolId}`;
+        const url = `${this.apiUrl}/students/${studentId}?schoolId=${schoolId}`;
         
         this.handleRequest(url, {
           method: 'DELETE'
@@ -1668,7 +1707,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
     this.isLoading = true;
     
     const schoolId = this.getSchoolId();
-    const url = `${this.apiUrl}/api/students/${studentId}/pay-registration?schoolId=${schoolId}`;
+    const url = `${this.apiUrl}/students/${studentId}/pay-registration?schoolId=${schoolId}`;
     
     const payload = {
       amount: this.paymentData.amount,
@@ -1686,28 +1725,80 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
       
       console.log('✅ Payment successful:', response);
       
-      // ✅ طباعة الإيصال
-      await this.printReceipt(response);
+      // ✅ عرض بيانات الاعتماد في رسالة النجاح
+      const username = response.credentials?.username || this.selectedStudent?.username || 'غير متاح';
+      const password = response.credentials?.password || 'يرجى التواصل مع الإدارة';
+      const platformUrl = response.credentials?.platformUrl || `https://alrouad.com/studentsPlatform/${studentId}`;
+      const qrCodeUrl = response.credentials?.qrCodeUrl || `https:/.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(platformUrl)}`;
       
-      // عرض رسالة النجاح
+      // عرض رسالة النجاح مع بيانات الاعتماد
       await Swal.fire({
-        title: 'نجاح',
+        title: '✅ تم الدفع بنجاح',
         html: `
-          <div style="text-align: center;">
+          <div style="text-align: right; direction: rtl;">
             <p style="color: #00C9A7; font-size: 18px; font-weight: 700;">✅ تم دفع رسوم التسجيل</p>
             <p style="margin: 10px 0; color: #636E72;">
-              <strong>الطالب:</strong> ${this.selectedStudent?.name}
+              <strong>👤 الطالب:</strong> ${this.selectedStudent?.name}
             </p>
             <p style="margin: 5px 0; color: #636E72;">
-              <strong>رقم الفاتورة:</strong> ${response.receiptNumber || 'N/A'}
+              <strong>📌 رقم الفاتورة:</strong> ${response.receiptNumber || 'N/A'}
             </p>
             <p style="margin: 5px 0; color: #636E72;">
-              <strong>المبلغ:</strong> ${this.paymentData.amount} دج
+              <strong>💰 المبلغ:</strong> ${this.paymentData.amount} دج
             </p>
+            
+            <hr style="margin: 15px 0; border: 1px dashed #DFE6E9;">
+            
+            <div style="background: #F8F9FA; padding: 12px; border-radius: 8px; margin: 10px 0;">
+              <h4 style="margin: 0 0 10px 0; color: #2D3436;">🔑 بيانات تسجيل الدخول</h4>
+              <p style="margin: 5px 0; font-size: 14px;">
+                <strong>👤 اسم المستخدم:</strong> 
+                <span style="color: #6C63FF; font-weight: 700; background: #EDE7FF; padding: 2px 8px; border-radius: 4px;">${username}</span>
+              </p>
+              <p style="margin: 5px 0; font-size: 14px;">
+                <strong>🔑 كلمة المرور:</strong> 
+                <span style="color: #FF6B6B; font-weight: 700; background: #FFE8E8; padding: 2px 8px; border-radius: 4px;">${password}</span>
+              </p>
+            </div>
+            
+            <div style="margin: 10px 0; text-align: center;">
+              <p style="font-size: 12px; color: #636E72;">🌐 رابط المنصة:</p>
+              <p style="font-size: 14px; color: #6C63FF; word-break: break-all;">
+                <a href="${platformUrl}" target="_blank" style="color: #6C63FF; text-decoration: underline;">
+                  ${platformUrl}
+                </a>
+              </p>
+            </div>
+            
+            <div style="margin: 10px 0; text-align: center;">
+              <img src="${qrCodeUrl}" style="width: 120px; height: 120px; border: 2px solid #DFE6E9; border-radius: 8px; padding: 5px;" />
+            </div>
+            
+            <div style="margin-top: 10px; padding: 8px; background: #FFFBEB; border-radius: 6px; border: 1px solid #FDE68A;">
+              <p style="font-size: 12px; color: #92400E; margin: 0;">
+                ⚠️ يرجى حفظ بيانات تسجيل الدخول في مكان آمن
+              </p>
+            </div>
           </div>
         `,
         icon: 'success',
-        confirmButtonColor: '#6C63FF'
+        confirmButtonColor: '#6C63FF',
+        confirmButtonText: '🖨️ طباعة الإيصال',
+        showCancelButton: true,
+        cancelButtonText: 'إغلاق',
+        cancelButtonColor: '#636E72',
+        width: 550
+      }).then(async (result) => {
+        if (result.isConfirmed) {
+          // ✅ طباعة الإيصال مع بيانات الاعتماد
+          await this.printReceiptWithCredentials({
+            ...response,
+            username: username,
+            password: password,
+            platformUrl: platformUrl,
+            qrCodeUrl: qrCodeUrl
+          });
+        }
       });
       
       this.closePaymentModal();
@@ -1720,12 +1811,11 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   }
 
   // ==============================================
-  // ✅ دالة طباعة الإيصال
+  // ✅ دالة طباعة الإيصال مع بيانات الاعتماد
   // ==============================================
 
-  private async printReceipt(paymentResponse: any): Promise<void> {
+  private async printReceiptWithCredentials(paymentResponse: any): Promise<void> {
     try {
-      // تحقق من اتصال الطابعة
       if (!this.printerService.checkConnectionStatus()) {
         const connected = await this.printerService.connectToThermalPrinter();
         if (!connected) {
@@ -1734,23 +1824,26 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
         }
       }
 
-      // بناء بيانات الإيصال
       const receiptData: ReceiptData = {
         receiptNumber: paymentResponse.receiptNumber || `R${Date.now()}`,
-        date: new Date().toLocaleDateString('en-US'),
-        time: new Date().toLocaleTimeString('en-US'),
+        date: new Date().toLocaleDateString('ar-EG'),
+        time: new Date().toLocaleTimeString('ar-EG'),
         studentName: this.selectedStudent?.name || 'Unknown',
         studentId: this.selectedStudent?.studentId || 'N/A',
         className: this.getAcademicYearName(this.selectedStudent?.academicYear),
-        month: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        month: new Date().toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }),
         amount: this.paymentData.amount,
         paymentMethod: this.paymentData.method,
         academicYear: this.selectedStudent?.academicYear,
         parentPhone: this.selectedStudent?.parentPhone,
-        notes: this.paymentData.notes || 'رسوم تسجيل'
+        notes: this.paymentData.notes || 'رسوم تسجيل',
+        // ✅ بيانات الاعتماد للطباعة
+        username: paymentResponse.username,
+        password: paymentResponse.password,
+        platformUrl: paymentResponse.platformUrl,
+        qrCodeUrl: paymentResponse.qrCodeUrl
       };
 
-      // طباعة الإيصال
       const printed = await this.printerService.printProfessionalReceipt(receiptData);
       
       if (printed) {
@@ -1760,12 +1853,11 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
       }
     } catch (error) {
       console.error('❌ Error printing receipt:', error);
-      // لا نعرض خطأ للمستخدم حتى لا يفسد تجربة الدفع الناجح
     }
   }
 
   // ==============================================
-  // ✅ Bulk Import - with School ID
+  // ✅ Bulk Import
   // ==============================================
 
   importStudents(): void {
@@ -1799,7 +1891,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
       ...s,
       academicYear: s.academicYear || this.bulkData.defaultYear,
       registrationDate: new Date().toISOString().split('T')[0],
-      schoolId: schoolId // ✅ Add schoolId to imported students
+      schoolId: schoolId
     }));
 
     console.log(`📥 Importing ${students.length} students to school ${schoolId}`);
@@ -1830,7 +1922,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
       }
 
       try {
-        await this.handleRequest(`${this.apiUrl}/api/students`, {
+        await this.handleRequest(`${this.apiUrl}/students`, {
           method: 'POST',
           body: JSON.stringify(students[index])
         });
@@ -1864,7 +1956,8 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
       const matchesSearch = !this.searchTerm || 
         student.name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
         (student.studentId?.toLowerCase().includes(this.searchTerm.toLowerCase())) ||
-        (student.parentName?.toLowerCase().includes(this.searchTerm.toLowerCase()));
+        (student.parentName?.toLowerCase().includes(this.searchTerm.toLowerCase())) ||
+        (student.username?.toLowerCase().includes(this.searchTerm.toLowerCase()));
       
       const matchesYear = this.selectedAcademicYear === 'all' || 
         student.academicYear === this.selectedAcademicYear;

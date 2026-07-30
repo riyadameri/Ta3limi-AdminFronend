@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
-
+import { environment } from '../../environments/environment.development';
 interface Student {
   _id: string;
   name: string;
@@ -831,7 +831,7 @@ interface LiveClass {
   `]
 })
 export class LiveClassComponent implements OnInit, OnDestroy {
-  private apiUrl = '';
+  private apiUrl = environment.apiUrl;
   private http = inject(HttpClient);
   
   liveClasses: LiveClass[] = [];
@@ -975,7 +975,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
       return;
     }
     this.loading = true;
-    let url = `${this.apiUrl}/api/live-classes?schoolId=${schoolId}`;
+    let url = `${this.apiUrl}/live-classes?schoolId=${schoolId}`;
     if (this.filters.status) url += `&status=${this.filters.status}`;
     if (this.filters.date) url += `&date=${this.filters.date}`;
     if (this.filters.class) url += `&class=${this.filters.class}`;
@@ -1004,7 +1004,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   loadAllClasses(): void {
     const schoolId = this.getSchoolId();
     if (!schoolId) { this.allClasses = []; return; }
-    this.http.get<any>(`${this.apiUrl}/api/classes?schoolId=${schoolId}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/classes?schoolId=${schoolId}`).subscribe({
       next: (response) => {
         this.allClasses = this.extractDataArray(response);
         console.log(`✅ Loaded ${this.allClasses.length} classes`);
@@ -1019,7 +1019,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   loadTeachers(): void {
     const schoolId = this.getSchoolId();
     if (!schoolId) { this.teachers = []; return; }
-    this.http.get<any>(`${this.apiUrl}/api/teachers?schoolId=${schoolId}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/teachers?schoolId=${schoolId}`).subscribe({
       next: (response) => {
         this.teachers = this.extractDataArray(response);
         console.log(`✅ Loaded ${this.teachers.length} teachers`);
@@ -1034,7 +1034,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   loadAllStudents(): void {
     const schoolId = this.getSchoolId();
     if (!schoolId) { this.allStudents = []; return; }
-    this.http.get<any>(`${this.apiUrl}/api/students?schoolId=${schoolId}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/students?schoolId=${schoolId}`).subscribe({
       next: (response) => {
         this.allStudents = this.extractDataArray(response);
         console.log(`✅ Loaded ${this.allStudents.length} students`);
@@ -1049,7 +1049,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   loadClassrooms(): void {
     const schoolId = this.getSchoolId();
     if (!schoolId) { this.classrooms = []; return; }
-    this.http.get<any>(`${this.apiUrl}/api/classrooms?schoolId=${schoolId}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/classrooms?schoolId=${schoolId}`).subscribe({
       next: (response) => {
         this.classrooms = this.extractDataArray(response);
         console.log(`✅ Loaded ${this.classrooms.length} classrooms`);
@@ -1064,7 +1064,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   loadClassStudents(liveClass: LiveClass): void {
     if (!liveClass.class?._id) { alert('معرف الحصة غير موجود'); return; }
     const schoolId = this.getSchoolId();
-    this.http.get<any>(`${this.apiUrl}/api/classes/${liveClass.class._id}?schoolId=${schoolId}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/classes/${liveClass.class._id}?schoolId=${schoolId}`).subscribe({
       next: (response) => {
         let students: Student[] = [];
         if (response?.data?.students) students = response.data.students;
@@ -1085,7 +1085,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   // ==============================================
   loadLiveClassAttendance(liveClassId: string): void {
     const schoolId = this.getSchoolId();
-    this.http.get<any>(`${this.apiUrl}/api/live-classes/${liveClassId}/attendance?schoolId=${schoolId}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/live-classes/${liveClassId}/attendance?schoolId=${schoolId}`).subscribe({
       next: (data) => {
         const liveClass = this.liveClasses.find(lc => lc._id === liveClassId);
         if (liveClass) liveClass.attendance = data.attendance || [];
@@ -1115,7 +1115,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     if (this.newLiveClass.notes) payload.notes = this.newLiveClass.notes;
     
     this.loading = true;
-    this.http.post(`${this.apiUrl}/api/live-classes`, payload).subscribe({
+    this.http.post(`${this.apiUrl}/live-classes`, payload).subscribe({
       next: () => {
         alert('✅ تم إنشاء الحصة بنجاح');
         this.loadLiveClasses();
@@ -1137,7 +1137,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   updateLiveClass(liveClass: LiveClass): void {
     const schoolId = this.getSchoolId();
     this.loading = true;
-    this.http.put(`${this.apiUrl}/api/live-classes/${liveClass._id}?schoolId=${schoolId}`, {
+    this.http.put(`${this.apiUrl}/live-classes/${liveClass._id}?schoolId=${schoolId}`, {
       status: liveClass.status,
       endTime: liveClass.endTime,
       notes: liveClass.notes
@@ -1168,7 +1168,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   deleteLiveClass(liveClassId: string): void {
     const schoolId = this.getSchoolId();
     this.loading = true;
-    this.http.delete(`${this.apiUrl}/api/live-classes/${liveClassId}?schoolId=${schoolId}`).subscribe({
+    this.http.delete(`${this.apiUrl}/live-classes/${liveClassId}?schoolId=${schoolId}`).subscribe({
       next: () => {
         alert('✅ تم حذف الحصة');
         this.loadLiveClasses();
@@ -1189,7 +1189,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     if (!confirm('هل تريد بدء هذه الحصة؟')) return;
     const schoolId = this.getSchoolId();
     this.loading = true;
-    this.http.put(`${this.apiUrl}/api/live-classes/${liveClassId}/start?schoolId=${schoolId}`, {}).subscribe({
+    this.http.put(`${this.apiUrl}/live-classes/${liveClassId}/start?schoolId=${schoolId}`, {}).subscribe({
       next: (response: any) => {
         alert('✅ تم بدء الحصة');
         if (response.classroomUpdated) alert('✅ تم تحديث حالة الغرفة إلى "مشغولة"');
@@ -1211,7 +1211,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     if (!confirm('هل تريد إنهاء هذه الحصة؟')) return;
     const schoolId = this.getSchoolId();
     this.loading = true;
-    this.http.put(`${this.apiUrl}/api/live-classes/${liveClassId}/complete?schoolId=${schoolId}`, {}).subscribe({
+    this.http.put(`${this.apiUrl}/live-classes/${liveClassId}/complete?schoolId=${schoolId}`, {}).subscribe({
       next: (response: any) => {
         alert('✅ تم إنهاء الحصة');
         if (response.classroomUpdated) alert('✅ تم تحديث حالة الغرفة إلى "متاحة"');
@@ -1235,7 +1235,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
   markStudentAttendance(liveClassId: string, studentId: string, status: string): void {
     const schoolId = this.getSchoolId();
     this.loading = true;
-    this.http.post(`${this.apiUrl}/api/live-classes/${liveClassId}/attendance?schoolId=${schoolId}`, {
+    this.http.post(`${this.apiUrl}/live-classes/${liveClassId}/attendance?schoolId=${schoolId}`, {
       studentId, status, method: 'manual', sendSMS: status === 'absent'
     }).subscribe({
       next: () => {
@@ -1258,7 +1258,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     if (!confirm('⚠️ سيتم تسجيل جميع الطلاب غير المسجل حضورهم كغائبين وإرسال رسائل لأولياء أمورهم. هل تريد المتابعة؟')) return;
     const schoolId = this.getSchoolId();
     this.loading = true;
-    this.http.post(`${this.apiUrl}/api/live-classes/${liveClassId}/auto-mark-absent?schoolId=${schoolId}`, {
+    this.http.post(`${this.apiUrl}/live-classes/${liveClassId}/auto-mark-absent?schoolId=${schoolId}`, {
       sendSMS: true
     }).subscribe({
       next: (response: any) => {
@@ -1326,7 +1326,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     const endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     
     this.http.get<any>(
-      `${this.apiUrl}/api/live-classes/class/${classId}/attendance?startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}&schoolId=${schoolId}`
+      `${this.apiUrl}/live-classes/class/${classId}/attendance?startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}&schoolId=${schoolId}`
     ).subscribe({
       next: (data) => {
         this.attendanceReport = data;
@@ -1350,7 +1350,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
     const year = today.getFullYear();
     window.open(
-      `${this.apiUrl}/api/classes/${classId}/monthly-attendance/export?month=${month}&year=${year}&schoolId=${schoolId}`,
+      `${this.apiUrl}/classes/${classId}/monthly-attendance/export?month=${month}&year=${year}&schoolId=${schoolId}`,
       '_blank'
     );
   }
@@ -1365,7 +1365,7 @@ export class LiveClassComponent implements OnInit, OnDestroy {
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
     const year = today.getFullYear();
     window.open(
-      `${this.apiUrl}/api/classes/${this.attendanceReport.class._id}/monthly-attendance/export?month=${month}&year=${year}&schoolId=${schoolId}`,
+      `${this.apiUrl}/classes/${this.attendanceReport.class._id}/monthly-attendance/export?month=${month}&year=${year}&schoolId=${schoolId}`,
       '_blank'
     );
   }

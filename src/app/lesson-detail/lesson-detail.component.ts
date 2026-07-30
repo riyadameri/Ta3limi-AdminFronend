@@ -6,7 +6,8 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { environment } from '../../environments/environment';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { forkJoin, debounceTime, distinctUntilChanged, Subject } from 'rxjs';
-
+import Swal from 'sweetalert2';
+import { PrinterService } from '../services/printer.service';
 // ==================== INTERFACES ====================
 interface Student {
   _id: string;
@@ -379,7 +380,7 @@ interface AttendanceStats {
                           <button class="icon-btn whatsapp-btn" (click)="callParent(p)" title="اتصال بولي الأمر">
                             <i class="fas fa-phone-alt"></i>
                           </button>
-                          <button class="icon-btn green" (click)="printReceipt(p)" title="طباعة">
+                          <button class="icon-btn green" (click)="printReceipt(p)" title="طباعة الإيصال">
                             <i class="fas fa-print"></i>
                           </button>
                           <button class="icon-btn blue" (click)="editPayment(p)" title="تعديل">
@@ -436,7 +437,7 @@ interface AttendanceStats {
                   <button class="icon-btn whatsapp-btn" (click)="callParent(p)" title="اتصال بولي الأمر">
                     <i class="fas fa-phone-alt"></i>
                   </button>
-                  <button class="icon-btn green" (click)="printReceipt(p)" title="طباعة">
+                  <button class="icon-btn green" (click)="printReceipt(p)" title="طباعة الإيصال">
                     <i class="fas fa-print"></i>
                   </button>
                   <button class="icon-btn blue" (click)="editPayment(p)" title="تعديل">
@@ -1329,6 +1330,7 @@ export class LessonDetailComponent implements OnInit {
   private http = inject(HttpClient);
   private fb = inject(FormBuilder);
   private sanitizer = inject(DomSanitizer);
+  private printerService = inject(PrinterService);
   
   // ==================== PROPERTIES ====================
   lessonId!: string;
@@ -1391,7 +1393,7 @@ export class LessonDetailComponent implements OnInit {
 
   // School ID
   private schoolId: string | null = null;
-  private apiUrl = '';
+  private apiUrl = environment.apiUrl;
 
   // ==================== COMPUTED PROPERTIES ====================
   get totalPages(): number {
@@ -1510,7 +1512,7 @@ export class LessonDetailComponent implements OnInit {
   
   loadLessonDetails(): void {
     this.loading = true;
-    this.http.get<any>(`${this.apiUrl}/api/classes/${this.lessonId}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/classes/${this.lessonId}`).subscribe({
       next: (res) => {
         let lessonData;
         if (res && res.data) {
@@ -1543,7 +1545,7 @@ export class LessonDetailComponent implements OnInit {
   }
 
   loadPayments(): void {
-    this.http.get<any>(`${this.apiUrl}/api/payments/class/${this.lessonId}`).subscribe({
+    this.http.get<any>(`${this.apiUrl}/payments/class/${this.lessonId}`).subscribe({
       next: (res) => {
         let paymentsData: Payment[] = [];
         
@@ -1578,7 +1580,7 @@ export class LessonDetailComponent implements OnInit {
     if (!this.lessonId) return;
     
     this.loading = true;
-    let url = `${this.apiUrl}/api/classes/${this.lessonId}/attendance`;
+    let url = `${this.apiUrl}/classes/${this.lessonId}/attendance`;
     const params = new HttpParams();
     
     if (this.attendanceFilter.startDate) {
@@ -1622,7 +1624,7 @@ export class LessonDetailComponent implements OnInit {
     
     const schoolId = this.getSchoolId();
     
-    let url = `${this.apiUrl}/api/students`;
+    let url = `${this.apiUrl}/students`;
     if (schoolId) {
       url += `?schoolId=${schoolId}`;
     }
@@ -1766,7 +1768,7 @@ export class LessonDetailComponent implements OnInit {
     }
     
     this.loading = true;
-    const url = `${this.apiUrl}/api/classes/${this.lessonId}/enroll/${studentId}`;
+    const url = `${this.apiUrl}/classes/${this.lessonId}/enroll/${studentId}`;
     
     this.http.post(url, {}, { headers: this.getHeaders() }).subscribe({
       next: () => {
@@ -1787,7 +1789,7 @@ export class LessonDetailComponent implements OnInit {
     if (!confirm('هل أنت متأكد من إزالة هذا الطالب من الحصة؟')) return;
     
     this.loading = true;
-    this.http.delete(`${this.apiUrl}/api/classes/${this.lessonId}/unenroll/${studentId}`).subscribe({
+    this.http.delete(`${this.apiUrl}/classes/${this.lessonId}/unenroll/${studentId}`).subscribe({
       next: () => {
         this.loadLessonDetails();
         this.showSuccess('تم إزالة الطالب بنجاح');
@@ -1808,7 +1810,7 @@ export class LessonDetailComponent implements OnInit {
       this.showError('يرجى تعبئة جميع الحقول المطلوبة');
       return;
     }
-    
+
     this.loading = true;
     const paymentData = {
       student: this.paymentForm.value.studentId,
@@ -1821,13 +1823,34 @@ export class LessonDetailComponent implements OnInit {
       notes: this.paymentForm.value.notes,
       paymentDate: new Date()
     };
-    
-    this.http.post(`${this.apiUrl}/api/payments`, paymentData, { headers: this.getHeaders() }).subscribe({
-      next: () => {
+
+    this.http.post(`${this.apiUrl}/payments`, paymentData, { headers: this.getHeaders() }).subscribe({
+      next: (response: any) => {
+        const newPayment = response.payment || response;
+        
+        // ✅ عرض نجاح التسجيل
         this.loadPayments();
         this.closeAddPaymentPopup();
-        this.showSuccess('تم تسجيل الدفع بنجاح');
+        this.showSuccess('✅ تم تسجيل الدفع بنجاح');
         this.loading = false;
+        
+        // ✅ طباعة الإيصال تلقائياً
+        Swal.fire({
+          icon: 'success',
+          title: '✅ تم الدفع بنجاح',
+          text: 'هل تريد طباعة الإيصال؟',
+          showCancelButton: true,
+          confirmButtonText: '🖨️ طباعة',
+          cancelButtonText: 'تخطي',
+          reverseButtons: true
+        }).then(result => {
+          if (result.isConfirmed) {
+            // محاولة طباعة الإيصال
+            this.printReceipt(newPayment);
+          } else {
+            this.showSuccess('تم حفظ الدفع - يمكنك الطباعة لاحقاً');
+          }
+        });
       },
       error: (err) => {
         console.error('Error processing payment:', err);
@@ -1859,7 +1882,7 @@ export class LessonDetailComponent implements OnInit {
       notes: this.editPaymentForm.value.notes
     };
     
-    this.http.put(`${this.apiUrl}/api/payments/${this.selectedPayment._id}`, updateData, { headers: this.getHeaders() }).subscribe({
+    this.http.put(`${this.apiUrl}/payments/${this.selectedPayment._id}`, updateData, { headers: this.getHeaders() }).subscribe({
       next: () => {
         this.loadPayments();
         this.closeEditPaymentPopup();
@@ -1890,7 +1913,7 @@ export class LessonDetailComponent implements OnInit {
       paymentDate: new Date()
     };
     
-    this.http.put(`${this.apiUrl}/api/payments/${this.selectedPayment._id}`, updateData, { headers: this.getHeaders() }).subscribe({
+    this.http.put(`${this.apiUrl}/payments/${this.selectedPayment._id}`, updateData, { headers: this.getHeaders() }).subscribe({
       next: () => {
         this.loadPayments();
         this.closeMarkPaidPopup();
@@ -1909,7 +1932,7 @@ export class LessonDetailComponent implements OnInit {
     if (!this.selectedPayment) return;
     
     this.loading = true;
-    this.http.put(`${this.apiUrl}/api/payments/${this.selectedPayment._id}/cancel`, {
+    this.http.put(`${this.apiUrl}/payments/${this.selectedPayment._id}/cancel`, {
       reason: this.cancelReason
     }, { headers: this.getHeaders() }).subscribe({
       next: () => {
@@ -1935,7 +1958,7 @@ export class LessonDetailComponent implements OnInit {
     if (!this.selectedPayment) return;
     
     this.loading = true;
-    this.http.delete(`${this.apiUrl}/api/payments/${this.selectedPayment._id}`, { headers: this.getHeaders() }).subscribe({
+    this.http.delete(`${this.apiUrl}/payments/${this.selectedPayment._id}`, { headers: this.getHeaders() }).subscribe({
       next: () => {
         this.loadPayments();
         this.closeDeleteConfirmPopup();
@@ -1948,6 +1971,167 @@ export class LessonDetailComponent implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  // ==================== PRINTING ====================
+
+  /**
+   * طباعة إيصال الدفع بعد التسديد
+   */
+  async printReceipt(payment: Payment): Promise<void> {
+    try {
+      this.loading = true;
+      
+      // عرض رسالة انتظار
+      this.showSuccess('جاري الاتصال بالطابعة...');
+      
+      // طباعة الإيصال
+      const success = await this.printerService.printPaymentReceipt(
+        payment, 
+        this.lesson
+      );
+      
+      if (success) {
+        this.showSuccess('✅ تم طباعة الإيصال بنجاح');
+      } else {
+        // عرض خيارات بديلة في حال فشل الطباعة
+        const result = await Swal.fire({
+          icon: 'warning',
+          title: '⚠️ فشل الطباعة',
+          text: 'هل تريد محاولة الطباعة مرة أخرى؟',
+          showCancelButton: true,
+          confirmButtonText: 'محاولة مرة أخرى',
+          cancelButtonText: 'طباعة عبر المتصفح',
+          reverseButtons: true
+        });
+        
+        if (result.isConfirmed) {
+          // محاولة مرة أخرى
+          await this.printReceipt(payment);
+        } else if (result.dismiss === Swal.DismissReason.cancel) {
+          // طباعة عبر المتصفح (نسخة احتياطية)
+          this.printReceiptViaWindow(payment);
+        } else {
+          this.showError('تم تخطي الطباعة');
+        }
+      }
+      
+      this.loading = false;
+    } catch (error) {
+      console.error('خطأ في الطباعة:', error);
+      this.loading = false;
+      
+      // عرض خيار الطباعة عبر المتصفح
+      const result = await Swal.fire({
+        icon: 'error',
+        title: '❌ فشل الاتصال بالطابعة',
+        text: 'هل تريد طباعة الإيصال عبر المتصفح؟',
+        showCancelButton: true,
+        confirmButtonText: 'نعم، طباعة عبر المتصفح',
+        cancelButtonText: 'تخطي',
+        reverseButtons: true
+      });
+      
+      if (result.isConfirmed) {
+        this.printReceiptViaWindow(payment);
+      }
+    }
+  }
+
+  /**
+   * فتح نافذة الطباعة (نسخة احتياطية)
+   */
+  printReceiptViaWindow(payment: Payment): void {
+    const receiptHTML = this.generateReceiptHTML(payment);
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (printWindow) {
+      printWindow.document.write(receiptHTML);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    } else {
+      this.showError('تعذر فتح نافذة الطباعة');
+    }
+  }
+
+  /**
+   * توليد HTML للإيصال للطباعة عبر المتصفح
+   */
+  private generateReceiptHTML(payment: Payment): string {
+    // Safely resolve student name: payment.student can be null, string, or an object
+    let studentName = 'طالب';
+    if (payment.student) {
+      if (typeof payment.student === 'string') {
+        studentName = payment.student;
+      } else {
+        // payment.student may be typed as object; use a safe any cast to access name
+        const s: any = payment.student as any;
+        if (s && (s.name || s.fullName || s.username)) {
+          studentName = s.name || s.fullName || s.username;
+        }
+      }
+    }
+    
+    return `
+      <!DOCTYPE html>
+      <html dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <title>إيصال الدفع</title>
+        <style>
+          body { font-family: 'Arial', sans-serif; padding: 20px; max-width: 350px; margin: auto; direction: rtl; }
+          .receipt { border: 1px solid #ddd; padding: 20px; border-radius: 8px; }
+          .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+          .header h2 { margin: 0; color: #2563eb; }
+          .header small { color: #666; }
+          .info { margin: 15px 0; }
+          .info-item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #eee; }
+          .total { font-size: 20px; font-weight: bold; text-align: center; color: #dc2626; margin: 15px 0; }
+          .footer { text-align: center; font-size: 12px; color: #666; border-top: 2px solid #333; padding-top: 10px; margin-top: 10px; }
+          .status-paid { color: #16a34a; font-weight: bold; }
+          .btn-print { display: block; width: 100%; padding: 10px; background: #2563eb; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 15px; }
+          .btn-print:hover { background: #1d4ed8; }
+          @media print {
+            .btn-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="header">
+            <h2>ROUAD AL-MAARIFA ACADEMY</h2>
+            <small>Algeria, Touggourt</small>
+          </div>
+          
+          <div class="info">
+            <div class="info-item"><span>رقم الإيصال:</span> <span>${payment.invoiceNumber || 'REC-' + Date.now().toString().slice(-6)}</span></div>
+            <div class="info-item"><span>التاريخ:</span> <span>${new Date(payment.paymentDate || Date.now()).toLocaleDateString('ar-EG')}</span></div>
+            <div class="info-item"><span>الطالب:</span> <span>${studentName}</span></div>
+            <div class="info-item"><span>الحصة:</span> <span>${this.lesson?.name || 'حصة'}</span></div>
+            <div class="info-item"><span>الشهر:</span> <span>${payment.month || ''}</span></div>
+            <div class="info-item"><span>طريقة الدفع:</span> <span>${this.getPaymentMethodText(payment.paymentMethod)}</span></div>
+          </div>
+          
+          <div class="total">
+            ${payment.amount.toLocaleString()} د.ج
+          </div>
+          
+          <div style="text-align: center; margin: 10px 0;">
+            <span class="status-paid">✅ مدفوع</span>
+          </div>
+          
+          ${payment.notes ? `<div style="font-size: 12px; color: #666; margin: 10px 0;">ملاحظات: ${payment.notes}</div>` : ''}
+          
+          <div class="footer">
+            <div>نظام إدارة التعليم</div>
+            <div style="font-size: 10px;">شكراً لثقتكم</div>
+          </div>
+          
+          <button class="btn-print" onclick="window.print()">🖨️ طباعة</button>
+        </div>
+      </body>
+      </html>
+    `;
   }
 
   // ==================== UTILITY FUNCTIONS ====================
@@ -2239,11 +2423,5 @@ export class LessonDetailComponent implements OnInit {
       this.showAttendanceDetailsPopup = false;
       this.selectedAttendanceRecord = undefined;
     }
-  }
-
-  // ==================== PRINTING ====================
-  
-  printReceipt(payment: Payment): void {
-    this.showSuccess('سيتم فتح نافذة الطباعة قريباً');
   }
 }

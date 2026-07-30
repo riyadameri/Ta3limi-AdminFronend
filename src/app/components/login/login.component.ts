@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import Swal from 'sweetalert2';
 import { CommonModule } from '@angular/common';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-login',
@@ -12,7 +13,7 @@ import { CommonModule } from '@angular/common';
   styleUrls: ['./login.component.css']
 })
 export class LoginComponent implements OnInit {
-  private apiUrl = ''; // Adjust this to your backend API URL if needed
+  private apiUrl = environment.apiUrl; // Adjust this to your backend API URL if needed
   
   username: string = '';
   password: string = '';
@@ -63,7 +64,7 @@ export class LoginComponent implements OnInit {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`${this.apiUrl}/api/dashboard/stats`, {
+      const response = await fetch(`${this.apiUrl}/dashboard/stats`, {
         method: 'GET',
         headers
       });
@@ -95,7 +96,7 @@ export class LoginComponent implements OnInit {
 
   async verifyTokenAndRedirect(token: string): Promise<void> {
     try {
-      const response = await fetch(`${this.apiUrl}/api/auth/verify`, {
+      const response = await fetch(`${this.apiUrl}/auth/verify`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -177,7 +178,7 @@ export class LoginComponent implements OnInit {
         schoolKey: this.schoolKey.trim()
       };
 
-      const url = `${this.apiUrl}/api/auth/login`;
+      const url = `${this.apiUrl}/auth/login`;
       
       console.log('محاولة تسجيل الدخول إلى:', url);
       console.log('البيانات:', { 
@@ -381,7 +382,7 @@ export class LoginComponent implements OnInit {
         schoolKey: this.schoolKey.trim()
       };
 
-      const response = await fetch(`${this.apiUrl}/api/auth/login`, {
+      const response = await fetch(`${this.apiUrl}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

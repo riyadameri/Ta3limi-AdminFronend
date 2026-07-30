@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-
+import { environment } from '../../../environments/environment.development';
 // ==============================================
 // الواجهات (Interfaces)
 // ==============================================
@@ -1125,7 +1125,7 @@ export class LessonManagementComponent implements OnInit {
   selectedLessons = new Set<string>();
   
   // ✅ عنوان API
-  private apiUrl = '';
+  private apiUrl = environment.apiUrl;
 
   // ==========================================
   // المُنشئ
@@ -1232,7 +1232,7 @@ export class LessonManagementComponent implements OnInit {
     }
     
     // ✅ استخدم النقطة العامة مع فلترة schoolId
-    const url = `${this.apiUrl}/api/classes?schoolId=${schoolId}`;
+    const url = `${this.apiUrl}/classes?schoolId=${schoolId}`;
     console.log('📚 جلب الحصص للمدرسة:', schoolId);
     
     this.http.get<Class[]>(url, { headers: this.getHeaders() })
@@ -1253,7 +1253,7 @@ export class LessonManagementComponent implements OnInit {
   }
 
   private loadClassesBySchoolId(schoolId: string): void {
-    const url = `${this.apiUrl}/api/classes/school/${schoolId}`;
+    const url = `${this.apiUrl}/classes/school/${schoolId}`;
     console.log('📤 جلب حصص المدرسة (بديل):', url);
     
     this.http.get<Class[]>(url, { headers: this.getHeaders() })
@@ -1285,7 +1285,7 @@ export class LessonManagementComponent implements OnInit {
       return;
     }
     
-    const url = `${this.apiUrl}/api/teachers/school/${schoolId}`;
+    const url = `${this.apiUrl}/teachers/school/${schoolId}`;
     console.log('📚 جلب أساتذة المدرسة:', schoolId);
     
     this.http.get<Teacher[]>(url, { headers: this.getHeaders() })
@@ -1307,7 +1307,7 @@ export class LessonManagementComponent implements OnInit {
     const schoolId = this.getSchoolId();
     if (!schoolId) return;
     
-    const url = `${this.apiUrl}/api/teachers?schoolId=${schoolId}`;
+    const url = `${this.apiUrl}/teachers?schoolId=${schoolId}`;
     console.log('📤 جلب الأساتذة (بديل):', url);
     
     this.http.get<Teacher[]>(url, { headers: this.getHeaders() })
@@ -1332,7 +1332,7 @@ export class LessonManagementComponent implements OnInit {
       return;
     }
     
-    const url = `${this.apiUrl}/api/classrooms/school/${schoolId}`;
+    const url = `${this.apiUrl}/classrooms/school/${schoolId}`;
     console.log('📚 جلب غرف المدرسة:', schoolId);
     
     this.http.get<Classroom[]>(url, { headers: this.getHeaders() })
@@ -1354,7 +1354,7 @@ export class LessonManagementComponent implements OnInit {
     const schoolId = this.getSchoolId();
     if (!schoolId) return;
     
-    const url = `${this.apiUrl}/api/classrooms?schoolId=${schoolId}`;
+    const url = `${this.apiUrl}/classrooms?schoolId=${schoolId}`;
     console.log('📤 جلب غرف المدرسة (بديل):', url);
     
     this.http.get<Classroom[]>(url, { headers: this.getHeaders() })
@@ -1485,7 +1485,7 @@ export class LessonManagementComponent implements OnInit {
     
     console.log('📤 إرسال بيانات حصة جديدة:', lessonData);
     
-    this.http.post(`${this.apiUrl}/api/classes`, lessonData, { headers: this.getHeaders() })
+    this.http.post(`${this.apiUrl}/classes`, lessonData, { headers: this.getHeaders() })
       .subscribe({
         next: (response: any) => {
           console.log('✅ تم إنشاء الحصة:', response);
@@ -1505,7 +1505,7 @@ export class LessonManagementComponent implements OnInit {
   deleteLesson(lessonId: string, event: Event): void {
     event.stopPropagation();
     if (confirm('هل أنت متأكد من حذف هذه الحصة؟')) {
-      this.http.delete(`${this.apiUrl}/api/classes/${lessonId}`, { headers: this.getHeaders() })
+      this.http.delete(`${this.apiUrl}/classes/${lessonId}`, { headers: this.getHeaders() })
         .subscribe({
           next: () => {
             this.showToast('تم حذف الحصة بنجاح', 'success');
@@ -1524,7 +1524,7 @@ export class LessonManagementComponent implements OnInit {
     
     if (confirm(`حذف ${this.selectedLessons.size} حصص؟`)) {
       const promises = Array.from(this.selectedLessons).map(id => 
-        this.http.delete(`${this.apiUrl}/api/classes/${id}`, { headers: this.getHeaders() }).toPromise()
+        this.http.delete(`${this.apiUrl}/classes/${id}`, { headers: this.getHeaders() }).toPromise()
       );
       
       Promise.all(promises).then(() => {

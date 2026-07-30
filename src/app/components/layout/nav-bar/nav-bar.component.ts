@@ -307,7 +307,7 @@ export class NavBarComponent implements OnInit {
     
     { id: 'classes', icon: 'bi-book', label: 'إدارة الحصص', route: '/home/lesson-management' },
     { id: 'classrooms', icon: 'bi-building', label: 'إدارة القاعات', route: '/home/rooms-management' },
-    { id: 'payments', icon: 'bi-cash-coin', label: 'المدفوعات', route: '/home/payments-management', notification: 5 },
+    { id: 'payments', icon: 'bi-cash-coin', label: 'المدفوعات', route: '/home/add-expense', notification: 5 },
     { id: 'cards', icon: 'bi-credit-card', label: 'البطاقات', route: '/home/cards-management' },
     { id: 'gate-interface', icon: 'bi-door-open', label: 'واجهة المدخل', route: '/home/gate-interface' },
     { id: 'settings', icon: 'bi-gear', label: 'الإعدادات', route: '/home/settings', subItems: true }

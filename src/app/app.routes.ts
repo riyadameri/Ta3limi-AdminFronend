@@ -15,6 +15,7 @@ import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { LessonDetailComponent } from './lesson-detail/lesson-detail.component';
 import { StudentAttendanceComponent } from './student-attendance/student-attendance.component';
 import { MessagesDashboardEnhancedComponent } from './messages-dashboard/messages-dashboard.component';
+import { OnPaymentsComponentComponent } from './add-expense-component/add-expense-component.component';
 export const routes: Routes = [
   // المسار الافتراضي - إعادة توجيه إلى login
   { path: '', redirectTo: '/login', pathMatch: 'full' },
@@ -34,6 +35,7 @@ export const routes: Routes = [
     component: HomeComponent,
     // يمكن إضافة canActivate: [AuthGuard] هنا إذا كانت الصفحة محمية
     children: [
+      { path: 'add-expense', component: OnPaymentsComponentComponent },
       { path: 'lesson-management', component: LessonManagementComponent },
       {path:'dashboard',component:DashboardComponent},
       { path: 'live-class', component: LiveClassComponent },

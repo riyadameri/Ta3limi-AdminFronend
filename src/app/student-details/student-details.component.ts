@@ -1,4 +1,3 @@
-// ==================== student-details.component.ts ====================
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -62,6 +61,7 @@ interface ClassPaymentGroup {
   paidAmount: number;
   pendingAmount: number;
   expanded?: boolean;
+  progressPercentage?: number;
 }
 
 interface Class {
@@ -152,15 +152,19 @@ interface RoundPayment {
           <div class="header-actions">
             <button class="action-btn print-btn" (click)="printStudentReport()">
               <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M6 18L18 18M6 14L18 14M6 10L18 10M6 6L18 6"/>
-                <rect x="6" y="2" width="12" height="20" rx="1" ry="1"/>
+                <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                <rect x="6" y="14" width="12" height="8" rx="1" ry="1"/>
+                <line x1="9" y1="4" x2="15" y2="4"/>
+                <line x1="9" y1="6" x2="13" y2="6"/>
               </svg>
               تقرير
             </button>
             <button class="action-btn printer-connect-btn" (click)="connectPrinter()">
               <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M6 18L18 18M6 14L18 14M6 10L18 10M6 6L18 6"/>
-                <rect x="6" y="2" width="12" height="20" rx="1" ry="1"/>
+                <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                <rect x="6" y="14" width="12" height="8" rx="1" ry="1"/>
+                <line x1="9" y1="4" x2="15" y2="4"/>
+                <line x1="9" y1="6" x2="13" y2="6"/>
               </svg>
               {{ printerConnected ? '🖨️ طابعة متصلة' : '🔌 اتصال طابعة' }}
             </button>
@@ -520,11 +524,19 @@ interface RoundPayment {
         </div>
       </div>
 
-      <!-- Payments Tab -->
+      <!-- Payments Tab - Enhanced -->
       <div *ngIf="activeTab === 'payments'" class="tab-content">
         <div class="payments-container">
           <div class="payments-header">
-            <h3 class="section-title">سجل المدفوعات</h3>
+            <h3 class="section-title">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                <path d="M12 12h.01"/>
+                <path d="M16 12h.01"/>
+                <path d="M8 12h.01"/>
+              </svg>
+              سجل المدفوعات
+            </h3>
             <div class="header-actions">
               <button class="add-btn primary" (click)="openAddPaymentModal()">
                 <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -542,23 +554,60 @@ interface RoundPayment {
             </div>
           </div>
 
+          <!-- Stats Summary -->
+          <div class="payment-stats" *ngIf="classPaymentGroups.length > 0">
+            <div class="stat-card">
+              <div class="stat-icon">📊</div>
+              <div class="stat-info">
+                <span class="stat-value">{{ classPaymentGroups.length }}</span>
+                <span class="stat-label">إجمالي الحصص</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">💰</div>
+              <div class="stat-info">
+                <span class="stat-value">{{ getTotalPaid() | number:'1.0-0' }} د.ج</span>
+                <span class="stat-label">إجمالي المدفوع</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">⏳</div>
+              <div class="stat-info">
+                <span class="stat-value">{{ getTotalPending() | number:'1.0-0' }} د.ج</span>
+                <span class="stat-label">المتبقي</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">📈</div>
+              <div class="stat-info">
+                <span class="stat-value">{{ getPaymentPercentage() }}%</span>
+                <span class="stat-label">نسبة السداد</span>
+              </div>
+            </div>
+          </div>
+
           <!-- Filter Controls -->
           <div class="filter-section">
             <div class="filter-group">
-              <label>الشهر</label>
+              <label>📅 الشهر</label>
               <select [(ngModel)]="selectedMonthForGroupPay" (change)="selectPaymentsByMonth(selectedMonthForGroupPay)" class="filter-select">
                 <option value="">جميع الأشهر</option>
                 <option *ngFor="let m of getUniqueMonths()" [value]="m">{{ m }}</option>
               </select>
             </div>
             <div class="filter-group">
-              <label>الحصة</label>
+              <label>📚 الحصة</label>
               <select [(ngModel)]="selectedClassForGroupPay" (change)="selectPaymentsByClass(selectedClassForGroupPay)" class="filter-select">
                 <option value="all">جميع الحصص</option>
                 <option *ngFor="let group of classPaymentGroups" [value]="group.classId">{{ group.className }}</option>
               </select>
             </div>
-            <button class="filter-clear" (click)="selectAllPendingPayments()">تحديد الكل</button>
+            <button class="filter-clear" (click)="selectAllPendingPayments()">
+              <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 12H4M12 4v16"/>
+              </svg>
+              تحديد الكل
+            </button>
           </div>
 
           <!-- Payment Groups -->
@@ -568,9 +617,24 @@ interface RoundPayment {
                 <div class="group-info">
                   <h4 class="group-name">{{ group.className }}</h4>
                   <div class="group-stats">
-                    <span class="stat total">المجموع: {{ group.totalAmount | number:'1.0-0' }} د.ج</span>
-                    <span class="stat paid">مدفوع: {{ group.paidAmount | number:'1.0-0' }} د.ج</span>
-                    <span class="stat pending">متبقي: {{ group.pendingAmount | number:'1.0-0' }} د.ج</span>
+                    <span class="stat total">
+                      <span class="stat-icon">📋</span>
+                      المجموع: {{ group.totalAmount | number:'1.0-0' }} د.ج
+                    </span>
+                    <span class="stat paid">
+                      <span class="stat-icon">✅</span>
+                      مدفوع: {{ group.paidAmount | number:'1.0-0' }} د.ج
+                    </span>
+                    <span class="stat pending">
+                      <span class="stat-icon">⏳</span>
+                      متبقي: {{ group.pendingAmount | number:'1.0-0' }} د.ج
+                    </span>
+                  </div>
+                  <div class="group-progress">
+                    <div class="progress-bar small">
+                      <div class="progress-fill" [style.width.%]="(group.paidAmount / group.totalAmount * 100)"></div>
+                    </div>
+                    <span class="progress-text">{{ (group.paidAmount / group.totalAmount * 100) | number:'1.0-0' }}%</span>
                   </div>
                 </div>
                 <div class="group-actions">
@@ -598,29 +662,48 @@ interface RoundPayment {
                            class="payment-checkbox-input">
                   </div>
                   <div class="payment-info">
-                    <div class="payment-month">{{ payment.month }}</div>
-                    <div class="payment-details">
+                    <div class="payment-month">
+                      <span class="month-icon">📅</span>
+                      {{ payment.month }}
                       <span class="payment-amount">{{ payment.amount | number:'1.0-0' }} د.ج</span>
+                    </div>
+                    <div class="payment-details">
                       <span class="payment-status" [class]="getPaymentStatusClass(payment)">
                         {{ getPaymentStatusText(payment) }}
                       </span>
+                      <span class="payment-method" *ngIf="payment.paymentMethod">
+                        <span class="method-icon">💳</span>
+                        {{ getPaymentMethodLabel(payment.paymentMethod) }}
+                      </span>
+                      <span class="payment-date" *ngIf="payment.paymentDate">
+                        <span class="date-icon">📆</span>
+                        {{ payment.paymentDate | date:'dd/MM/yyyy' }}
+                      </span>
                     </div>
-                    <div class="payment-meta" *ngIf="payment.paymentDate">
-                      <span class="payment-date">{{ payment.paymentDate | date:'dd/MM/yyyy' }}</span>
-                      <span class="payment-method">{{ getPaymentMethodLabel(payment.paymentMethod) }}</span>
+                    <div class="payment-notes" *ngIf="payment.notes">
+                      <span class="notes-icon">📝</span>
+                      {{ payment.notes }}
                     </div>
                   </div>
                   <div class="payment-actions">
                     <button class="icon-btn print" (click)="printPaymentReceipt(payment)" title="طباعة">
                       <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M6 18L18 18M6 14L18 14M6 10L18 10M6 6L18 6"/>
-                        <rect x="6" y="2" width="12" height="20" rx="1" ry="1"/>
+                        <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                        <rect x="6" y="14" width="12" height="8" rx="1" ry="1"/>
+                        <line x1="9" y1="4" x2="15" y2="4"/>
+                        <line x1="9" y1="6" x2="13" y2="6"/>
                       </svg>
                     </button>
                     
                     <button class="icon-btn pay" *ngIf="payment.status !== 'paid'" (click)="payPayment(payment)" title="دفع">
                       <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M5 12h14M12 5l7 7-7 7"/>
+                      </svg>
+                    </button>
+                    
+                    <button class="icon-btn edit" *ngIf="payment.status !== 'paid'" (click)="openEditPaymentModal(payment)" title="تعديل">
+                      <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
                       </svg>
                     </button>
                     
@@ -634,7 +717,7 @@ interface RoundPayment {
 
                     <button class="icon-btn delete" *ngIf="payment.status !== 'paid'" (click)="openDeleteConfirmModal(payment)" title="حذف">
                       <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
                       </svg>
                     </button>
                   </div>
@@ -645,12 +728,29 @@ interface RoundPayment {
 
           <div class="payments-summary" *ngIf="selectedPaymentsForBulkPay.length > 0">
             <div class="summary-info">
-              <span>المختارة: {{ selectedPaymentsForBulkPay.length }} دفعة</span>
-              <span>المبلغ الإجمالي: {{ getSelectedPaymentsTotal() | number:'1.0-0' }} د.ج</span>
+              <span class="summary-item">
+                <span class="item-icon">📋</span>
+                المختارة: {{ selectedPaymentsForBulkPay.length }} دفعة
+              </span>
+              <span class="summary-item">
+                <span class="item-icon">💰</span>
+                المبلغ الإجمالي: {{ getSelectedPaymentsTotal() | number:'1.0-0' }} د.ج
+              </span>
             </div>
             <div class="summary-actions">
-              <button class="btn-success" (click)="processBulkPaySelected()">دفع الجماعي</button>
-              <button class="btn-secondary" (click)="selectedPaymentsForBulkPay = []">إلغاء التحديد</button>
+              <button class="btn-success" (click)="processBulkPaySelected()">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+                دفع الجماعي
+              </button>
+              <button class="btn-secondary" (click)="selectedPaymentsForBulkPay = []">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+                إلغاء التحديد
+              </button>
             </div>
           </div>
         </div>
@@ -661,7 +761,15 @@ interface RoundPayment {
         <div class="payment-systems-container">
           <!-- Monthly Payments Section -->
           <div class="system-section">
-            <h3 class="section-title">الدفعات الشهرية</h3>
+            <h3 class="section-title">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                <path d="M12 12h.01"/>
+                <path d="M16 12h.01"/>
+                <path d="M8 12h.01"/>
+              </svg>
+              الدفعات الشهرية
+            </h3>
             <div class="payments-table-responsive" *ngIf="studentMonthlyPayments.length > 0; else noMonthly">
               <table class="modern-table">
                 <thead>
@@ -671,11 +779,13 @@ interface RoundPayment {
                     <th>الحالة</th>
                     <th>تاريخ الدفع</th>
                     <th>الإجراءات</th>
-                   </tr>
+                  </tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let payment of studentMonthlyPayments">
-                    <td>{{ payment.month }}</td>
+                    <td>
+                      <span class="month-cell">{{ payment.month }}</span>
+                    </td>
                     <td>{{ payment.amount | number:'1.0-0' }} د.ج</td>
                     <td>
                       <span class="status-badge-sm" [class.paid]="payment.status === 'paid'" [class.pending]="payment.status === 'pending'">
@@ -703,7 +813,13 @@ interface RoundPayment {
 
           <!-- Rounds Section -->
           <div class="system-section">
-            <h3 class="section-title">الجولات</h3>
+            <h3 class="section-title">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+              </svg>
+              الجولات
+            </h3>
             <div class="rounds-grid" *ngIf="studentRounds.length > 0; else noRounds">
               <div class="round-card" *ngFor="let round of studentRounds">
                 <div class="round-header">
@@ -738,28 +854,33 @@ interface RoundPayment {
     <div class="modal-overlay" *ngIf="showPaymentModal" (click)="closePaymentModal()">
       <div class="modal-content" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <h3>إضافة دفعة جديدة</h3>
+          <h3>
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            إضافة دفعة جديدة
+          </h3>
           <button class="close-btn" (click)="closePaymentModal()">✕</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>المبلغ</label>
+            <label>💰 المبلغ</label>
             <input type="number" [(ngModel)]="newPayment.amount" class="form-control" placeholder="المبلغ بالدينار">
           </div>
           <div class="form-group">
-            <label>الشهر</label>
+            <label>📅 الشهر</label>
             <select [(ngModel)]="newPayment.month" class="form-control">
               <option *ngFor="let m of generateMonthOptions()" [value]="m">{{ m }}</option>
             </select>
           </div>
           <div class="form-group">
-            <label>طريقة الدفع</label>
+            <label>💳 طريقة الدفع</label>
             <select [(ngModel)]="newPayment.paymentMethod" class="form-control">
               <option *ngFor="let m of paymentMethods" [value]="m.value">{{ m.label }}</option>
             </select>
           </div>
           <div class="form-group">
-            <label>ملاحظات</label>
+            <label>📝 ملاحظات</label>
             <textarea [(ngModel)]="newPayment.notes" class="form-control" rows="2"></textarea>
           </div>
         </div>
@@ -774,22 +895,27 @@ interface RoundPayment {
     <div class="modal-overlay" *ngIf="showEditPaymentModal" (click)="closeEditPaymentModal()">
       <div class="modal-content" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <h3>تعديل الدفعة</h3>
+          <h3>
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+            تعديل الدفعة
+          </h3>
           <button class="close-btn" (click)="closeEditPaymentModal()">✕</button>
         </div>
         <div class="modal-body" *ngIf="editingPayment">
           <div class="form-group">
-            <label>المبلغ</label>
+            <label>💰 المبلغ</label>
             <input type="number" [(ngModel)]="editingPayment.amount" class="form-control">
           </div>
           <div class="form-group">
-            <label>طريقة الدفع</label>
+            <label>💳 طريقة الدفع</label>
             <select [(ngModel)]="editingPayment.paymentMethod" class="form-control">
               <option *ngFor="let m of paymentMethods" [value]="m.value">{{ m.label }}</option>
             </select>
           </div>
           <div class="form-group">
-            <label>ملاحظات</label>
+            <label>📝 ملاحظات</label>
             <textarea [(ngModel)]="editingPayment.notes" class="form-control" rows="2"></textarea>
           </div>
         </div>
@@ -821,32 +947,38 @@ interface RoundPayment {
     <div class="modal-overlay" *ngIf="showBulkPayConfirmation" (click)="closeBulkPayConfirmation()">
       <div class="modal-content large" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <h3>تأكيد الدفع الجماعي</h3>
+          <h3>
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            تأكيد الدفع الجماعي
+          </h3>
           <button class="close-btn" (click)="closeBulkPayConfirmation()">✕</button>
         </div>
         <div class="modal-body">
           <div class="confirmation-summary">
             <div class="summary-item">
-              <span>عدد الدفعات:</span>
+              <span>📋 عدد الدفعات:</span>
               <strong>{{ selectedPaymentsForBulkPay.length }}</strong>
             </div>
             <div class="summary-item">
-              <span>المبلغ الإجمالي:</span>
+              <span>💰 المبلغ الإجمالي:</span>
               <strong>{{ getSelectedPaymentsTotal() | number:'1.0-0' }} د.ج</strong>
             </div>
             <div class="summary-item">
-              <span>عدد الطلاب:</span>
+              <span>👨‍🎓 عدد الطلاب:</span>
               <strong>{{ getUniqueStudentsCount() }}</strong>
             </div>
           </div>
           <div class="form-group">
-            <label>طريقة الدفع</label>
+            <label>💳 طريقة الدفع</label>
             <select [(ngModel)]="bulkPayment.paymentMethod" class="form-control">
               <option *ngFor="let m of paymentMethods" [value]="m.value">{{ m.label }}</option>
             </select>
           </div>
           <div class="form-group">
-            <label>خيار الطباعة</label>
+            <label>🖨️ خيار الطباعة</label>
             <div class="radio-group">
               <label class="radio-label">
                 <input type="radio" [(ngModel)]="selectedReceiptOption" value="single">
@@ -859,7 +991,7 @@ interface RoundPayment {
             </div>
           </div>
           <div class="form-group">
-            <label>ملاحظات</label>
+            <label>📝 ملاحظات</label>
             <textarea [(ngModel)]="bulkPayment.notes" class="form-control" rows="2"></textarea>
           </div>
         </div>
@@ -874,20 +1006,25 @@ interface RoundPayment {
     <div class="modal-overlay" *ngIf="showAddToLessonsModal" (click)="closeAddToLessonsModal()">
       <div class="modal-content large" (click)="$event.stopPropagation()">
         <div class="modal-header">
-          <h3>تسجيل في حصص</h3>
+          <h3>
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            تسجيل في حصص
+          </h3>
           <button class="close-btn" (click)="closeAddToLessonsModal()">✕</button>
         </div>
         <div class="modal-body">
           <div class="filters-row">
             <div class="filter-group">
-              <label>المادة</label>
+              <label>📚 المادة</label>
               <select [(ngModel)]="filterSubject" (change)="filterAvailableClasses()" class="form-control">
                 <option value="">الكل</option>
                 <option *ngFor="let s of subjects" [value]="s">{{ s }}</option>
               </select>
             </div>
             <div class="filter-group">
-              <label>المستوى</label>
+              <label>🎓 المستوى</label>
               <select [(ngModel)]="filterLevel" (change)="filterAvailableClasses()" class="form-control">
                 <option value="">الكل</option>
                 <option *ngFor="let y of academicYears" [value]="y.value">{{ y.label }}</option>
@@ -1073,7 +1210,7 @@ interface RoundPayment {
                       {{ getAbsenceStatusText(absence.status) }}
                     </span>
                     <span *ngIf="absence.autoMarked" class="auto-badge" title="تم التسجيل تلقائياً">آلي</span>
-                   </td>
+                  </td>
                   <td>{{ absence.notes || '—' }}</td>
                 </tr>
               </tbody>
@@ -1584,6 +1721,9 @@ interface RoundPayment {
       font-weight: 600;
       color: var(--gray-800);
       margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
     .add-btn {
       display: flex;
@@ -1687,7 +1827,52 @@ interface RoundPayment {
       font-size: 0.7rem;
     }
 
-    /* Payments */
+    /* ==================== PAYMENTS STYLES ==================== */
+    .payment-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .payment-stats .stat-card {
+      background: white;
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition);
+      border: 1px solid var(--gray-100);
+    }
+    .payment-stats .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+    .payment-stats .stat-icon {
+      font-size: 1.5rem;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--gray-50);
+      border-radius: var(--radius-sm);
+    }
+    .payment-stats .stat-info {
+      display: flex;
+      flex-direction: column;
+    }
+    .payment-stats .stat-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--gray-800);
+    }
+    .payment-stats .stat-label {
+      font-size: 0.75rem;
+      color: var(--gray-500);
+    }
+
     .filter-section {
       display: flex;
       flex-wrap: wrap;
@@ -1697,6 +1882,7 @@ interface RoundPayment {
       background: white;
       border-radius: var(--radius-sm);
       box-shadow: var(--shadow-sm);
+      border: 1px solid var(--gray-100);
     }
     .filter-group {
       flex: 1;
@@ -1718,16 +1904,30 @@ interface RoundPayment {
       border-radius: var(--radius-sm);
       background: white;
       font-family: inherit;
+      transition: var(--transition);
+    }
+    .filter-select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
     .filter-clear {
-      padding: 0.6rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.2rem;
       background: var(--gray-200);
       border: none;
       border-radius: var(--radius-sm);
       cursor: pointer;
       font-weight: 500;
       align-self: flex-end;
+      transition: var(--transition);
     }
+    .filter-clear:hover {
+      background: var(--gray-300);
+    }
+
     .group-card {
       background: white;
       border-radius: var(--radius-sm);
@@ -1735,12 +1935,16 @@ interface RoundPayment {
       overflow: hidden;
       box-shadow: var(--shadow-sm);
       border: 1px solid var(--gray-200);
+      transition: var(--transition);
+    }
+    .group-card:hover {
+      border-color: var(--primary-light);
     }
     .group-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 1rem;
+      padding: 1rem 1.25rem;
       cursor: pointer;
       transition: var(--transition);
     }
@@ -1754,6 +1958,7 @@ interface RoundPayment {
       font-size: 1rem;
       font-weight: 600;
       margin: 0 0 0.5rem 0;
+      color: var(--gray-800);
     }
     .group-stats {
       display: flex;
@@ -1761,9 +1966,44 @@ interface RoundPayment {
       gap: 1rem;
       font-size: 0.8rem;
     }
+    .group-stats .stat {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .group-stats .stat-icon {
+      font-size: 0.85rem;
+    }
     .stat.total { color: var(--gray-600); }
     .stat.paid { color: var(--success); }
     .stat.pending { color: var(--warning); }
+    
+    .group-progress {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 0.5rem;
+    }
+    .group-progress .progress-bar {
+      flex: 1;
+      height: 6px;
+      background: var(--gray-200);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .group-progress .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--primary);
+      transition: width 0.5s ease;
+    }
+    .group-progress .progress-text {
+      font-size: 0.7rem;
+      color: var(--gray-500);
+      min-width: 40px;
+      text-align: left;
+    }
+
     .group-actions {
       display: flex;
       align-items: center;
@@ -1772,7 +2012,7 @@ interface RoundPayment {
     .expand-icon {
       width: 1.2rem;
       height: 1.2rem;
-      transition: transform 0.3s;
+      transition: transform 0.3s ease;
     }
     .expand-icon.rotated {
       transform: rotate(180deg);
@@ -1783,56 +2023,94 @@ interface RoundPayment {
     .payment-item {
       display: flex;
       align-items: center;
-      padding: 0.75rem 1rem;
+      padding: 0.75rem 1.25rem;
       border-bottom: 1px solid var(--gray-100);
       transition: var(--transition);
+      gap: 1rem;
+    }
+    .payment-item:last-child {
+      border-bottom: none;
     }
     .payment-item:hover {
       background: var(--gray-50);
     }
     .payment-item.paid {
       background: #f8fafc;
-      opacity: 0.7;
+      opacity: 0.75;
     }
     .payment-item.pending {
-      border-right: 3px solid var(--warning);
+      border-right: 4px solid var(--warning);
     }
     .payment-item.late {
-      border-right: 3px solid var(--danger);
+      border-right: 4px solid var(--danger);
       background: #fef2f2;
     }
     .payment-checkbox {
-      margin-left: 1rem;
+      flex-shrink: 0;
     }
     .payment-info {
       flex: 1;
+      min-width: 0;
     }
     .payment-month {
-      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+      color: var(--gray-800);
       margin-bottom: 0.25rem;
+    }
+    .month-icon {
+      font-size: 0.9rem;
+    }
+    .payment-amount {
+      margin-right: auto;
+      font-size: 1rem;
+      color: var(--primary);
     }
     .payment-details {
       display: flex;
-      gap: 1rem;
-      font-size: 0.85rem;
       flex-wrap: wrap;
+      gap: 0.75rem;
+      font-size: 0.8rem;
+      align-items: center;
     }
     .payment-status {
       padding: 0.2rem 0.6rem;
       border-radius: 12px;
       font-size: 0.7rem;
+      font-weight: 500;
     }
     .payment-status.bg-success { background: #d1fae5; color: #065f46; }
     .payment-status.bg-warning { background: #fef3c7; color: #92400e; }
     .payment-status.bg-danger { background: #fee2e2; color: #991b1b; }
-    .payment-meta {
-      font-size: 0.7rem;
+    .payment-status.bg-secondary { background: var(--gray-200); color: var(--gray-600); }
+    
+    .payment-method, .payment-date {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
       color: var(--gray-500);
-      margin-top: 0.25rem;
     }
+    .method-icon, .date-icon {
+      font-size: 0.75rem;
+    }
+    .payment-notes {
+      margin-top: 0.25rem;
+      font-size: 0.75rem;
+      color: var(--gray-400);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .notes-icon {
+      font-size: 0.7rem;
+    }
+
     .payment-actions {
       display: flex;
       gap: 0.25rem;
+      flex-shrink: 0;
     }
     .icon-btn {
       background: none;
@@ -1844,23 +2122,27 @@ interface RoundPayment {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      color: var(--gray-500);
+      color: var(--gray-400);
     }
     .icon-btn:hover {
       background: var(--gray-100);
+      color: var(--gray-700);
     }
     .icon-btn.print { color: var(--primary); }
-    .icon-btn.print:hover { background: #dbeafe; }
+    .icon-btn.print:hover { background: #dbeafe; color: var(--primary-dark); }
     .icon-btn.pay { color: var(--success); }
-    .icon-btn.pay:hover { background: #d1fae5; }
+    .icon-btn.pay:hover { background: #d1fae5; color: var(--success); }
+    .icon-btn.edit { color: #8b5cf6; }
+    .icon-btn.edit:hover { background: #ede9fe; color: #7c3aed; }
     .icon-btn.cancel { color: var(--warning); }
-    .icon-btn.cancel:hover { background: #fef3c7; }
+    .icon-btn.cancel:hover { background: #fef3c7; color: var(--warning); }
     .icon-btn.delete { color: var(--danger); }
-    .icon-btn.delete:hover { background: #fee2e2; }
+    .icon-btn.delete:hover { background: #fee2e2; color: var(--danger); }
+
     .payments-summary {
       background: var(--primary);
       color: white;
-      padding: 1rem;
+      padding: 1rem 1.5rem;
       border-radius: var(--radius-sm);
       display: flex;
       justify-content: space-between;
@@ -1871,9 +2153,26 @@ interface RoundPayment {
     }
     .summary-info {
       display: flex;
-      gap: 1rem;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .summary-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .item-icon {
+      font-size: 0.9rem;
+    }
+    .summary-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
     }
     .btn-success {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
       background: var(--success);
       color: white;
       border: none;
@@ -1881,15 +2180,23 @@ interface RoundPayment {
       border-radius: var(--radius-sm);
       cursor: pointer;
       font-weight: 500;
+      transition: var(--transition);
+    }
+    .btn-success:hover {
+      background: #059669;
     }
     .btn-secondary {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
       background: rgba(255,255,255,0.2);
       color: white;
-      border: none;
+      border: 1px solid rgba(255,255,255,0.3);
       padding: 0.5rem 1.2rem;
       border-radius: var(--radius-sm);
       cursor: pointer;
       font-weight: 500;
+      transition: var(--transition);
     }
     .btn-secondary:hover {
       background: rgba(255,255,255,0.3);
@@ -1925,6 +2232,13 @@ interface RoundPayment {
       text-transform: uppercase;
       letter-spacing: 0.3px;
     }
+    .modern-table tr:hover td {
+      background: var(--gray-50);
+    }
+    .month-cell {
+      font-weight: 500;
+      color: var(--gray-800);
+    }
     .rounds-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -1935,6 +2249,11 @@ interface RoundPayment {
       border-radius: var(--radius-sm);
       padding: 1rem;
       border: 1px solid var(--gray-200);
+      transition: var(--transition);
+    }
+    .round-card:hover {
+      border-color: var(--primary-light);
+      box-shadow: var(--shadow-sm);
     }
     .round-header {
       display: flex;
@@ -1945,6 +2264,7 @@ interface RoundPayment {
     .round-number {
       font-weight: 600;
       margin: 0;
+      color: var(--gray-800);
     }
     .round-details p {
       margin: 0.5rem 0;
@@ -2010,6 +2330,7 @@ interface RoundPayment {
       align-items: center;
       gap: 0.5rem;
       font-size: 1.1rem;
+      color: var(--gray-800);
     }
     .close-btn {
       background: none;
@@ -2328,6 +2649,9 @@ interface RoundPayment {
     .table-responsive {
       overflow-x: auto;
     }
+    .payments-table-responsive {
+      overflow-x: auto;
+    }
 
     /* Responsive */
     @media (max-width: 768px) {
@@ -2365,17 +2689,32 @@ interface RoundPayment {
       .classes-grid {
         grid-template-columns: 1fr;
       }
+      .payment-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
       .group-stats {
         flex-direction: column;
         gap: 0.25rem;
       }
       .payment-item {
         flex-wrap: wrap;
+        padding: 0.75rem;
+        gap: 0.5rem;
       }
       .payment-actions {
         margin-top: 0.5rem;
         width: 100%;
         justify-content: flex-end;
+      }
+      .payment-month {
+        flex-wrap: wrap;
+      }
+      .payment-amount {
+        margin-right: 0;
+        margin-left: auto;
+      }
+      .payment-details {
+        gap: 0.5rem;
       }
       .filters-row {
         flex-direction: column;
@@ -2418,10 +2757,19 @@ interface RoundPayment {
         flex-direction: column;
         align-items: stretch;
         gap: 0.5rem;
+        padding: 1rem;
       }
       .summary-info {
         flex-direction: column;
         gap: 0.25rem;
+      }
+      .summary-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .summary-actions button {
+        width: 100%;
+        justify-content: center;
       }
       .rounds-grid {
         grid-template-columns: 1fr;
@@ -2431,6 +2779,10 @@ interface RoundPayment {
       }
       .filter-group {
         min-width: 100%;
+      }
+      .filter-clear {
+        width: 100%;
+        justify-content: center;
       }
     }
 
@@ -2457,9 +2809,31 @@ interface RoundPayment {
         width: 100%;
         justify-content: center;
       }
-      .payment-details {
-        flex-direction: column;
-        gap: 0.25rem;
+      .payment-stats {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+      }
+      .payment-stats .stat-card {
+        padding: 0.75rem;
+      }
+      .payment-stats .stat-value {
+        font-size: 1rem;
+      }
+      .group-header {
+        flex-wrap: wrap;
+        padding: 0.75rem;
+      }
+      .group-actions {
+        margin-top: 0.5rem;
+        width: 100%;
+        justify-content: space-between;
+      }
+      .summary-stats {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .absence-stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
       }
     }
   `]
@@ -2699,7 +3073,6 @@ loadStudentDetails(): void {
   this.http.get<any>(url, { headers: this.getHeaders() }).subscribe({
     next: (student) => {
       this.student = student;
-      // ✅ تأكد من تخزين schoolId في localStorage
       if (student?.schoolId) {
         localStorage.setItem('schoolId', student.schoolId.toString());
       }
@@ -2825,7 +3198,6 @@ loadStudentClasses(studentId: string): void {
   }
 
   loadStudentPaymentSystems(studentId: string): void {
-    // Load monthly payments with schoolId filter
     let monthlyUrl = `${this.apiUrl}/payments/student/${studentId}`;
     const schoolId = this.getSchoolId();
     
@@ -2861,7 +3233,6 @@ loadStudentClasses(studentId: string): void {
       }
     });
 
-    // Load rounds with schoolId filter
     let roundsUrl = `${this.apiUrl}/payment-systems/rounds/student/${studentId}`;
     if (schoolId) {
       roundsUrl += `?schoolId=${schoolId}`;
@@ -3150,7 +3521,7 @@ loadStudentClasses(studentId: string): void {
       const className = payment.className || 'عام';
       if (!groups[classId]) {
         groups[classId] = {
-          classId, className, payments: [], totalAmount: 0, paidAmount: 0, pendingAmount: 0, expanded: false
+          classId, className, payments: [], totalAmount: 0, paidAmount: 0, pendingAmount: 0, expanded: false, progressPercentage: 0
         };
       }
       groups[classId].payments.push(payment);
@@ -3160,6 +3531,9 @@ loadStudentClasses(studentId: string): void {
       } else {
         groups[classId].pendingAmount += payment.amount;
       }
+      groups[classId].progressPercentage = groups[classId].totalAmount > 0 
+        ? (groups[classId].paidAmount / groups[classId].totalAmount) * 100 
+        : 0;
     });
     return Object.values(groups);
   }
@@ -3358,12 +3732,10 @@ loadStudentClasses(studentId: string): void {
     this.showRoundSelectionModal = false;
   }
 
-// في دالة loadAvailableClasses()
 loadAvailableClasses(): void {
   if (!this.student) return;
   this.loadingAvailableClasses = true;
   
-  // ✅ تأكد من وجود schoolId
   const schoolId = this.getSchoolId();
   
   if (!schoolId) {
@@ -3375,7 +3747,6 @@ loadAvailableClasses(): void {
     return;
   }
   
-  // ✅ أضف schoolId كـ query parameter
   const url = `${this.apiUrl}/classes/available?schoolId=${schoolId}`;
   console.log('📚 جلب الحصص المتاحة من:', url);
   
@@ -3395,7 +3766,6 @@ loadAvailableClasses(): void {
         classes = [];
       }
       
-      // ✅ تصفية الحصص التي الطالب مسجل فيها بالفعل
       const enrolledClassIds = (this.studentClasses || []).map(c => c._id || c.id).filter(id => id);
       this.availableClasses = classes.filter(c => {
         const classId = c._id || c.id;
@@ -3742,14 +4112,13 @@ loadAvailableClasses(): void {
     Swal.fire({
       title: 'تأكيد الدفع',
       html: `<div class="text-start">
-        <p><strong>المبلغ:</strong> ${payment.amount.toLocaleString()} د.ج</p>
-        <p><strong>الشهر:</strong> ${payment.month}</p>
-        <p><strong>الحصة:</strong> ${payment.className || 'عام'}</p>
+        <p><strong>💰 المبلغ:</strong> ${payment.amount.toLocaleString()} د.ج</p>
+        <p><strong>📅 الشهر:</strong> ${payment.month}</p>
+        <p><strong>📚 الحصة:</strong> ${payment.className || 'عام'}</p>
       </div>`,
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'دفع وطباعة',
-      cancelButtonText: 'دفع فقط',
+      confirmButtonText: '💳 دفع وطباعة',
       showDenyButton: true,
       denyButtonText: 'إلغاء',
       input: 'select',
@@ -3835,9 +4204,9 @@ loadAvailableClasses(): void {
       title: 'تأكيد إلغاء الدفعة',
       html: `<div class="text-start">
         <p>هل أنت متأكد من إلغاء هذه الدفعة؟</p>
-        <p><strong>الطالب:</strong> ${payment.studentName || this.student?.name}</p>
-        <p><strong>الشهر:</strong> ${payment.month}</p>
-        <p><strong>المبلغ:</strong> ${payment.amount.toLocaleString()} د.ج</p>
+        <p><strong>👨‍🎓 الطالب:</strong> ${payment.studentName || this.student?.name}</p>
+        <p><strong>📅 الشهر:</strong> ${payment.month}</p>
+        <p><strong>💰 المبلغ:</strong> ${payment.amount.toLocaleString()} د.ج</p>
         <p class="text-danger mt-3">⚠️ سيتم إلغاء الدفعة وإعادتها كـ "معلقة".</p>
       </div>`,
       icon: 'warning',
@@ -3937,7 +4306,7 @@ loadAvailableClasses(): void {
       const unpaidPayments = this.selectedPaymentsForBulkPay.filter(p => p.status !== 'paid');
       const { value: proceed } = await Swal.fire({
         title: 'تحذير',
-        html: `<div class="text-start"><p class="text-warning">بعض المدفوعات المختارة مدفوعة مسبقاً</p>
+        html: `<div class="text-start"><p class="text-warning">⚠️ بعض المدفوعات المختارة مدفوعة مسبقاً</p>
                <p><strong>المعلقة:</strong> ${unpaidPayments.length}</p>
                <p>هل تريد المتابعة مع المدفوعات المعلقة فقط؟</p></div>`,
         icon: 'warning',
@@ -3960,12 +4329,12 @@ loadAvailableClasses(): void {
       title: 'خيارات الدفع الجماعي',
       html: `<div class="text-start">
         <div class="alert alert-info">
-          <h6>تفاصيل الدفع الجماعي</h6>
+          <h6>📋 تفاصيل الدفع الجماعي</h6>
           <p><strong>عدد المدفوعات:</strong> ${this.selectedPaymentsForBulkPay.length}</p>
           <p><strong>المبلغ الإجمالي:</strong> ${totalAmount.toLocaleString('ar-SA')} د.ج</p>
         </div>
         <div class="mb-3">
-          <label class="form-label">طريقة الدفع:</label>
+          <label class="form-label">💳 طريقة الدفع:</label>
           <select class="form-select" id="bulkPaymentMethod">
             <option value="cash">نقداً</option>
             <option value="bank">تحويل بنكي</option>
@@ -3975,7 +4344,7 @@ loadAvailableClasses(): void {
           </select>
         </div>
         <div class="mb-3">
-          <label class="form-label">خيار الطباعة:</label>
+          <label class="form-label">🖨️ خيار الطباعة:</label>
           <select class="form-select" id="bulkPrintOption">
             <option value="single">إيصال واحد لجميع الدفعات</option>
             <option value="multiple">إيصالات منفصلة لكل دفعة</option>
@@ -3983,13 +4352,13 @@ loadAvailableClasses(): void {
           </select>
         </div>
         <div class="mb-3">
-          <label class="form-label">ملاحظات:</label>
+          <label class="form-label">📝 ملاحظات:</label>
           <textarea class="form-control" id="bulkPaymentNotes" rows="2"></textarea>
         </div>
       </div>`,
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'دفع',
+      confirmButtonText: '✅ دفع',
       cancelButtonText: 'إلغاء',
       width: '600px',
       preConfirm: () => {
@@ -4012,18 +4381,18 @@ loadAvailableClasses(): void {
       title: 'جاري معالجة الدفعات...',
       html: `<div class="text-center">
         <div class="spinner-border text-primary mb-3"></div>
-        <h5>دفع جماعي</h5>
+        <h5>💳 دفع جماعي</h5>
         <p>جاري معالجة ${this.selectedPaymentsForBulkPay.length} دفعة...</p>
         <div class="progress mt-4">
           <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 0%;" id="bulk-pay-progress">0%</div>
         </div>
         <div class="row mt-4">
           <div class="col-6 text-end">
-            <small class="text-muted">النجاح:</small>
+            <small class="text-muted">✅ النجاح:</small>
             <h5 class="text-success" id="success-count">0</h5>
           </div>
           <div class="col-6 text-start">
-            <small class="text-muted">الفشل:</small>
+            <small class="text-muted">❌ الفشل:</small>
             <h5 class="text-danger" id="fail-count">0</h5>
           </div>
         </div>
@@ -4205,7 +4574,7 @@ loadAvailableClasses(): void {
   async payLatePayment(payment: MonthlyPayment): Promise<void> {
     const { value: paymentMethod } = await Swal.fire({
       title: 'تسديد دفعة متأخرة',
-      html: `<div class="text-start"><p>المبلغ: ${payment.amount.toLocaleString()} د.ج</p>${payment.month ? `<p>الشهر: ${payment.month}</p>` : ''}</div>`,
+      html: `<div class="text-start"><p>💰 المبلغ: ${payment.amount.toLocaleString()} د.ج</p>${payment.month ? `<p>📅 الشهر: ${payment.month}</p>` : ''}</div>`,
       icon: 'warning', showCancelButton: true, confirmButtonText: 'تسديد الآن', cancelButtonText: 'إلغاء',
       input: 'select', inputOptions: { 'cash': 'نقداً', 'bank': 'تحويل بنكي', 'card': 'بطاقة ائتمان', 'online': 'دفع إلكتروني' }
     });
@@ -4239,7 +4608,7 @@ loadAvailableClasses(): void {
   async payRound(round: RoundPayment): Promise<void> {
     const { value: paymentMethod } = await Swal.fire({
       title: 'دفع الجولة',
-      html: `<div class="text-start"><p>رقم الجولة: ${round.roundNumber}</p><p>المبلغ: ${round.totalAmount.toLocaleString()} د.ج</p><p>عدد الجلسات: ${round.sessionCount}</p></div>`,
+      html: `<div class="text-start"><p>🔢 رقم الجولة: ${round.roundNumber}</p><p>💰 المبلغ: ${round.totalAmount.toLocaleString()} د.ج</p><p>📋 عدد الجلسات: ${round.sessionCount}</p></div>`,
       icon: 'question', showCancelButton: true, confirmButtonText: 'دفع', cancelButtonText: 'إلغاء',
       input: 'select', inputOptions: { 'cash': 'نقداً', 'bank': 'تحويل بنكي', 'card': 'بطاقة ائتمان', 'online': 'دفع إلكتروني' }, inputValue: 'cash'
     });
@@ -4278,9 +4647,9 @@ loadAvailableClasses(): void {
         <td><span class="badge ${session.status === 'completed' ? 'bg-success' : 'bg-warning'}">${session.status === 'completed' ? 'مكتملة' : 'معلقة'}</span></td></tr>`;
     });
     sessionsHTML += '</tbody></table></div>';
-    Swal.fire({ title: `تفاصيل الجولة ${round.roundNumber}`, html: `<div class="text-start"><p><strong>رقم الجولة:</strong> ${round.roundNumber}</p><p><strong>عدد الجلسات:</strong> ${round.sessionCount}</p>
-      <p><strong>المجموع الكلي:</strong> ${round.totalAmount.toLocaleString()} د.ج</p><p><strong>تاريخ البدء:</strong> ${new Date(round.startDate).toLocaleDateString('ar-EG')}</p>
-      <p><strong>تاريخ الانتهاء:</strong> ${new Date(round.endDate).toLocaleDateString('ar-EG')}</p><p><strong>الحالة:</strong> <span class="${round.statusClass}">${round.statusText}</span></p><hr><h6>تفاصيل الجلسات:</h6>${sessionsHTML}</div>`,
+    Swal.fire({ title: `تفاصيل الجولة ${round.roundNumber}`, html: `<div class="text-start"><p><strong>🔢 رقم الجولة:</strong> ${round.roundNumber}</p><p><strong>📋 عدد الجلسات:</strong> ${round.sessionCount}</p>
+      <p><strong>💰 المجموع الكلي:</strong> ${round.totalAmount.toLocaleString()} د.ج</p><p><strong>📅 تاريخ البدء:</strong> ${new Date(round.startDate).toLocaleDateString('ar-EG')}</p>
+      <p><strong>📅 تاريخ الانتهاء:</strong> ${new Date(round.endDate).toLocaleDateString('ar-EG')}</p><p><strong>📊 الحالة:</strong> <span class="${round.statusClass}">${round.statusText}</span></p><hr><h6>تفاصيل الجلسات:</h6>${sessionsHTML}</div>`,
       icon: 'info', confirmButtonText: 'حسناً' });
   }
 
@@ -4644,7 +5013,7 @@ loadAvailableClasses(): void {
     }
     
     Swal.close();
-    Swal.fire({ title: 'نتائج الطباعة', html: `<div class="alert alert-success"><h6>تمت الطباعة بنجاح</h6><p><strong>المطبوع:</strong> ${printedCount}</p><p><strong>الإجمالي:</strong> ${payments.length}</p></div>`, icon: 'success', confirmButtonText: 'حسناً' });
+    Swal.fire({ title: 'نتائج الطباعة', html: `<div class="alert alert-success"><h6>✅ تمت الطباعة بنجاح</h6><p><strong>المطبوع:</strong> ${printedCount}</p><p><strong>الإجمالي:</strong> ${payments.length}</p></div>`, icon: 'success', confirmButtonText: 'حسناً' });
   }
 
   private async printSingleReceiptForMultiplePayments(payments: Payment[], paymentMethod: string, notes?: string): Promise<void> {
@@ -4750,16 +5119,16 @@ loadAvailableClasses(): void {
       .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; } .section { margin-bottom: 30px; }
       table { width: 100%; border-collapse: collapse; margin-top: 10px; } th, td { padding: 10px; text-align: right; border: 1px solid #ddd; }
       th { background-color: #3498db; color: white; } .total { font-weight: bold; color: #2ecc71; font-size: 18px; }
-    </style></head><body><div class="report"><div class="header"><h1>تقرير الطالب</h1><p>التاريخ: ${data.date}</p></div>
-    <div class="student-info"><div class="info-grid"><div><strong>اسم الطالب:</strong> ${data.student.name}</div><div><strong>رقم الطالب:</strong> ${data.student.studentId}</div>
-    <div><strong>المستوى الدراسي:</strong> ${this.getAcademicYearName(data.student.academicYear)}</div><div><strong>ولي الأمر:</strong> ${data.student.parentName}</div>
-    <div><strong>هاتف ولي الأمر:</strong> ${data.student.parentPhone}</div></div></div>
-    <div class="section"><h2>الحصص المسجلة</h2><table><thead><tr><th>اسم الحصة</th><th>المادة</th><th>المعلم</th><th>السعر الشهري</th></tr></thead><tbody>
+    </style></head><body><div class="report"><div class="header"><h1>📊 تقرير الطالب</h1><p>📅 التاريخ: ${data.date}</p></div>
+    <div class="student-info"><div class="info-grid"><div><strong>👨‍🎓 اسم الطالب:</strong> ${data.student.name}</div><div><strong>🆔 رقم الطالب:</strong> ${data.student.studentId}</div>
+    <div><strong>🎓 المستوى الدراسي:</strong> ${this.getAcademicYearName(data.student.academicYear)}</div><div><strong>👨‍👦 ولي الأمر:</strong> ${data.student.parentName}</div>
+    <div><strong>📞 هاتف ولي الأمر:</strong> ${data.student.parentPhone}</div></div></div>
+    <div class="section"><h2>📚 الحصص المسجلة</h2><table><thead><tr><th>اسم الحصة</th><th>المادة</th><th>المعلم</th><th>السعر الشهري</th></tr></thead><tbody>
     ${data.classes.map((cls: any) => `<tr><td>${cls.name}</td><td>${cls.subject}</td><td>${cls.teacher?.name || 'غير محدد'}</td><td>${cls.price ? cls.price.toLocaleString() + ' د.ج' : 'غير محدد'}</td></tr>`).join('')}
-    </tbody></table></div><div class="section"><h2>سجل المدفوعات</h2><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الشهر</th><th>طريقة الدفع</th><th>الحالة</th></tr></thead><tbody>
+    </tbody></table></div><div class="section"><h2>💰 سجل المدفوعات</h2><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الشهر</th><th>طريقة الدفع</th><th>الحالة</th></tr></thead><tbody>
     ${data.payments.map((payment: any) => `<tr><td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : 'لم يتم الدفع'}</td>
        <td>${payment.amount.toLocaleString()} د.ج</td><td>${payment.month}</td><td>${this.getPaymentMethodLabel(payment.paymentMethod)}</td>
-       <td>${this.getPaymentStatusText(payment)}</td></tr>`).join('')}</tbody></table><p class="total">الإجمالي المدفوع: ${data.totalPaid.toLocaleString()} د.ج</p></div>
+       <td>${this.getPaymentStatusText(payment)}</td></tr>`).join('')}</tbody></table><p class="total">💰 الإجمالي المدفوع: ${data.totalPaid.toLocaleString()} د.ج</p></div>
     <div class="footer"><p>تم إنشاء التقرير تلقائياً من نظام إدارة المدرسة</p><p>© ${new Date().getFullYear()} جميع الحقوق محفوظة</p></div></div></body></html>`;
   }
 

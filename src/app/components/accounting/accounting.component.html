@@ -1,1796 +1,1126 @@
-<div class="accounting-container">
-  <!-- Header Section -->
-  <div class="header-section">
-    <h1><i class="fas fa-calculator"></i> النظام المحاسبي</h1>
+<!-- comprehensive-accounting.component.html -->
+<div class="dashboard-container" *ngIf="isLoaded">
+  
+  <!-- Dashboard Header -->
+  <div class="dashboard-header">
+    <div class="header-title">
+      <h2>📊 اللوحة المحاسبية</h2>
+      <p><i class="fas fa-school"></i> {{ schoolName }}</p>
+    </div>
     <div class="header-actions">
-      <button class="btn btn-primary" (click)="openTransactionModal()">
-        <i class="fas fa-plus"></i> إضافة معاملة
+      <button class="btn-success mobile-btn" (click)="openTransactionModal()">
+        <i class="fas fa-plus-circle"></i>
+        <span class="btn-text">إضافة</span>
       </button>
-      <button class="btn btn-success" (click)="openExpenseModal()">
-        <i class="fas fa-minus"></i> إضافة مصروف
-      </button>
-      <button class="btn btn-info" (click)="refreshData()">
-        <i class="fas fa-sync-alt"></i> تحديث
-      </button>
-      <button class="btn btn-warning" (click)="printReport()">
-        <i class="fas fa-print"></i> طباعة
+      <button class="btn-back mobile-btn" (click)="goBack()">
+        <i class="fas fa-arrow-right"></i>
+        <span class="btn-text">رجوع</span>
       </button>
     </div>
   </div>
 
-  <!-- Tabs Navigation -->
-  <div class="tabs-navigation">
-    <nav class="tabs-nav">
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'dashboard'"
-        (click)="switchTab('dashboard')">
-        <i class="fas fa-tachometer-alt"></i> لوحة التحكم
+  <!-- Tabs -->
+  <div class="tabs-container mobile-tabs">
+    <button class="tab-btn" [class.active]="activeTab === 'summary'" (click)="switchTab('summary')">
+      <i class="fas fa-chart-pie"></i>
+      <span class="tab-label">ملخص</span>
+    </button>
+    <button class="tab-btn" [class.active]="activeTab === 'commissions'" (click)="switchTab('commissions')">
+      <i class="fas fa-user-graduate"></i>
+      <span class="tab-label">عمولات</span>
+    </button>
+    <button class="tab-btn" [class.active]="activeTab === 'payments'" (click)="switchTab('payments')">
+      <i class="fas fa-money-bill-wave"></i>
+      <span class="tab-label">مدفوعات</span>
+    </button>
+    <button class="tab-btn" [class.active]="activeTab === 'expenses'" (click)="switchTab('expenses')">
+      <i class="fas fa-receipt"></i>
+      <span class="tab-label">مصروفات</span>
+    </button>
+    <button class="tab-btn" [class.active]="activeTab === 'transactions-status'" (click)="switchTab('transactions-status')">
+      <i class="fas fa-list-alt"></i>
+      <span class="tab-label">معاملات</span>
+    </button>
+    <button class="tab-btn" [class.active]="activeTab === 'students-attendance'" (click)="switchTab('students-attendance')">
+      <i class="fas fa-users"></i>
+      <span class="tab-label">طلاب</span>
+    </button>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TAB 1: SUMMARY -->
+  <!-- ============================================================ -->
+  <div class="tab-content" *ngIf="activeTab === 'summary'">
+    <div class="filter-card mobile-filter">
+      <div class="month-selector">
+        <label>الشهر:</label>
+        <input type="month" [(ngModel)]="selectedMonth" (change)="onMonthChange()" class="mobile-input">
+      </div>
+      <div class="custom-date-range mobile-range">
+        <input type="date" [(ngModel)]="summaryStartDate" class="mobile-input">
+        <span>إلى</span>
+        <input type="date" [(ngModel)]="summaryEndDate" class="mobile-input">
+        <button class="btn-primary mobile-btn" (click)="loadSummary()" [disabled]="isLoadingSummary">
+          <i class="fas" [ngClass]="isLoadingSummary ? 'fa-spinner fa-spin' : 'fa-sync-alt'"></i>
+          <span class="btn-text">تحديث</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="stats-grid mobile-stats" *ngIf="summary">
+      <div class="stat-card income mobile-stat">
+        <div class="stat-icon"><i class="fas fa-arrow-down"></i></div>
+        <div class="stat-details">
+          <h4>الإيرادات</h4>
+          <span class="value">{{ summary.totalIncome | number:'1.2-2' }}</span>
+          <small>د.ج</small>
+        </div>
+      </div>
+      <div class="stat-card expense mobile-stat">
+        <div class="stat-icon"><i class="fas fa-arrow-up"></i></div>
+        <div class="stat-details">
+          <h4>المصروفات</h4>
+          <span class="value">{{ summary.totalExpenses | number:'1.2-2' }}</span>
+          <small>د.ج</small>
+        </div>
+      </div>
+      <div class="stat-card profit mobile-stat" [class.negative]="summary.netProfit < 0">
+        <div class="stat-icon"><i class="fas fa-balance-scale"></i></div>
+        <div class="stat-details">
+          <h4>صافي الأرباح</h4>
+          <span class="value">{{ summary.netProfit | number:'1.2-2' }}</span>
+          <small>د.ج</small>
+        </div>
+      </div>
+      <div class="stat-card count mobile-stat">
+        <div class="stat-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+        <div class="stat-details">
+          <h4>العمليات</h4>
+          <span class="value">{{ summary.totalTransactions }}</span>
+          <small>عملية</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-grid mobile-stats" *ngIf="netProfitData">
+      <div class="stat-card profit mobile-stat" [class.negative]="netProfitData.summary.netProfit < 0" style="border-color: #8b5cf6;">
+        <div class="stat-icon" style="background: #ede9fe; color: #7c3aed;"><i class="fas fa-calculator"></i></div>
+        <div class="stat-details">
+          <h4>صافي الربح (بعد العمولات)</h4>
+          <span class="value">{{ netProfitData.summary.netProfit | number:'1.2-2' }}</span>
+          <small>هامش: {{ netProfitData.summary.profitMargin }}%</small>
+        </div>
+      </div>
+      <div class="stat-card mobile-stat" style="border-color: #f59e0b;">
+        <div class="stat-icon" style="background: #fef3c7; color: #d97706;"><i class="fas fa-users"></i></div>
+        <div class="stat-details">
+          <h4>عمولات الأساتذة</h4>
+          <span class="value">{{ netProfitData.summary.totalCommissions | number:'1.2-2' }}</span>
+          <small>د.ج</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="charts-grid mobile-charts" [class.hidden]="!summary">
+      <div class="chart-card">
+        <h3>المداخيل مقابل المصاريف</h3>
+        <div class="canvas-container">
+          <canvas #incomeExpenseChart></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h3>توزيع العمليات</h3>
+        <div class="canvas-container">
+          <canvas #transactionsChart></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="details-section">
+      <div class="details-header mobile-details-header">
+        <h3><i class="fas fa-list"></i> دفتر اليومية</h3>
+        <div class="daily-filter">
+          <input type="date" [(ngModel)]="detailsDate" class="mobile-input">
+          <button class="btn-secondary mobile-btn" (click)="loadDailyDetails()" [disabled]="isLoadingDetails">
+            <i class="fas" [ngClass]="isLoadingDetails ? 'fa-spinner fa-spin' : 'fa-search'"></i>
+            <span class="btn-text">عرض</span>
+          </button>
+        </div>
+      </div>
+      <div class="table-card mobile-table">
+        <div class="table-responsive" *ngIf="transactions.length > 0; else noData">
+          <table class="styled-table mobile-table">
+            <thead>
+              <tr>
+                <th>النوع</th>
+                <th>الوصف</th>
+                <th>المبلغ</th>
+                <th>التاريخ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let t of transactions | slice:0:10">
+                <td>
+                  <span class="badge mobile-badge" [ngClass]="t._type">
+                    <i class="fas {{t.icon}}"></i>
+                  </span>
+                </td>
+                <td class="desc-cell">{{ t.description || 'بدون وصف' | slice:0:15 }}</td>
+                <td class="amount-cell" [ngClass]="{'text-success': isIncome(t), 'text-danger': !isIncome(t)}">
+                  {{ isIncome(t) ? '+' : '-' }} {{ t.amount | number:'1.0-0' }}
+                </td>
+                <td>{{ (t.date || t.paymentDate || t.createdAt) | date:'dd/MM' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <ng-template #noData>
+          <div class="no-data"><p>لا توجد معاملات</p></div>
+        </ng-template>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TAB 2: COMMISSIONS -->
+  <!-- ============================================================ -->
+  <div class="tab-content" *ngIf="activeTab === 'commissions'">
+    <div class="commission-controls mobile-controls">
+      <div class="filter-group">
+        <label>الشهر:</label>
+        <input type="month" [(ngModel)]="commissionMonth" (change)="loadCommissions()" class="mobile-input">
+      </div>
+      <div class="filter-group">
+        <label>الحالة:</label>
+        <select [(ngModel)]="commissionStatus" (change)="loadCommissions()" class="mobile-input">
+          <option value="all">الكل</option>
+          <option value="pending">معلقة</option>
+          <option value="partial">جزئية</option>
+          <option value="paid">مدفوعة</option>
+          <option value="cancelled">ملغاة</option>
+        </select>
+      </div>
+      <button class="btn-primary mobile-btn" (click)="generateMonthlyCommissions()" [disabled]="isGeneratingCommissions">
+        <i class="fas" [ngClass]="isGeneratingCommissions ? 'fa-spinner fa-spin' : 'fa-cogs'"></i>
+        <span class="btn-text">إنشاء</span>
       </button>
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'transactions'"
-        (click)="switchTab('transactions')">
-        <i class="fas fa-exchange-alt"></i> المعاملات
+    </div>
+
+    <div class="stats-grid mobile-stats" *ngIf="commissionsStats">
+      <div class="stat-card pending mobile-stat">
+        <div class="stat-icon"><i class="fas fa-clock"></i></div>
+        <div class="stat-details">
+          <h4>معلقة</h4>
+          <span class="value">{{ commissionsStats.pending?.amount || 0 | number:'1.0-0' }}</span>
+        </div>
+      </div>
+      <div class="stat-card partial mobile-stat">
+        <div class="stat-icon"><i class="fas fa-hourglass-half"></i></div>
+        <div class="stat-details">
+          <h4>جزئية</h4>
+          <span class="value">{{ commissionsStats.partial?.amount || 0 | number:'1.0-0' }}</span>
+        </div>
+      </div>
+      <div class="stat-card paid mobile-stat">
+        <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-details">
+          <h4>مدفوعة</h4>
+          <span class="value">{{ commissionsStats.paid?.amount || 0 | number:'1.0-0' }}</span>
+        </div>
+      </div>
+      <div class="stat-card cancelled mobile-stat">
+        <div class="stat-icon"><i class="fas fa-ban"></i></div>
+        <div class="stat-details">
+          <h4>ملغاة</h4>
+          <span class="value">{{ commissionsStats.cancelled?.amount || 0 | number:'1.0-0' }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card mobile-table">
+      <div class="table-header">
+        <h4>العمولات</h4>
+        <button class="btn-success mobile-btn" (click)="payAllCommissions()" [disabled]="!hasPendingCommissions">
+          <i class="fas fa-money-bill-wave"></i>
+          <span class="btn-text">دفع الكل</span>
+        </button>
+      </div>
+      <div class="table-responsive" *ngIf="commissions.length > 0; else noCommissions">
+        <table class="styled-table mobile-table">
+          <thead>
+            <tr>
+              <th>الأستاذ</th>
+              <th>المبلغ</th>
+              <th>الحالة</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let c of commissions | slice:0:15">
+              <td>{{ c.teacher?.name | slice:0:10 }}</td>
+              <td>{{ c.totalAmount | number:'1.0-0' }}</td>
+              <td>
+                <span class="status-badge mobile-badge" [ngClass]="c.status">
+                  {{ c.status === 'pending' ? 'معلقة' : c.status === 'paid' ? 'مدفوعة' : 'ملغاة' }}
+                </span>
+              </td>
+              <td>
+                <div class="action-buttons mobile-actions">
+                  <button class="btn-sm btn-pay" (click)="payCommission(c._id)" *ngIf="c.status !== 'paid' && c.status !== 'cancelled'">
+                    <i class="fas fa-check"></i>
+                  </button>
+                  <button class="btn-sm btn-view" (click)="viewCommissionDetails(c._id)">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button class="btn-sm btn-cancel" (click)="cancelCommission(c._id)" *ngIf="c.status !== 'paid' && c.status !== 'cancelled'">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #noCommissions>
+        <div class="no-data"><p>لا توجد عمولات</p></div>
+      </ng-template>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TAB 3: PAYMENTS -->
+  <!-- ============================================================ -->
+  <div class="tab-content" *ngIf="activeTab === 'payments'">
+    <div class="filter-card mobile-filter">
+      <div class="filter-group">
+        <label>الشهر:</label>
+        <input type="month" [(ngModel)]="paymentMonth" (change)="loadPayments()" class="mobile-input">
+      </div>
+      <div class="filter-group">
+        <label>الحالة:</label>
+        <select [(ngModel)]="paymentStatus" (change)="loadPayments()" class="mobile-input">
+          <option value="all">الكل</option>
+          <option value="paid">مدفوعة</option>
+          <option value="pending">معلقة</option>
+          <option value="late">متأخرة</option>
+        </select>
+      </div>
+      <button class="btn-success mobile-btn" (click)="openPaymentModal()">
+        <i class="fas fa-plus"></i>
+        <span class="btn-text">إضافة</span>
       </button>
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'income'"
-        (click)="switchTab('income')">
-        <i class="fas fa-money-bill-wave"></i> الإيرادات
+    </div>
+
+    <div class="table-card mobile-table">
+      <div class="table-header">
+        <h4>المدفوعات</h4>
+      </div>
+      <div class="table-responsive" *ngIf="payments.length > 0; else noPayments">
+        <table class="styled-table mobile-table">
+          <thead>
+            <tr>
+              <th>الطالب</th>
+              <th>المبلغ</th>
+              <th>الحالة</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let p of payments | slice:0:15">
+              <td>{{ p.student?.name | slice:0:10 }}</td>
+              <td>{{ p.amount | number:'1.0-0' }}</td>
+              <td>
+                <span class="status-badge mobile-badge" [ngClass]="p.status">
+                  {{ p.status === 'paid' ? 'مدفوعة' : p.status === 'pending' ? 'معلقة' : 'متأخرة' }}
+                </span>
+              </td>
+              <td>
+                <div class="action-buttons mobile-actions">
+                  <button class="btn-sm btn-pay" (click)="payPayment(p._id)" *ngIf="p.status !== 'paid' && p.status !== 'cancelled'">
+                    <i class="fas fa-check"></i>
+                  </button>
+                  <button class="btn-sm btn-cancel" (click)="cancelPayment(p._id)" *ngIf="p.status !== 'cancelled'">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #noPayments>
+        <div class="no-data"><p>لا توجد مدفوعات</p></div>
+      </ng-template>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TAB 4: EXPENSES -->
+  <!-- ============================================================ -->
+  <div class="tab-content" *ngIf="activeTab === 'expenses'">
+    <div class="filter-card mobile-filter">
+      <div class="filter-group">
+        <label>من:</label>
+        <input type="date" [(ngModel)]="expenseStartDate" class="mobile-input">
+      </div>
+      <div class="filter-group">
+        <label>إلى:</label>
+        <input type="date" [(ngModel)]="expenseEndDate" class="mobile-input">
+      </div>
+      <button class="btn-success mobile-btn" (click)="openExpenseModal()">
+        <i class="fas fa-plus"></i>
+        <span class="btn-text">إضافة</span>
       </button>
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'expenses'"
-        (click)="switchTab('expenses')">
-        <i class="fas fa-receipt"></i> المصروفات
+    </div>
+
+    <div class="table-card mobile-table">
+      <div class="table-header">
+        <h4>المصروفات</h4>
+        <span class="total-expenses">{{ totalExpenses | number:'1.0-0' }}</span>
+      </div>
+      <div class="table-responsive" *ngIf="expenses.length > 0; else noExpenses">
+        <table class="styled-table mobile-table">
+          <thead>
+            <tr>
+              <th>الوصف</th>
+              <th>المبلغ</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let e of expenses | slice:0:15">
+              <td>{{ e.description | slice:0:12 }}</td>
+              <td>{{ e.amount | number:'1.0-0' }}</td>
+              <td>
+                <div class="action-buttons mobile-actions">
+                  <button class="btn-sm btn-delete" (click)="deleteExpense(e._id)">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #noExpenses>
+        <div class="no-data"><p>لا توجد مصروفات</p></div>
+      </ng-template>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TAB 5: TRANSACTIONS BY STATUS -->
+  <!-- ============================================================ -->
+  <div class="tab-content" *ngIf="activeTab === 'transactions-status'">
+    <div class="filter-card mobile-filter">
+      <div class="filter-group">
+        <label>الشهر:</label>
+        <input type="month" [(ngModel)]="statusMonth" (change)="loadTransactionsByStatus()" class="mobile-input">
+      </div>
+      <div class="filter-group">
+        <label>الحالة:</label>
+        <select [(ngModel)]="statusFilter" (change)="loadTransactionsByStatus()" class="mobile-input">
+          <option value="all">الكل</option>
+          <option value="paid">مدفوع</option>
+          <option value="pending">معلق</option>
+          <option value="cancelled">ملغى</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="stats-grid mobile-stats" *ngIf="transactionsByStatus">
+      <div class="stat-card count mobile-stat">
+        <div class="stat-icon"><i class="fas fa-file-invoice"></i></div>
+        <div class="stat-details">
+          <h4>المعاملات</h4>
+          <span class="value">{{ transactionsByStatus.stats.total }}</span>
+        </div>
+      </div>
+      <div class="stat-card paid mobile-stat">
+        <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+        <div class="stat-details">
+          <h4>مدفوعة</h4>
+          <span class="value">{{ transactionsByStatus.stats.byStatus.paid }}</span>
+        </div>
+      </div>
+      <div class="stat-card pending mobile-stat">
+        <div class="stat-icon"><i class="fas fa-clock"></i></div>
+        <div class="stat-details">
+          <h4>معلقة</h4>
+          <span class="value">{{ transactionsByStatus.stats.byStatus.pending }}</span>
+        </div>
+      </div>
+      <div class="stat-card cancelled mobile-stat">
+        <div class="stat-icon"><i class="fas fa-ban"></i></div>
+        <div class="stat-details">
+          <h4>ملغاة</h4>
+          <span class="value">{{ transactionsByStatus.stats.byStatus.cancelled }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card mobile-table">
+      <div class="table-header">
+        <h4>المعاملات</h4>
+      </div>
+      <div class="table-responsive" *ngIf="statusTransactions.length > 0; else noStatusTransactions">
+        <table class="styled-table mobile-table">
+          <thead>
+            <tr>
+              <th>النوع</th>
+              <th>المبلغ</th>
+              <th>الحالة</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let t of statusTransactions | slice:0:15">
+              <td>
+                <span class="badge mobile-badge" [ngClass]="t._type">
+                  <i class="fas {{t.icon}}"></i>
+                </span>
+              </td>
+              <td>{{ t.amount | number:'1.0-0' }}</td>
+              <td>
+                <span class="status-badge mobile-badge" [ngClass]="t.status || 'pending'">
+                  {{ t.status === 'paid' ? 'مدفوع' : t.status === 'cancelled' ? 'ملغى' : 'معلق' }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #noStatusTransactions>
+        <div class="no-data"><p>لا توجد معاملات</p></div>
+      </ng-template>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TAB 6: STUDENTS & ATTENDANCE -->
+  <!-- ============================================================ -->
+  <div class="tab-content" *ngIf="activeTab === 'students-attendance'">
+    <div class="filter-card mobile-filter">
+      <div class="filter-group" style="flex: 1; min-width: 100%;">
+        <label>الحصة:</label>
+        <select [(ngModel)]="selectedClassId" (change)="loadStudentsAttendance()" class="mobile-input">
+          <option value="">-- اختر --</option>
+          <option *ngFor="let c of classesList" [value]="c._id">{{ c.name }}</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>الشهر:</label>
+        <input type="month" [(ngModel)]="attendanceMonth" (change)="loadStudentsAttendance()" class="mobile-input">
+      </div>
+      <button class="btn-primary mobile-btn" (click)="loadStudentsAttendance()" [disabled]="isLoadingAttendance">
+        <i class="fas" [ngClass]="isLoadingAttendance ? 'fa-spinner fa-spin' : 'fa-sync-alt'"></i>
+        <span class="btn-text">عرض</span>
       </button>
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'budgets'"
-        (click)="switchTab('budgets')">
-        <i class="fas fa-chart-pie"></i> الميزانيات
-      </button>
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'school-fees'"
-        (click)="switchTab('school-fees')">
-        <i class="fas fa-user-graduate"></i> رسوم التسجيل
-      </button>
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'commissions'"
-        (click)="switchTab('commissions')">
-        <i class="fas fa-chalkboard-teacher"></i> عمولات الأساتذة
-      </button>
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'class-commission'"
-        (click)="switchTab('class-commission')">
-        <i class="fas fa-calculator"></i> عمولة الحصة
-      </button>
+    </div>
+
+    <div class="stats-grid mobile-stats" *ngIf="studentsAttendanceData">
+      <div class="stat-card count mobile-stat">
+        <div class="stat-icon"><i class="fas fa-users"></i></div>
+        <div class="stat-details">
+          <h4>الطلاب</h4>
+          <span class="value">{{ studentsAttendanceData.summary.totalStudents }}</span>
+        </div>
+      </div>
+      <div class="stat-card income mobile-stat">
+        <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
+        <div class="stat-details">
+          <h4>المدفوع</h4>
+          <span class="value">{{ studentsAttendanceData.summary.totalPaid | number:'1.0-0' }}</span>
+        </div>
+      </div>
+      <div class="stat-card pending mobile-stat">
+        <div class="stat-icon"><i class="fas fa-clock"></i></div>
+        <div class="stat-details">
+          <h4>المتبقي</h4>
+          <span class="value">{{ studentsAttendanceData.summary.totalPending | number:'1.0-0' }}</span>
+        </div>
+      </div>
+      <div class="stat-card profit mobile-stat">
+        <div class="stat-icon"><i class="fas fa-percent"></i></div>
+        <div class="stat-details">
+          <h4>الحضور</h4>
+          <span class="value">{{ studentsAttendanceData.summary.averageAttendance }}%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card mobile-table" *ngIf="studentsAttendanceData">
+      <div class="table-header">
+        <h4>الطلاب</h4>
+        <button class="btn-sm btn-edit" (click)="openTeacherPercentageModal()">
+          <i class="fas fa-percent"></i>
+          <span class="btn-text">نسبة الأستاذ</span>
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="styled-table mobile-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>الطالب</th>
+              <th>المدفوع</th>
+              <th>الحضور</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let student of studentsAttendanceData.students | slice:0:15; let i = index">
+              <td>{{ i + 1 }}</td>
+              <td>{{ student.name | slice:0:10 }}</td>
+              <td>
+                <span class="status-badge mobile-badge" [ngClass]="student.payment.status">
+                  {{ student.payment.status === 'paid' ? '✅' : student.payment.status === 'partial' ? '⚠️' : '❌' }}
+                </span>
+              </td>
+              <td>
+                <span class="badge" [ngClass]="student.attendance.summary.attendanceRate >= 80 ? 'paid' : student.attendance.summary.attendanceRate >= 50 ? 'pending' : 'cancelled'">
+                  {{ student.attendance.summary.attendanceRate }}%
+                </span>
+              </td>
+              <td>
+                <div class="action-buttons mobile-actions">
+                  <button class="btn-sm btn-edit" (click)="openPaymentAdjustModal(student)">
+                    <i class="fas fa-money-bill-wave"></i>
+                  </button>
+                  <button class="btn-sm btn-view" (click)="openStudentAttendanceModal(student)">
+                    <i class="fas fa-calendar-alt"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Add Financial Transaction -->
+  <!-- ============================================================ -->
+  <div class="modal-overlay" *ngIf="showTransactionModal">
+    <div class="modal-content mobile-modal">
+      <div class="modal-header">
+        <h3>معاملة جديدة</h3>
+        <button class="close-btn" (click)="closeTransactionModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group full-width">
+          <label>النوع</label>
+          <div class="radio-group">
+            <label class="radio-btn" [class.active]="newTx.type === 'income'">
+              <input type="radio" [(ngModel)]="newTx.type" value="income"> إيراد
+            </label>
+            <label class="radio-btn expense-btn" [class.active]="newTx.type === 'expense'">
+              <input type="radio" [(ngModel)]="newTx.type" value="expense"> مصروف
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>المبلغ</label>
+          <input type="number" [(ngModel)]="newTx.amount" min="1" class="mobile-input">
+        </div>
+        <div class="form-group">
+          <label>التاريخ</label>
+          <input type="date" [(ngModel)]="newTx.date" class="mobile-input">
+        </div>
+        <div class="form-group full-width">
+          <label>الوصف</label>
+          <input type="text" [(ngModel)]="newTx.description" class="mobile-input">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-back mobile-btn" (click)="closeTransactionModal()">إلغاء</button>
+        <button class="btn-success mobile-btn" (click)="submitTransaction()" [disabled]="isSubmittingTx">
+          <i class="fas" [ngClass]="isSubmittingTx ? 'fa-spinner fa-spin' : 'fa-save'"></i>
+          <span class="btn-text">حفظ</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Add Payment -->
+  <!-- ============================================================ -->
+  <div class="modal-overlay" *ngIf="showPaymentModal">
+    <div class="modal-content mobile-modal">
+      <div class="modal-header">
+        <h3>دفعة جديدة</h3>
+        <button class="close-btn" (click)="closePaymentModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group full-width">
+          <label>الطالب</label>
+          <select [(ngModel)]="newPayment.studentId" class="mobile-input">
+            <option value="">اختر...</option>
+            <option *ngFor="let s of studentsList" [value]="s._id">{{ s.name }}</option>
+          </select>
+        </div>
+        <div class="form-group full-width">
+          <label>الحصة</label>
+          <select [(ngModel)]="newPayment.classId" class="mobile-input">
+            <option value="">اختر...</option>
+            <option *ngFor="let c of classesList" [value]="c._id">{{ c.name }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>المبلغ</label>
+          <input type="number" [(ngModel)]="newPayment.amount" min="1" class="mobile-input">
+        </div>
+        <div class="form-group">
+          <label>الشهر</label>
+          <input type="month" [(ngModel)]="newPayment.month" class="mobile-input">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-back mobile-btn" (click)="closePaymentModal()">إلغاء</button>
+        <button class="btn-success mobile-btn" (click)="submitPayment()" [disabled]="isSubmittingPayment">
+          <i class="fas" [ngClass]="isSubmittingPayment ? 'fa-spinner fa-spin' : 'fa-save'"></i>
+          <span class="btn-text">حفظ</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Add Expense -->
+  <!-- ============================================================ -->
+  <div class="modal-overlay" *ngIf="showExpenseModal">
+    <div class="modal-content mobile-modal">
+      <div class="modal-header">
+        <h3>مصروف جديد</h3>
+        <button class="close-btn" (click)="closeExpenseModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group full-width">
+          <label>الوصف</label>
+          <input type="text" [(ngModel)]="newExpense.description" class="mobile-input">
+        </div>
+        <div class="form-group">
+          <label>المبلغ</label>
+          <input type="number" [(ngModel)]="newExpense.amount" min="1" class="mobile-input">
+        </div>
+        <div class="form-group">
+          <label>التاريخ</label>
+          <input type="date" [(ngModel)]="newExpense.date" class="mobile-input">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-back mobile-btn" (click)="closeExpenseModal()">إلغاء</button>
+        <button class="btn-success mobile-btn" (click)="submitExpense()" [disabled]="isSubmittingExpense">
+          <i class="fas" [ngClass]="isSubmittingExpense ? 'fa-spinner fa-spin' : 'fa-save'"></i>
+          <span class="btn-text">حفظ</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Payment Adjustment -->
+  <!-- ============================================================ -->
+  <div class="modal-overlay" *ngIf="showPaymentAdjustModal">
+    <div class="modal-content mobile-modal">
+      <div class="modal-header">
+        <h3>تعديل المبلغ</h3>
+        <button class="close-btn" (click)="closePaymentAdjustModal()">&times;</button>
+      </div>
+      <div class="modal-body" *ngIf="selectedStudent">
+        <div class="form-group full-width">
+          <label>الطالب: <strong>{{ selectedStudent.name }}</strong></label>
+        </div>
+        <div class="form-group full-width">
+          <label>المبلغ الحالي: <strong>{{ selectedStudent.payment.totalAmount | number:'1.0-0' }}</strong></label>
+        </div>
+        <div class="form-group full-width">
+          <label>المبلغ الجديد</label>
+          <input type="number" [(ngModel)]="adjustedAmount" min="0" step="100" class="mobile-input">
+        </div>
+        <div class="form-group full-width">
+          <label>السبب</label>
+          <input type="text" [(ngModel)]="adjustReason" class="mobile-input">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-back mobile-btn" (click)="closePaymentAdjustModal()">إلغاء</button>
+        <button class="btn-success mobile-btn" (click)="submitPaymentAdjust()" [disabled]="!adjustedAmount || adjustedAmount < 0">
+          <i class="fas fa-save"></i>
+          <span class="btn-text">حفظ</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Teacher Percentage -->
+  <!-- ============================================================ -->
+  <div class="modal-overlay" *ngIf="showTeacherPercentageModal">
+    <div class="modal-content mobile-modal">
+      <div class="modal-header">
+        <h3>نسبة الأستاذ</h3>
+        <button class="close-btn" (click)="closeTeacherPercentageModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group full-width">
+          <label>الأستاذ: <strong>{{ studentsAttendanceData?.class?.teacher?.name || 'غير محدد' }}</strong></label>
+        </div>
+        <div class="form-group full-width">
+          <label>النسبة الحالية: <strong>{{ studentsAttendanceData?.class?.teacher?.salaryPercentage || 70 }}%</strong></label>
+        </div>
+        <div class="form-group full-width">
+          <label>النسبة الجديدة</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="range" [(ngModel)]="newTeacherPercentage" min="0" max="100" step="1" style="flex: 1;">
+            <span style="font-weight: bold; font-size: 18px; min-width: 50px;">{{ newTeacherPercentage }}%</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-back mobile-btn" (click)="closeTeacherPercentageModal()">إلغاء</button>
+        <button class="btn-success mobile-btn" (click)="submitTeacherPercentage()" [disabled]="newTeacherPercentage < 0 || newTeacherPercentage > 100">
+          <i class="fas fa-save"></i>
+          <span class="btn-text">حفظ</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Student Attendance -->
+  <!-- ============================================================ -->
+  <div class="modal-overlay" *ngIf="showStudentAttendanceModal && selectedStudent">
+    <div class="modal-content mobile-modal modal-lg">
+      <div class="modal-header">
+        <h3><i class="fas fa-calendar-check"></i> سجل حضور الطالب</h3>
+        <button class="close-btn" (click)="closeStudentAttendanceModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="commission-info-grid mobile-info">
+          <div class="info-item">
+            <label>الطالب</label>
+            <span>{{ selectedStudent.name }}</span>
+          </div>
+          <div class="info-item">
+            <label>الرقم</label>
+            <span>{{ selectedStudent.studentId }}</span>
+          </div>
+          <div class="info-item">
+            <label>نسبة الحضور</label>
+            <span>{{ selectedStudent.attendance?.summary?.attendanceRate || 0 }}%</span>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="styled-table mobile-table">
+            <thead>
+              <tr>
+                <th>التاريخ</th>
+                <th>اليوم</th>
+                <th>الحالة</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of getStudentAttendanceDates(selectedStudent) | slice:0:10">
+                <td>{{ item.date | date:'dd/MM' }}</td>
+                <td>{{ item.dayName }}</td>
+                <td>
+                  <span class="status-badge mobile-badge" [ngClass]="item.status">
+                    {{ item.status === 'present' ? '✅ حاضر' : 
+                       item.status === 'late' ? '🟡 متأخر' : '🔴 غائب' }}
+                  </span>
+                </td>
+                <td>
+                  <select [(ngModel)]="item.status" 
+                          (change)="updateAttendance(selectedStudent._id, item.date, item.status)" 
+                          class="mobile-input" style="padding: 4px 6px; font-size: 11px; min-width: 70px;">
+                    <option value="present">✅ حاضر</option>
+                    <option value="late">🟡 متأخر</option>
+                    <option value="absent">🔴 غائب</option>
+                  </select>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-back mobile-btn" (click)="closeStudentAttendanceModal()">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Commission Details -->
+  <!-- ============================================================ -->
+  <div class="modal-overlay" *ngIf="showCommissionDetailsModal">
+    <div class="modal-content mobile-modal modal-lg">
+      <div class="modal-header">
+        <h3><i class="fas fa-user-graduate"></i> تفاصيل العمولة</h3>
+        <button class="close-btn" (click)="closeCommissionDetailsModal()">&times;</button>
+      </div>
       
-      <!-- NEW TAB: Class Payments Management -->
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'class-payments'"
-        (click)="switchTab('class-payments')">
-        <i class="fas fa-money-check-alt"></i> مدفوعات الحصص
-      </button>
+      <div class="modal-body" *ngIf="commissionDetails">
+        <!-- Commission Basic Info -->
+        <div class="commission-info-grid mobile-info">
+          <div class="info-item">
+            <label>الأستاذ</label>
+            <span>{{ commissionDetails.commission.teacher?.name || 'غير معروف' }}</span>
+          </div>
+          <div class="info-item">
+            <label>الحصة</label>
+            <span>{{ commissionDetails.commission.class?.name || 'غير معروف' }}</span>
+          </div>
+          <div class="info-item">
+            <label>الشهر</label>
+            <span>{{ commissionDetails.commission.month }}</span>
+          </div>
+          <div class="info-item">
+            <label>الحالة</label>
+            <span class="status-badge mobile-badge" [ngClass]="commissionDetails.commission.status">
+              {{ commissionDetails.commission.status === 'pending' ? 'معلقة' : 
+                 commissionDetails.commission.status === 'partial' ? 'جزئية' : 
+                 commissionDetails.commission.status === 'paid' ? 'مدفوعة' : 'ملغاة' }}
+            </span>
+          </div>
+          <div class="info-item">
+            <label>المبلغ الإجمالي</label>
+            <span>{{ commissionDetails.commission.totalAmount | number:'1.2-2' }} د.ج</span>
+          </div>
+          <div class="info-item">
+            <label>المدفوع</label>
+            <span class="text-success">{{ commissionDetails.commission.totalPaid | number:'1.2-2' }} د.ج</span>
+          </div>
+          <div class="info-item">
+            <label>المتبقي</label>
+            <span class="text-danger">{{ commissionDetails.commission.remainingAmount | number:'1.2-2' }} د.ج</span>
+          </div>
+          <div class="info-item">
+            <label>نسبة الأستاذ</label>
+            <span>{{ commissionDetails.commission.percentage || 70 }}%</span>
+          </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="stats-grid mobile-stats" style="margin-bottom: 12px;">
+          <div class="stat-card count mobile-stat" style="border-color: #3b82f6;">
+            <div class="stat-icon" style="background: #dbeafe; color: #2563eb;"><i class="fas fa-users"></i></div>
+            <div class="stat-details">
+              <h4>الطلاب</h4>
+              <span class="value">{{ commissionDetails.summary.totalStudents }}</span>
+            </div>
+          </div>
+          <div class="stat-card income mobile-stat" style="border-color: #10b981;">
+            <div class="stat-icon" style="background: #d1fae5; color: #059669;"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-details">
+              <h4>الحضور</h4>
+              <span class="value">{{ commissionDetails.summary.averageAttendance }}%</span>
+            </div>
+          </div>
+          <div class="stat-card pending mobile-stat" style="border-color: #f59e0b;">
+            <div class="stat-icon" style="background: #fef3c7; color: #d97706;"><i class="fas fa-money-bill-wave"></i></div>
+            <div class="stat-details">
+              <h4>المدفوع</h4>
+              <span class="value">{{ commissionDetails.summary.totalPaid | number:'1.0-0' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Student List -->
+        <h4 style="font-size: 14px; margin: 10px 0 8px;">
+          <i class="fas fa-list"></i> قائمة الطلاب
+          <small style="font-weight: normal; color: #94a3b8; font-size: 12px;">
+            ({{ commissionDetails.students.length }} طالب)
+          </small>
+        </h4>
+        
+        <div class="table-responsive">
+          <table class="styled-table mobile-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>الطالب</th>
+                <th>الحصة</th>
+                <th>المدفوع</th>
+                <th>الحضور</th>
+                <th>الإجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let student of commissionDetails.students; let i = index">
+                <td>{{ i + 1 }}</td>
+                <td>{{ student.name | slice:0:10 }}</td>
+                <td>{{ student.teacherShare | number:'1.0-0' }}</td>
+                <td>
+                  <span class="status-badge mobile-badge" [ngClass]="student.payment.status">
+                    {{ student.payment.status === 'paid' ? '✅' : 
+                       student.payment.status === 'partial' ? '⚠️' : '❌' }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge" [ngClass]="student.attendance.summary.attendanceRate >= 80 ? 'paid' : 
+                        student.attendance.summary.attendanceRate >= 50 ? 'pending' : 'cancelled'">
+                    {{ student.attendance.summary.attendanceRate }}%
+                  </span>
+                </td>
+                <td>
+                  <div class="action-buttons mobile-actions">
+                    <button class="btn-sm btn-edit" (click)="openStudentShareModal(student)" 
+                            title="تعديل حصة الأستاذ">
+                      <i class="fas fa-percent"></i>
+                    </button>
+                    <button class="btn-sm btn-view" (click)="openStudentAttendanceFromCommission(student)"
+                            title="عرض سجل الحضور">
+                      <i class="fas fa-calendar-alt"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Upcoming Days -->
+        <h4 style="font-size: 14px; margin: 12px 0 8px;">
+          <i class="fas fa-calendar-alt"></i> الأيام القادمة
+        </h4>
+        <div class="table-responsive">
+          <table class="styled-table mobile-table">
+            <thead>
+              <tr>
+                <th>التاريخ</th>
+                <th>اليوم</th>
+                <th>الوقت</th>
+                <th>الحالة</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let day of commissionDetails.upcomingDays | slice:0:10">
+                <td>{{ day.date | date:'dd/MM' }}</td>
+                <td>{{ day.dayName }}</td>
+                <td>{{ day.schedule?.time || '--:--' }}</td>
+                <td>
+                  <span class="status-badge mobile-badge" [ngClass]="day.isPast ? 'paid' : 'pending'">
+                    {{ day.isPast ? 'مضى' : day.isToday ? 'اليوم' : 'قادم' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
       
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'financial-report'"
-        (click)="switchTab('financial-report')">
-        <i class="fas fa-file-invoice-dollar"></i> التقرير المالي
-      </button>
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'registration-fees'"
-        (click)="switchTab('registration-fees')">
-        <i class="fas fa-id-card"></i> رسوم التسجيل التفصيلية
-      </button>
-      <button 
-        class="tab-btn" 
-        [class.active]="activeTab === 'invoices'"
-        (click)="switchTab('invoices')">
-        <i class="fas fa-file-invoice"></i> الفواتير
-      </button>
-    </nav>
+      <div class="modal-footer">
+        <button class="btn-back mobile-btn" (click)="closeCommissionDetailsModal()">إغلاق</button>
+        <button class="btn-success mobile-btn" (click)="payCommission(commissionDetails?.commission._id)" 
+                *ngIf="commissionDetails?.commission.status !== 'paid' && commissionDetails?.commission.status !== 'cancelled'">
+          <i class="fas fa-check"></i>
+          <span class="btn-text">دفع العمولة</span>
+        </button>
+      </div>
+    </div>
   </div>
 
-  <!-- Tab Content -->
-  <div class="tab-content">
-    
-    <!-- Dashboard Tab -->
-    <div *ngIf="activeTab === 'dashboard'" class="dashboard-tab">
-      <!-- Quick Stats -->
-      <div class="quick-stats">
-        <div class="stat-card bg-success">
-          <div class="stat-icon">
-            <i class="fas fa-wallet"></i>
-          </div>
-          <div class="stat-content">
-            <h3>{{ formatCurrency(currentBalance) }}</h3>
-            <p>الرصيد الحالي</p>
-          </div>
+  <!-- ============================================================ -->
+  <!-- MODAL: Student Share Adjustment -->
+  <!-- ============================================================ -->
+  <div class="modal-overlay" *ngIf="showStudentShareModal">
+    <div class="modal-content mobile-modal">
+      <div class="modal-header">
+        <h3><i class="fas fa-percent"></i> تعديل حصة الأستاذ</h3>
+        <button class="close-btn" (click)="closeStudentShareModal()">&times;</button>
+      </div>
+      <div class="modal-body" *ngIf="selectedCommissionStudent">
+        <div class="form-group full-width">
+          <label>الطالب: <strong>{{ selectedCommissionStudent.name }}</strong></label>
         </div>
-        
-        <div class="stat-card bg-info">
-          <div class="stat-icon">
-            <i class="fas fa-money-bill-wave"></i>
-          </div>
-          <div class="stat-content">
-            <h3>{{ formatCurrency(todayStats.payments?.total || 0) }}</h3>
-            <p>إيرادات اليوم</p>
-            <small>{{ todayStats.payments?.count || 0 }} معاملة</small>
-          </div>
+        <div class="form-group full-width">
+          <label>الحصة الحالية: <strong>{{ selectedCommissionStudent.teacherShare | number:'1.2-2' }} د.ج</strong></label>
         </div>
-        
-        <div class="stat-card bg-danger">
-          <div class="stat-icon">
-            <i class="fas fa-receipt"></i>
-          </div>
-          <div class="stat-content">
-            <h3>{{ formatCurrency(todayStats.expenses?.total || 0) }}</h3>
-            <p>مصروفات اليوم</p>
-            <small>{{ todayStats.expenses?.count || 0 }} مصروف</small>
-          </div>
+        <div class="form-group full-width">
+          <label>الحصة الجديدة</label>
+          <input type="number" [(ngModel)]="studentShareAmount" min="0" step="100" class="mobile-input">
         </div>
-        
-        <div class="stat-card bg-warning">
-          <div class="stat-icon">
-            <i class="fas fa-chalkboard-teacher"></i>
-          </div>
-          <div class="stat-content">
-            <h3>{{ formatCurrency(todayStats.commissions?.total || 0) }}</h3>
-            <p>عمولات اليوم</p>
-            <small>{{ todayStats.commissions?.count || 0 }} عمولة</small>
-          </div>
+        <div class="form-group full-width">
+          <label>سبب التعديل</label>
+          <input type="text" [(ngModel)]="studentShareReason" placeholder="سبب التعديل (اختياري)" class="mobile-input">
         </div>
       </div>
-
-      <!-- Daily Income Card -->
-      <div class="card mb-4">
-        <div class="card-header">
-          <h3><i class="fas fa-calendar-day"></i> إيرادات اليوم</h3>
-          <span class="date-badge">{{ dailyIncome.formattedDate || getCurrentDateFormatted() }}</span>
-        </div>
-        <div class="card-body">
-          <div *ngIf="loading.income" class="loading-spinner">
-            <i class="fas fa-spinner fa-spin"></i> جاري التحميل...
-          </div>
-          
-          <div *ngIf="!loading.income" class="daily-income-content">
-            <div class="total-income">
-              <h2>{{ formatCurrency(dailyIncome.dailyIncome || 0) }}</h2>
-              <p>إجمالي إيرادات اليوم</p>
-            </div>
-            
-            <div class="income-breakdown">
-              <div class="breakdown-item">
-                <span class="breakdown-label">مدفوعات الحصص:</span>
-                <span class="breakdown-value">
-                  {{ formatCurrency(dailyIncome.breakdown?.payments?.amount || 0) }}
-                  <small>({{ dailyIncome.breakdown?.payments?.count || 0 }})</small>
-                </span>
-              </div>
-              
-              <div class="breakdown-item">
-                <span class="breakdown-label">رسوم التسجيل:</span>
-                <span class="breakdown-value">
-                  {{ formatCurrency(dailyIncome.breakdown?.registrationFees?.amount || 0) }}
-                  <small>({{ dailyIncome.breakdown?.registrationFees?.count || 0 }})</small>
-                </span>
-              </div>
-              
-              <div class="breakdown-item">
-                <span class="breakdown-label">إيرادات أخرى:</span>
-                <span class="breakdown-value">
-                  {{ formatCurrency(dailyIncome.breakdown?.otherIncome?.amount || 0) }}
-                  <small>({{ dailyIncome.breakdown?.otherIncome?.count || 0 }})</small>
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="modal-footer">
+        <button class="btn-back mobile-btn" (click)="closeStudentShareModal()">إلغاء</button>
+        <button class="btn-success mobile-btn" (click)="submitStudentShare()" [disabled]="studentShareAmount < 0">
+          <i class="fas fa-save"></i>
+          <span class="btn-text">حفظ</span>
+        </button>
       </div>
+    </div>
+  </div>
 
-      <!-- Quick Financial Stats -->
-      <div class="row">
-        <div class="col-md-6">
-          <div class="card">
-            <div class="card-header">
-              <h4><i class="fas fa-chart-line"></i> الإحصائيات المالية السريعة</h4>
-            </div>
-            <div class="card-body">
-              <div class="financial-stats">
-                <div class="stat-item">
-                  <span class="stat-label">إجمالي الإيرادات:</span>
-                  <span class="stat-value text-success">
-                    {{ formatCurrency(quickFinancialStats.totalIncome || 0) }}
+  <!-- ============================================================ -->
+  <!-- MODAL: Student Attendance from Commission -->
+  <!-- ============================================================ -->
+  <div class="modal-overlay" *ngIf="showCommissionStudentAttendanceModal && selectedCommissionStudent">
+    <div class="modal-content mobile-modal modal-lg">
+      <div class="modal-header">
+        <h3><i class="fas fa-calendar-check"></i> سجل حضور الطالب</h3>
+        <button class="close-btn" (click)="closeCommissionStudentAttendanceModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="commission-info-grid mobile-info">
+          <div class="info-item">
+            <label>الطالب</label>
+            <span>{{ selectedCommissionStudent.name }}</span>
+          </div>
+          <div class="info-item">
+            <label>الرقم</label>
+            <span>{{ selectedCommissionStudent.studentId }}</span>
+          </div>
+          <div class="info-item">
+            <label>نسبة الحضور</label>
+            <span>{{ selectedCommissionStudent.attendance?.summary?.attendanceRate || 0 }}%</span>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="styled-table mobile-table">
+            <thead>
+              <tr>
+                <th>التاريخ</th>
+                <th>اليوم</th>
+                <th>الحالة</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of getCommissionStudentAttendanceDates(selectedCommissionStudent) | slice:0:10">
+                <td>{{ item.date | date:'dd/MM' }}</td>
+                <td>{{ item.dayName }}</td>
+                <td>
+                  <span class="status-badge mobile-badge" [ngClass]="item.status">
+                    {{ item.status === 'present' ? '✅ حاضر' : 
+                       item.status === 'late' ? '🟡 متأخر' : '🔴 غائب' }}
                   </span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">إجمالي المصروفات:</span>
-                  <span class="stat-value text-danger">
-                    {{ formatCurrency(quickFinancialStats.totalExpenses || 0) }}
-                  </span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">المدفوعات المعلقة:</span>
-                  <span class="stat-value text-warning">
-                    {{ quickFinancialStats.pendingPayments || 0 }}
-                  </span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">آخر تحديث:</span>
-                  <span class="stat-value">
-                    {{ formatDateTime(quickFinancialStats.lastUpdated) }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="col-md-6">
-          <div class="card">
-            <div class="card-header">
-              <h4><i class="fas fa-bolt"></i> إجراءات سريعة</h4>
-            </div>
-            <div class="card-body">
-              <div class="quick-actions">
-                <button class="btn btn-outline-primary btn-block mb-2" (click)="openTransactionModal()">
-                  <i class="fas fa-plus-circle"></i> إضافة معاملة
-                </button>
-                <button class="btn btn-outline-success btn-block mb-2" (click)="openExpenseModal()">
-                  <i class="fas fa-minus-circle"></i> إضافة مصروف
-                </button>
-                <button class="btn btn-outline-info btn-block mb-2" (click)="openBudgetModal()">
-                  <i class="fas fa-chart-pie"></i> إنشاء ميزانية
-                </button>
-                <button class="btn btn-outline-warning btn-block" (click)="openSchoolFeeModal()">
-                  <i class="fas fa-user-plus"></i> تسجيل رسوم تسجيل
-                </button>
-              </div>
-            </div>
-          </div>
+                </td>
+                <td>
+                  <select [(ngModel)]="item.status" 
+                          (change)="updateCommissionAttendance(selectedCommissionStudent._id, item.date, item.status)" 
+                          class="mobile-input" style="padding: 4px 6px; font-size: 11px; min-width: 70px;">
+                    <option value="present">✅ حاضر</option>
+                    <option value="late">🟡 متأخر</option>
+                    <option value="absent">🔴 غائب</option>
+                  </select>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
-
-      <!-- Recent Transactions -->
-      <div class="card">
-        <div class="card-header">
-          <h4><i class="fas fa-history"></i> آخر المعاملات</h4>
-          <button class="btn btn-sm btn-outline-secondary" (click)="switchTab('transactions')">
-            عرض الكل <i class="fas fa-arrow-left"></i>
-          </button>
-        </div>
-        <div class="card-body">
-          <div *ngIf="loading.transactions" class="loading-spinner">
-            <i class="fas fa-spinner fa-spin"></i> جاري تحميل المعاملات...
-          </div>
-          
-          <div *ngIf="!loading.transactions && transactions.length === 0" class="empty-state">
-            <i class="fas fa-exchange-alt fa-2x"></i>
-            <p>لا توجد معاملات حالياً</p>
-          </div>
-          
-          <div class="table-responsive" *ngIf="!loading.transactions && transactions.length > 0">
-            <table class="table table-hover">
-              <thead>
-                <tr>
-                  <th>التاريخ</th>
-                  <th>النوع</th>
-                  <th>الوصف</th>
-                  <th>المبلغ</th>
-                  <th>التصنيف</th>
-                  <th>المسجل</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let transaction of transactions.slice(0, 10)">
-                  <td>{{ formatDate(transaction.date) }}</td>
-                  <td>
-                    <span class="badge" [ngClass]="'badge-' + getTransactionTypeBadge(transaction.type)">
-                      {{ getTransactionTypeText(transaction.type) }}
-                    </span>
-                  </td>
-                  <td>{{ transaction.description }}</td>
-                  <td [ngClass]="transaction.type === 'income' ? 'text-success' : 'text-danger'">
-                    {{ formatCurrency(transaction.amount) }}
-                  </td>
-                  <td>{{ getCategoryText(transaction.category) }}</td>
-                  <td>{{ transaction.recordedBy?.username || 'نظام' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Transactions Tab -->
-    <div *ngIf="activeTab === 'transactions'" class="transactions-tab">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fas fa-exchange-alt"></i> إدارة المعاملات المالية</h3>
-          <div class="header-controls">
-            <button class="btn btn-primary" (click)="openTransactionModal()">
-              <i class="fas fa-plus"></i> إضافة معاملة
-            </button>
-          </div>
-        </div>
-        
-        <div class="card-body">
-          <!-- Filters -->
-          <div class="filters-section">
-            <div class="row">
-              <div class="col-md-3">
-                <label>من تاريخ</label>
-                <input type="date" class="form-control" [(ngModel)]="dateFilter.startDate">
-              </div>
-              <div class="col-md-3">
-                <label>إلى تاريخ</label>
-                <input type="date" class="form-control" [(ngModel)]="dateFilter.endDate">
-              </div>
-              <div class="col-md-4">
-                <label>بحث</label>
-                <div class="input-group">
-                  <input type="text" class="form-control" [(ngModel)]="searchTerm" 
-                         placeholder="بحث في الوصف أو المبلغ...">
-                  <div class="input-group-append">
-                    <button class="btn btn-outline-primary" (click)="searchTransactions()">
-                      <i class="fas fa-search"></i>
-                    </button>
-                    <button class="btn btn-outline-secondary" (click)="clearSearch()">
-                      <i class="fas fa-times"></i>
-                    </button>
-                  </div>
-                </div>
-              </div>
-              <div class="col-md-2">
-                <label>&nbsp;</label>
-                <div class="btn-group d-flex">
-                  <button class="btn btn-success" (click)="applyDateFilter()">
-                    <i class="fas fa-filter"></i> تطبيق
-                  </button>
-                  <button class="btn btn-secondary" (click)="clearDateFilter()">
-                    <i class="fas fa-times"></i> مسح
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Transactions Table -->
-          <div class="table-responsive mt-3">
-            <div *ngIf="loading.transactions" class="loading-spinner">
-              <i class="fas fa-spinner fa-spin"></i> جاري تحميل المعاملات...
-            </div>
-            
-            <div *ngIf="!loading.transactions && transactions.length === 0" class="empty-state">
-              <i class="fas fa-exchange-alt fa-3x"></i>
-              <h4>لا توجد معاملات</h4>
-              <p>قم بإضافة معاملة مالية جديدة</p>
-              <button class="btn btn-primary" (click)="openTransactionModal()">
-                <i class="fas fa-plus"></i> إضافة معاملة
-              </button>
-            </div>
-            
-            <table *ngIf="!loading.transactions && transactions.length > 0" class="table table-hover">
-              <thead>
-                <tr>
-                  <th>التاريخ</th>
-                  <th>النوع</th>
-                  <th>الوصف</th>
-                  <th>المبلغ</th>
-                  <th>التصنيف</th>
-                  <th>المسجل</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let transaction of transactions">
-                  <td>{{ formatDate(transaction.date) }}</td>
-                  <td>
-                    <span class="badge" [ngClass]="'badge-' + getTransactionTypeBadge(transaction.type)">
-                      {{ getTransactionTypeText(transaction.type) }}
-                    </span>
-                  </td>
-                  <td>{{ transaction.description }}</td>
-                  <td [ngClass]="transaction.type === 'income' ? 'text-success' : 'text-danger'">
-                    <strong>{{ formatCurrency(transaction.amount) }}</strong>
-                  </td>
-                  <td>
-                    <span class="category-badge">
-                      {{ getCategoryText(transaction.category) }}
-                    </span>
-                  </td>
-                  <td>{{ transaction.recordedBy?.username || 'نظام' }}</td>
-                  <td>
-                    <button class="btn btn-sm btn-info" title="عرض التفاصيل">
-                      <i class="fas fa-eye"></i>
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Summary -->
-          <div *ngIf="!loading.transactions && transactions.length > 0" class="summary-section mt-4">
-            <div class="row">
-              <div class="col-md-4">
-                <div class="summary-card bg-success">
-                  <h4>{{ formatCurrency(calculateTotalIncome()) }}</h4>
-                  <p>إجمالي الإيرادات</p>
-                  <small>{{ getTransactionCounts().income }} معاملة</small>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <div class="summary-card bg-danger">
-                  <h4>{{ formatCurrency(calculateTotalExpenses()) }}</h4>
-                  <p>إجمالي المصروفات</p>
-                  <small>{{ getTransactionCounts().expense }} معاملة</small>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <div class="summary-card" [ngClass]="calculateNetProfit() >= 0 ? 'bg-info' : 'bg-warning'">
-                  <h4>{{ formatCurrency(calculateNetProfit()) }}</h4>
-                  <p>صافي الربح</p>
-                  <small>{{ transactions.length }} معاملة إجمالاً</small>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Income Tab -->
-    <div *ngIf="activeTab === 'income'" class="income-tab">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fas fa-money-bill-wave"></i> تقارير الإيرادات</h3>
-        </div>
-        <div class="card-body">
-          <div class="income-reports">
-            <!-- Daily Income -->
-            <div class="report-card">
-              <div class="report-header">
-                <h4><i class="fas fa-calendar-day"></i> إيرادات اليوم</h4>
-                <button class="btn btn-sm btn-outline-primary" (click)="loadDailyIncome()">
-                  <i class="fas fa-sync-alt"></i> تحديث
-                </button>
-              </div>
-              <div class="report-body">
-                <div *ngIf="loading.income" class="loading-spinner">
-                  <i class="fas fa-spinner fa-spin"></i> جاري التحميل...
-                </div>
-                <div *ngIf="!loading.income">
-                  <div class="income-total">
-                    <h2>{{ formatCurrency(dailyIncome.dailyIncome || 0) }}</h2>
-                    <p>إجمالي إيرادات اليوم</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Monthly Income -->
-            <div class="report-card">
-              <div class="report-header">
-                <h4><i class="fas fa-calendar-alt"></i> إيرادات الشهر الحالي</h4>
-              </div>
-              <div class="report-body">
-                <div class="income-total">
-                  <h2>{{ formatCurrency(getCurrentMonthData().income) }}</h2>
-                  <p>إيرادات الشهر الحالي</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Income Breakdown -->
-          <div class="card mt-4">
-            <div class="card-header">
-              <h4><i class="fas fa-chart-pie"></i> توزيع الإيرادات حسب التصنيف</h4>
-            </div>
-            <div class="card-body">
-              <div class="table-responsive">
-                <table class="table">
-                  <thead>
-                    <tr>
-                      <th>التصنيف</th>
-                      <th>المبلغ</th>
-                      <th>النسبة</th>
-                      <th>عدد المعاملات</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let category of getTopCategories()">
-                      <td>{{ getCategoryText(category.name) }}</td>
-                      <td>{{ formatCurrency(category.amount) }}</td>
-                      <td>
-                        <div class="progress">
-                          <div class="progress-bar" [style.width.%]="category.percentage"></div>
-                        </div>
-                        {{ category.percentage.toFixed(1) }}%
-                      </td>
-                      <td>{{ category.count }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Expenses Tab -->
-    <div *ngIf="activeTab === 'expenses'" class="expenses-tab">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fas fa-receipt"></i> إدارة المصروفات</h3>
-          <div class="header-controls">
-            <button class="btn btn-primary" (click)="openExpenseModal()">
-              <i class="fas fa-plus"></i> إضافة مصروف
-            </button>
-          </div>
-        </div>
-        <div class="card-body">
-          <!-- Expenses Table -->
-          <div class="table-responsive">
-            <div *ngIf="loading.transactions" class="loading-spinner">
-              <i class="fas fa-spinner fa-spin"></i> جاري تحميل المصروفات...
-            </div>
-            
-            <div *ngIf="!loading.transactions && expenses.length === 0" class="empty-state">
-              <i class="fas fa-receipt fa-3x"></i>
-              <h4>لا توجد مصروفات</h4>
-              <p>قم بإضافة مصروف جديد</p>
-              <button class="btn btn-primary" (click)="openExpenseModal()">
-                <i class="fas fa-plus"></i> إضافة مصروف
-              </button>
-            </div>
-            
-            <table *ngIf="!loading.transactions && expenses.length > 0" class="table table-hover">
-              <thead>
-                <tr>
-                  <th>التاريخ</th>
-                  <th>الوصف</th>
-                  <th>المبلغ</th>
-                  <th>التصنيف</th>
-                  <th>طريقة الدفع</th>
-                  <th>الحالة</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let expense of expenses">
-                  <td>{{ formatDate(expense.date) }}</td>
-                  <td>{{ expense.description }}</td>
-                  <td class="text-danger">
-                    <strong>{{ formatCurrency(expense.amount) }}</strong>
-                  </td>
-                  <td>
-                    <span class="badge badge-secondary">
-                      {{ getCategoryText(expense.category) }}
-                    </span>
-                  </td>
-                  <td>{{ getPaymentMethodText(expense.paymentMethod) }}</td>
-                  <td>
-                    <span class="badge" [ngClass]="'badge-' + getStatusBadge(expense.status)">
-                      {{ getStatusText(expense.status) }}
-                    </span>
-                  </td>
-                  <td>
-                    <button class="btn btn-sm btn-info" title="عرض التفاصيل">
-                      <i class="fas fa-eye"></i>
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Expense Summary -->
-          <div *ngIf="!loading.transactions && expenses.length > 0" class="summary-section mt-4">
-            <div class="row">
-              <div class="col-md-6">
-                <div class="summary-card bg-danger">
-                  <h4>{{ formatCurrency(calculateTotalExpenses()) }}</h4>
-                  <p>إجمالي المصروفات</p>
-                  <small>{{ expenses.length }} مصروف</small>
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="summary-card bg-info">
-                  <h4>{{ formatCurrency(getCurrentMonthData().expense) }}</h4>
-                  <p>مصروفات الشهر الحالي</p>
-                  <small>من {{ getCurrentDateFormatted() }}</small>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Budgets Tab -->
-    <div *ngIf="activeTab === 'budgets'" class="budgets-tab">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fas fa-chart-pie"></i> إدارة الميزانيات</h3>
-          <div class="header-controls">
-            <button class="btn btn-primary" (click)="openBudgetModal()">
-              <i class="fas fa-plus"></i> إنشاء ميزانية
-            </button>
-          </div>
-        </div>
-        <div class="card-body">
-          <!-- Budgets Table -->
-          <div class="table-responsive">
-            <div *ngIf="loading.transactions" class="loading-spinner">
-              <i class="fas fa-spinner fa-spin"></i> جاري تحميل الميزانيات...
-            </div>
-            
-            <div *ngIf="!loading.transactions && budgets.length === 0" class="empty-state">
-              <i class="fas fa-chart-pie fa-3x"></i>
-              <h4>لا توجد ميزانيات</h4>
-              <p>قم بإنشاء ميزانية جديدة</p>
-              <button class="btn btn-primary" (click)="openBudgetModal()">
-                <i class="fas fa-plus"></i> إنشاء ميزانية
-              </button>
-            </div>
-            
-            <table *ngIf="!loading.transactions && budgets.length > 0" class="table table-hover">
-              <thead>
-                <tr>
-                  <th>العنوان</th>
-                  <th>المبلغ</th>
-                  <th>التصنيف</th>
-                  <th>الفترة</th>
-                  <th>الصرف الفعلي</th>
-                  <th>المتبقي</th>
-                  <th>نسبة الاستخدام</th>
-                  <th>الحالة</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let budget of budgets">
-                  <td>{{ budget.title }}</td>
-                  <td>{{ formatCurrency(budget.amount) }}</td>
-                  <td>{{ getCategoryText(budget.category) }}</td>
-                  <td>
-                    {{ formatDate(budget.startDate) }} - {{ formatDate(budget.endDate) }}
-                  </td>
-                  <td>{{ formatCurrency(budget.actualSpending || 0) }}</td>
-                  <td [ngClass]="isOverBudget(budget) ? 'text-danger' : 'text-success'">
-                    {{ formatCurrency(budget.remainingBudget || budget.amount) }}
-                  </td>
-                  <td>
-                    <div class="progress">
-                      <div class="progress-bar" 
-                           [ngClass]="'bg-' + getPercentageColor(getBudgetUtilization(budget))"
-                           [style.width.%]="getBudgetUtilization(budget)"></div>
-                    </div>
-                    {{ formatPercentage(getBudgetUtilization(budget)) }}
-                  </td>
-                  <td>
-                    <span class="badge" [ngClass]="'badge-' + getStatusBadge(budget.status)">
-                      {{ getStatusText(budget.status) }}
-                    </span>
-                  </td>
-                  <td>
-                    <button class="btn btn-sm btn-info" title="عرض التفاصيل">
-                      <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-warning" title="تعديل">
-                      <i class="fas fa-edit"></i>
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- School Fees Tab -->
-    <div *ngIf="activeTab === 'school-fees'" class="school-fees-tab">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fas fa-user-graduate"></i> رسوم التسجيل</h3>
-          <div class="header-controls">
-            <button class="btn btn-primary" (click)="openSchoolFeeModal()">
-              <i class="fas fa-plus"></i> تسجيل رسوم
-            </button>
-          </div>
-        </div>
-        <div class="card-body">
-          <!-- School Fees Table -->
-          <div class="table-responsive">
-            <div *ngIf="loading.transactions" class="loading-spinner">
-              <i class="fas fa-spinner fa-spin"></i> جاري تحميل رسوم التسجيل...
-            </div>
-            
-            <div *ngIf="!loading.transactions && schoolFees.length === 0" class="empty-state">
-              <i class="fas fa-user-graduate fa-3x"></i>
-              <h4>لا توجد رسوم تسجيل</h4>
-              <button class="btn btn-primary" (click)="openSchoolFeeModal()">
-                <i class="fas fa-plus"></i> تسجيل رسوم جديدة
-              </button>
-            </div>
-            
-            <table *ngIf="!loading.transactions && schoolFees.length > 0" class="table table-hover">
-              <thead>
-                <tr>
-                  <th>الطالب</th>
-                  <th>المبلغ</th>
-                  <th>تاريخ الدفع</th>
-                  <th>طريقة الدفع</th>
-                  <th>الحالة</th>
-                  <th>رقم الفاتورة</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let fee of schoolFees">
-                  <td>{{ fee.student?.name || 'غير معروف' }}</td>
-                  <td>{{ formatCurrency(fee.amount) }}</td>
-                  <td>{{ formatDate(fee.paymentDate) }}</td>
-                  <td>{{ getPaymentMethodText(fee.paymentMethod) }}</td>
-                  <td>
-                    <span class="badge" [ngClass]="'badge-' + getStatusBadge(fee.status)">
-                      {{ getStatusText(fee.status) }}
-                    </span>
-                  </td>
-                  <td>{{ fee.invoiceNumber || 'غير متوفر' }}</td>
-                  <td>
-                    <button *ngIf="fee.status === 'pending'" 
-                            class="btn btn-sm btn-success" 
-                            (click)="paySchoolFee(fee)"
-                            title="دفع">
-                      <i class="fas fa-money-bill-wave"></i>
-                    </button>
-                    <button class="btn btn-sm btn-info" title="عرض التفاصيل">
-                      <i class="fas fa-eye"></i>
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Teacher Commissions Tab -->
-    <div *ngIf="activeTab === 'commissions'" class="commissions-tab">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fas fa-chalkboard-teacher"></i> عمولات الأساتذة</h3>
-        </div>
-        <div class="card-body">
-          <!-- Commissions Table -->
-          <div class="table-responsive">
-            <div *ngIf="loading.transactions" class="loading-spinner">
-              <i class="fas fa-spinner fa-spin"></i> جاري تحميل العمولات...
-            </div>
-            
-            <div *ngIf="!loading.transactions && teacherCommissions.length === 0" class="empty-state">
-              <i class="fas fa-chalkboard-teacher fa-3x"></i>
-              <h4>لا توجد عمولات</h4>
-              <p>سيتم إنشاء العمولات تلقائياً عند دفع رسوم الحصص</p>
-            </div>
-            
-            <table *ngIf="!loading.transactions && teacherCommissions.length > 0" class="table table-hover">
-              <thead>
-                <tr>
-                  <th>الأستاذ</th>
-                  <th>الطالب</th>
-                  <th>الحصة</th>
-                  <th>الشهر</th>
-                  <th>المبلغ</th>
-                  <th>النسبة</th>
-                  <th>تاريخ الدفع</th>
-                  <th>الحالة</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let commission of teacherCommissions">
-                  <td>{{ commission.teacher?.name || 'غير معروف' }}</td>
-                  <td>{{ commission.student?.name || 'غير معروف' }}</td>
-                  <td>{{ commission.class?.name || 'غير معروف' }}</td>
-                  <td>{{ commission.month }}</td>
-                  <td>{{ formatCurrency(commission.amount) }}</td>
-                  <td>{{ commission.percentage }}%</td>
-                  <td>{{ formatDate(commission.paymentDate) }}</td>
-                  <td>
-                    <span class="badge" [ngClass]="'badge-' + getStatusBadge(commission.status)">
-                      {{ getStatusText(commission.status) }}
-                    </span>
-                  </td>
-                  <td>
-                    <button *ngIf="commission.status === 'pending'" 
-                            class="btn btn-sm btn-success" 
-                            (click)="payTeacherCommission(commission)"
-                            title="دفع">
-                      <i class="fas fa-money-bill-wave"></i>
-                    </button>
-                    <button class="btn btn-sm btn-info" title="عرض التفاصيل">
-                      <i class="fas fa-eye"></i>
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Class Commission Tab -->
-    <div *ngIf="activeTab === 'class-commission'" class="class-commission-tab">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fas fa-calculator"></i> حساب عمولة الحصة</h3>
-          <div class="header-controls">
-            <button class="btn btn-primary" (click)="openClassCommissionModal()">
-              <i class="fas fa-calculator"></i> حساب عمولة جديدة
-            </button>
-          </div>
-        </div>
-        <div class="card-body">
-          <!-- Commission Calculator Form -->
-          <div class="commission-calculator">
-            <form [formGroup]="classCommissionForm" (ngSubmit)="calculateClassCommission()">
-              <div class="row">
-                <div class="col-md-4">
-                  <div class="form-group">
-                    <label>الأستاذ *</label>
-                    <select class="form-control" formControlName="teacherId" required>
-                      <option value="">اختر الأستاذ</option>
-                      <option *ngFor="let teacher of teachersList" [value]="teacher._id">
-                        {{ teacher.name }}
-                      </option>
-                    </select>
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="form-group">
-                    <label>الحصة *</label>
-                    <select class="form-control" formControlName="classId" required>
-                      <option value="">اختر الحصة</option>
-                      <option *ngFor="let lesson of lessonsList" [value]="lesson._id">
-                        {{ lesson.name }} - {{ lesson.subject }} ({{ lesson.teacher?.name || 'غير معروف' }})
-                      </option>
-                    </select>
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="form-group">
-                    <label>الشهر *</label>
-                    <input type="month" class="form-control" formControlName="month" required>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="row">
-                <div class="col-md-6">
-                  <div class="form-group">
-                    <label>الجولة (اختياري)</label>
-                    <input type="text" class="form-control" formControlName="round" 
-                           placeholder="مثال: الجولة الأولى">
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="form-group">
-                    <label>طريقة الدفع</label>
-                    <select class="form-control" formControlName="paymentMethod">
-                      <option value="cash">نقداً</option>
-                      <option value="bank">تحويل بنكي</option>
-                      <option value="online">دفع إلكتروني</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="form-group">
-                <label>ملاحظات</label>
-                <textarea class="form-control" formControlName="notes" rows="2"></textarea>
-              </div>
-              
-              <div class="form-actions">
-                <button type="submit" class="btn btn-primary" [disabled]="loading.classCommission">
-                  <i class="fas fa-calculator"></i> حساب العمولة
-                </button>
-                <button type="button" class="btn btn-secondary" (click)="classCommissionForm.reset()">
-                  <i class="fas fa-times"></i> إلغاء
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <!-- Commission Results -->
-          <div *ngIf="loading.classCommission" class="loading-spinner mt-4">
-            <i class="fas fa-spinner fa-spin"></i> جاري حساب العمولة...
-          </div>
-          
-          <div *ngIf="classCommissionData && !loading.classCommission" class="commission-results mt-4">
-            <div class="results-header">
-              <h4>نتائج حساب العمولة</h4>
-              <button class="btn btn-success" (click)="payClassCommission()" 
-                      [disabled]="classCommissionData.summary.commissionStatus === 'paid'">
-                <i class="fas fa-money-bill-wave"></i> دفع العمولة
-              </button>
-            </div>
-            
-            <div class="results-summary">
-              <div class="summary-card bg-info">
-                <h4>{{ formatCurrency(classCommissionData.summary.totalClassRevenue) }}</h4>
-                <p>إجمالي إيرادات الحصة</p>
-              </div>
-              <div class="summary-card bg-warning">
-                <h4>{{ formatCurrency(classCommissionData.summary.totalTeacherCommission) }}</h4>
-                <p>عمولة الأستاذ (70%)</p>
-              </div>
-              <div class="summary-card bg-secondary">
-                <h4>{{ classCommissionData.summary.totalStudents }}</h4>
-                <p>عدد الطلاب</p>
-              </div>
-            </div>
-            
-            <!-- Students List -->
-            <div class="card mt-4">
-              <div class="card-header">
-                <h5>تفاصيل الطلاب</h5>
-              </div>
-              <div class="card-body">
-                <div class="table-responsive">
-                  <table class="table table-sm">
-                    <thead>
-                      <tr>
-                        <th>اسم الطالب</th>
-                        <th>رقم الطالب</th>
-                        <th>عدد الحضور</th>
-                        <th>الحصص المجدولة</th>
-                        <th>نسبة الحضور</th>
-                        <th>الرسوم الشهرية</th>
-                        <th>حصة الأستاذ</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngFor="let student of classCommissionData.students">
-                        <td>{{ student.student.name }}</td>
-                        <td>{{ student.student.studentId }}</td>
-                        <td>{{ student.attendancesCount }}</td>
-                        <td>{{ student.scheduledSessions }}</td>
-                        <td>
-                          <span class="badge" [ngClass]="student.attendancePercentage >= 70 ? 'badge-success' : 'badge-warning'">
-                            {{ student.attendancePercentage }}%
-                          </span>
-                        </td>
-                        <td>{{ formatCurrency(student.monthlyFee) }}</td>
-                        <td class="text-success">{{ formatCurrency(student.teacherShare) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- NEW: Class Payments Management Tab -->
-    <div *ngIf="activeTab === 'class-payments'" class="class-payments-tab">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fas fa-money-check-alt"></i> إدارة مدفوعات الحصص</h3>
-          <div class="header-actions">
-            <button class="btn btn-info" (click)="loadClassPayments()" title="تحديث">
-              <i class="fas fa-sync-alt"></i>
-            </button>
-          </div>
-        </div>
-        
-        <div class="card-body">
-          <!-- Month Filter -->
-          <div class="row mb-4">
-            <div class="col-md-4">
-              <div class="form-group">
-                <label>فلترة حسب الشهر</label>
-                <input type="month" class="form-control" 
-                       [(ngModel)]="selectedPaymentMonth"
-                       (change)="onMonthChange()">
-              </div>
-            </div>
-            <div class="col-md-8">
-              <div class="form-group">
-                <label>بحث (اسم الحصة أو الأستاذ)</label>
-                <div class="input-group">
-                  <input type="text" class="form-control" 
-                         [(ngModel)]="searchTerm"
-                         (keyup)="filterClassPayments()"
-                         placeholder="بحث في اسم الحصة أو الأستاذ...">
-                  <div class="input-group-append">
-                    <button class="btn btn-outline-primary" (click)="filterClassPayments()">
-                      <i class="fas fa-search"></i>
-                    </button>
-                    <button class="btn btn-outline-secondary" (click)="searchTerm = ''; filterClassPayments()">
-                      <i class="fas fa-times"></i>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Loading State -->
-          <div *ngIf="loading.classPayments" class="loading-spinner text-center py-5">
-            <i class="fas fa-spinner fa-spin fa-3x"></i>
-            <p class="mt-3">جاري تحميل بيانات الحصص...</p>
-          </div>
-
-          <!-- Class Payments Table -->
-          <div *ngIf="!loading.classPayments" class="table-responsive">
-            <div *ngIf="filteredClassPayments.length === 0" class="empty-state text-center py-5">
-              <i class="fas fa-money-check-alt fa-3x text-muted"></i>
-              <h4 class="mt-3">لا توجد حصص للشهر المحدد</h4>
-              <p>قم بتغيير الشهر أو تأكد من وجود حصص مسجلة</p>
-            </div>
-            
-            <table *ngIf="filteredClassPayments.length > 0" class="table table-hover">
-              <thead>
-                <tr>
-                  <th>اسم الحصة</th>
-                  <th>المادة</th>
-                  <th>الأستاذ</th>
-                  <th>الشهر</th>
-                  <th>عدد الطلاب</th>
-                  <th>طلاب مدفوعين</th>
-                  <th>سعر الحصة</th>
-                  <th>عمولة الأستاذ (70%)</th>
-                  <th>الحالة</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let payment of filteredClassPayments">
-                  <td>
-                    <strong>{{ payment.class?.name }}</strong><br>
-                    <small class="text-muted">{{ payment.class?.schedule?.length || 0 }} جلسة أسبوعياً</small>
-                  </td>
-                  <td>{{ payment.class?.subject }}</td>
-                  <td>
-                    {{ payment.teacher?.name }}<br>
-                    <small class="text-muted">{{ payment.teacher?.phone }}</small>
-                  </td>
-                  <td>{{ payment.month }}</td>
-                  <td>
-                    <span class="badge badge-info">{{ payment.students?.total || 0 }}</span>
-                  </td>
-                  <td>
-                    <span class="badge" [ngClass]="payment.students?.paid > 0 ? 'badge-success' : 'badge-warning'">
-                      {{ payment.students?.paid || 0 }}
-                    </span>
-                  </td>
-                  <td class="text-success">
-                    <strong>{{ formatCurrency(payment.class?.price) }}</strong>
-                  </td>
-                  <td class="text-warning">
-                    <strong>{{ formatCurrency(payment.commissionAmount) }}</strong>
-                  </td>
-                  <td>
-                    <span class="badge" [ngClass]="{
-                      'badge-success': payment.status === 'paid',
-                      'badge-warning': payment.status === 'pending',
-                      'badge-danger': payment.status === 'late'
-                    }">
-                      {{ getStatusText(payment.status) }}
-                    </span>
-                    <small *ngIf="payment.paymentDate" class="d-block">
-                      {{ formatDate(payment.paymentDate) }}
-                    </small>
-                  </td>
-                  <td>
-                    <!-- View Details Button -->
-                    <button class="btn btn-sm btn-info mb-1" 
-                            title="عرض التفاصيل"
-                            (click)="viewClassPaymentDetails(payment)">
-                      <i class="fas fa-eye"></i>
-                    </button>
-                    
-                    <!-- Pay Button (only if can be paid) -->
-                    <button *ngIf="payment.canPay && payment.students?.paid > 0" 
-                            class="btn btn-sm btn-success mb-1" 
-                            title="دفع العمولة"
-                            (click)="payClassPayment(payment)">
-                      <i class="fas fa-money-bill-wave"></i> دفع
-                    </button>
-                    
-                    <!-- View Receipt Button (if paid) -->
-                    <button *ngIf="payment.status === 'paid'" 
-                            class="btn btn-sm btn-secondary mb-1" 
-                            title="عرض الإيصال">
-                      <i class="fas fa-receipt"></i>
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Summary -->
-          <div *ngIf="!loading.classPayments && filteredClassPayments.length > 0" class="summary-section mt-4">
-            <div class="row">
-              <div class="col-md-3">
-                <div class="summary-card bg-info">
-                  <h4>{{ filteredClassPayments.length }}</h4>
-                  <p>عدد الحصص</p>
-                </div>
-              </div>
-              <div class="col-md-3">
-                <div class="summary-card bg-success">
-                  <h4>{{ getTotalStudents() }}</h4>
-                  <p>إجمالي الطلاب</p>
-                </div>
-              </div>
-              <div class="col-md-3">
-                <div class="summary-card bg-warning">
-                  <h4>{{ formatCurrency(getTotalCommission()) }}</h4>
-                  <p>إجمالي العمولات</p>
-                </div>
-              </div>
-              <div class="col-md-3">
-                <div class="summary-card" [ngClass]="getPendingPaymentsCount() > 0 ? 'bg-danger' : 'bg-secondary'">
-                  <h4>{{ getPendingPaymentsCount() }}</h4>
-                  <p>حصص تحتاج دفع</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Financial Report Tab -->
-    <div *ngIf="activeTab === 'financial-report'" class="financial-report-tab">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fas fa-file-invoice-dollar"></i> التقرير المالي الشهري</h3>
-          <div class="header-controls">
-            <button class="btn btn-success" (click)="exportFinancialReport('excel')" 
-                    [disabled]="loading.export">
-              <i class="fas fa-file-excel"></i> تصدير Excel
-            </button>
-            <button class="btn btn-danger" (click)="exportFinancialReport('pdf')" 
-                    [disabled]="loading.export">
-              <i class="fas fa-file-pdf"></i> تصدير PDF
-            </button>
-          </div>
-        </div>
-        <div class="card-body">
-          <!-- Report Filters -->
-          <div class="report-filters">
-            <form [formGroup]="financialReportForm" (ngSubmit)="loadFinancialReportData()">
-              <div class="row">
-                <div class="col-md-3">
-                  <div class="form-group">
-                    <label>نوع الفترة *</label>
-                    <select class="form-control" formControlName="periodType" (change)="onPeriodTypeChange()">
-                      <option value="monthly">شهري</option>
-                      <option value="custom">مخصص</option>
-                      <option value="yearly">سنوي</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <div class="col-md-3" *ngIf="financialReportForm.get('periodType')?.value === 'monthly'">
-                  <div class="form-group">
-                    <label>الشهر *</label>
-                    <input type="month" class="form-control" formControlName="month" required>
-                  </div>
-                </div>
-                
-                <div class="col-md-3" *ngIf="financialReportForm.get('periodType')?.value === 'yearly'">
-                  <div class="form-group">
-                    <label>السنة *</label>
-                    <input type="number" class="form-control" formControlName="year" 
-                           min="2020" max="2030" required>
-                  </div>
-                </div>
-                
-                <div class="col-md-3" *ngIf="financialReportForm.get('periodType')?.value === 'custom'">
-                  <div class="form-group">
-                    <label>من تاريخ *</label>
-                    <input type="date" class="form-control" formControlName="startDate" required>
-                  </div>
-                </div>
-                
-                <div class="col-md-3" *ngIf="financialReportForm.get('periodType')?.value === 'custom'">
-                  <div class="form-group">
-                    <label>إلى تاريخ *</label>
-                    <input type="date" class="form-control" formControlName="endDate" required>
-                  </div>
-                </div>
-                
-                <div class="col-md-3">
-                  <label>&nbsp;</label>
-                  <button type="submit" class="btn btn-primary btn-block" 
-                          [disabled]="loading.financialReport">
-                    <i class="fas fa-chart-bar"></i> توليد التقرير
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-
-          <!-- Loading State -->
-          <div *ngIf="loading.financialReport" class="loading-spinner mt-4">
-            <i class="fas fa-spinner fa-spin"></i> جاري توليد التقرير...
-          </div>
-
-          <!-- Report Results -->
-          <div *ngIf="monthlyFinancialReport && !loading.financialReport" class="report-results mt-4">
-            <!-- Summary Cards -->
-            <div class="summary-cards">
-              <div class="summary-card bg-success">
-                <h4>{{ formatCurrency(monthlyFinancialReport.income.total) }}</h4>
-                <p>إجمالي الإيرادات</p>
-                <small>{{ monthlyFinancialReport.summary.incomeTransactions }} معاملة</small>
-              </div>
-              
-              <div class="summary-card bg-danger">
-                <h4>{{ formatCurrency(monthlyFinancialReport.expenses.total) }}</h4>
-                <p>إجمالي المصروفات</p>
-                <small>{{ monthlyFinancialReport.summary.expenseTransactions }} معاملة</small>
-              </div>
-              
-              <div class="summary-card" 
-                   [ngClass]="monthlyFinancialReport.profit.netProfit >= 0 ? 'bg-info' : 'bg-warning'">
-                <h4>{{ formatCurrency(monthlyFinancialReport.profit.netProfit) }}</h4>
-                <p>صافي الربح</p>
-                <small>هامش الربح: {{ monthlyFinancialReport.profit.profitMargin }}%</small>
-              </div>
-              
-              <div class="summary-card bg-secondary">
-                <h4>{{ formatCurrency(monthlyFinancialReport.summary.averageDailyIncome) }}</h4>
-                <p>متوسط الإيرادات اليومية</p>
-                <small>متوسط المصروفات: {{ formatCurrency(monthlyFinancialReport.summary.averageDailyExpense) }}</small>
-              </div>
-            </div>
-
-            <!-- Income Breakdown -->
-            <div class="card mt-4">
-              <div class="card-header">
-                <h5>تفصيل الإيرادات</h5>
-              </div>
-              <div class="card-body">
-                <div class="table-responsive">
-                  <table class="table table-sm">
-                    <thead>
-                      <tr>
-                        <th>التاريخ</th>
-                        <th>الوصف</th>
-                        <th>المبلغ</th>
-                        <th>التصنيف</th>
-                        <th>المسجل</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngFor="let item of monthlyFinancialReport.income.details">
-                        <td>{{ formatDate(item.date) }}</td>
-                        <td>{{ item.description }}</td>
-                        <td class="text-success">{{ formatCurrency(item.amount) }}</td>
-                        <td>{{ getCategoryText(item.category) }}</td>
-                        <td>{{ item.recordedBy?.username || 'نظام' }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            <!-- Expenses Breakdown -->
-            <div class="card mt-4">
-              <div class="card-header">
-                <h5>تفصيل المصروفات</h5>
-              </div>
-              <div class="card-body">
-                <div class="table-responsive">
-                  <table class="table table-sm">
-                    <thead>
-                      <tr>
-                        <th>التاريخ</th>
-                        <th>الوصف</th>
-                        <th>المبلغ</th>
-                        <th>التصنيف</th>
-                        <th>المسجل</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr *ngFor="let item of monthlyFinancialReport.expenses.details">
-                        <td>{{ formatDate(item.date) }}</td>
-                        <td>{{ item.description }}</td>
-                        <td class="text-danger">{{ formatCurrency(item.amount) }}</td>
-                        <td>{{ getCategoryText(item.category) }}</td>
-                        <td>{{ item.recordedBy?.username || 'نظام' }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Registration Fees Tab -->
-    <div *ngIf="activeTab === 'registration-fees'" class="registration-fees-tab">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fas fa-id-card"></i> تفاصيل رسوم التسجيل</h3>
-        </div>
-        <div class="card-body">
-          <!-- Registration Fees Table -->
-          <div class="table-responsive">
-            <div *ngIf="loading.registrationFees" class="loading-spinner">
-              <i class="fas fa-spinner fa-spin"></i> جاري تحميل البيانات...
-            </div>
-            
-            <div *ngIf="!loading.registrationFees && registrationFeeDetails.length === 0" class="empty-state">
-              <i class="fas fa-id-card fa-3x"></i>
-              <h4>لا توجد رسوم تسجيل</h4>
-              <p>سيتم عرض رسوم التسجيل هنا عند تسجيلها</p>
-            </div>
-            
-            <table *ngIf="!loading.registrationFees && registrationFeeDetails.length > 0" class="table table-hover">
-              <thead>
-                <tr>
-                  <th>تاريخ الدفع</th>
-                  <th>الطالب</th>
-                  <th>المبلغ</th>
-                  <th>طريقة الدفع</th>
-                  <th>الحالة</th>
-                  <th>رقم الفاتورة</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let fee of registrationFeeDetails">
-                  <td>{{ formatDate(fee.paymentDate) }}</td>
-                  <td>{{ fee.student?.name || 'غير معروف' }}</td>
-                  <td>{{ formatCurrency(fee.amount) }}</td>
-                  <td>{{ getPaymentMethodText(fee.paymentMethod) }}</td>
-                  <td>
-                    <span class="badge" [ngClass]="'badge-' + getStatusBadge(fee.status)">
-                      {{ getStatusText(fee.status) }}
-                    </span>
-                  </td>
-                  <td>{{ fee.invoiceNumber || 'غير متوفر' }}</td>
-                  <td>
-                    <button class="btn btn-sm btn-info" title="عرض الفاتورة">
-                      <i class="fas fa-file-invoice"></i>
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Invoices Tab -->
-    <div *ngIf="activeTab === 'invoices'" class="invoices-tab">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fas fa-file-invoice"></i> إدارة الفواتير</h3>
-        </div>
-        <div class="card-body">
-          <!-- Invoices Table -->
-          <div class="table-responsive">
-            <div *ngIf="loading.transactions" class="loading-spinner">
-              <i class="fas fa-spinner fa-spin"></i> جاري تحميل الفواتير...
-            </div>
-            
-            <div *ngIf="!loading.transactions && invoices.length === 0" class="empty-state">
-              <i class="fas fa-file-invoice fa-3x"></i>
-              <h4>لا توجد فواتير</h4>
-              <p>سيتم إنشاء الفواتير تلقائياً عند إتمام الدفعات</p>
-            </div>
-            
-            <table *ngIf="!loading.transactions && invoices.length > 0" class="table table-hover">
-              <thead>
-                <tr>
-                  <th>رقم الفاتورة</th>
-                  <th>النوع</th>
-                  <th>المستلم</th>
-                  <th>المبلغ الإجمالي</th>
-                  <th>التاريخ</th>
-                  <th>الحالة</th>
-                  <th>طريقة الدفع</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let invoice of invoices">
-                  <td>{{ invoice.invoiceNumber }}</td>
-                  <td>
-                    <span class="badge" [ngClass]="{
-                      'badge-primary': invoice.type === 'school-fee',
-                      'badge-success': invoice.type === 'teacher',
-                      'badge-info': invoice.type === 'staff',
-                      'badge-secondary': invoice.type === 'other'
-                    }">
-                      {{ invoice.type === 'school-fee' ? 'رسوم تسجيل' : 
-                         invoice.type === 'teacher' ? 'معلم' : 
-                         invoice.type === 'staff' ? 'موظف' : 'أخرى' }}
-                    </span>
-                  </td>
-                  <td>{{ invoice.recipient?.name || 'غير معروف' }}</td>
-                  <td>{{ formatCurrency(invoice.totalAmount) }}</td>
-                  <td>{{ formatDate(invoice.date) }}</td>
-                  <td>
-                    <span class="badge" [ngClass]="'badge-' + getStatusBadge(invoice.status)">
-                      {{ getStatusText(invoice.status) }}
-                    </span>
-                  </td>
-                  <td>{{ getPaymentMethodText(invoice.paymentMethod) }}</td>
-                  <td>
-                    <button class="btn btn-sm btn-info" title="عرض الفاتورة">
-                      <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-warning" title="طباعة">
-                      <i class="fas fa-print"></i>
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div class="modal-footer">
+        <button class="btn-back mobile-btn" (click)="closeCommissionStudentAttendanceModal()">إغلاق</button>
       </div>
     </div>
   </div>
 
-  <!-- Modals -->
-
-  <!-- Transaction Modal -->
-  <div class="transaction-modal" data-modal="transaction-modal">
-    <div class="transaction-modal-dialog">
-      <div class="transaction-modal-content">
-        <div class="transaction-modal-header">
-          <h5 class="transaction-modal-title">
-            <i class="fas fa-exchange-alt"></i> إضافة معاملة مالية
-          </h5>
-          <button type="button" class="close" (click)="closeTransactionModal()">
-            <span>&times;</span>
-          </button>
-        </div>
-        <div class="transaction-modal-body">
-          <form [formGroup]="transactionForm" (ngSubmit)="addTransaction()">
-            <div class="form-group">
-              <label>نوع المعاملة *</label>
-              <select class="form-control" formControlName="type" required>
-                <option value="income">إيراد</option>
-                <option value="expense">مصروف</option>
-                <option value="registration">رسوم تسجيل</option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label>المبلغ *</label>
-              <input type="number" class="form-control" formControlName="amount" 
-                     min="1" required placeholder="أدخل المبلغ">
-            </div>
-            
-            <div class="form-group">
-              <label>الوصف *</label>
-              <input type="text" class="form-control" formControlName="description" 
-                     required placeholder="أدخل وصف المعاملة">
-            </div>
-            
-            <div class="form-group">
-              <label>التصنيف *</label>
-              <select class="form-control" formControlName="category" required>
-                <option value="tuition">رسوم دراسية</option>
-                <option value="salary">رواتب</option>
-                <option value="rent">إيجار</option>
-                <option value="utilities">مرافق</option>
-                <option value="supplies">مستلزمات</option>
-                <option value="registration">رسوم تسجيل</option>
-                <option value="other">أخرى</option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label>التاريخ *</label>
-              <input type="date" class="form-control" formControlName="date" required>
-            </div>
-            
-            <div class="transaction-modal-footer">
-              <button type="submit" class="btn btn-primary" 
-                      [disabled]="transactionForm.invalid || loading.transactions">
-                <i class="fas fa-check"></i> حفظ
-              </button>
-              <button type="button" class="btn btn-secondary" 
-                      (click)="closeTransactionModal()">
-                <i class="fas fa-times"></i> إلغاء
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Expense Modal -->
-  <div class="transaction-modal" data-modal="expense-modal">
-    <div class="transaction-modal-dialog">
-      <div class="transaction-modal-content">
-        <div class="transaction-modal-header">
-          <h5 class="transaction-modal-title">
-            <i class="fas fa-receipt"></i> إضافة مصروف
-          </h5>
-          <button type="button" class="close" (click)="closeExpenseModal()">
-            <span>&times;</span>
-          </button>
-        </div>
-        <div class="transaction-modal-body">
-          <form [formGroup]="expenseForm" (ngSubmit)="addExpense()">
-            <div class="form-group">
-              <label>الوصف *</label>
-              <input type="text" class="form-control" formControlName="description" 
-                     required placeholder="وصف المصروف">
-            </div>
-            
-            <div class="form-group">
-              <label>المبلغ *</label>
-              <input type="number" class="form-control" formControlName="amount" 
-                     min="1" required placeholder="أدخل المبلغ">
-            </div>
-            
-            <div class="form-group">
-              <label>التصنيف *</label>
-              <select class="form-control" formControlName="category" required>
-                <option value="salary">رواتب</option>
-                <option value="rent">إيجار</option>
-                <option value="utilities">مرافق</option>
-                <option value="supplies">مستلزمات</option>
-                <option value="maintenance">صيانة</option>
-                <option value="marketing">تسويق</option>
-                <option value="other">أخرى</option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label>طريقة الدفع *</label>
-              <select class="form-control" formControlName="paymentMethod" required>
-                <option value="cash">نقداً</option>
-                <option value="bank">تحويل بنكي</option>
-                <option value="online">دفع إلكتروني</option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label>رقم الإيصال (اختياري)</label>
-              <input type="text" class="form-control" formControlName="receiptNumber" 
-                     placeholder="رقم الإيصال">
-            </div>
-            
-            <div class="transaction-modal-footer">
-              <button type="submit" class="btn btn-primary" 
-                      [disabled]="expenseForm.invalid || loading.transactions">
-                <i class="fas fa-check"></i> حفظ
-              </button>
-              <button type="button" class="btn btn-secondary" 
-                      (click)="closeExpenseModal()">
-                <i class="fas fa-times"></i> إلغاء
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Budget Modal -->
-  <div class="transaction-modal" data-modal="budget-modal">
-    <div class="transaction-modal-dialog">
-      <div class="transaction-modal-content">
-        <div class="transaction-modal-header">
-          <h5 class="transaction-modal-title">
-            <i class="fas fa-chart-pie"></i> إنشاء ميزانية
-          </h5>
-          <button type="button" class="close" (click)="closeBudgetModal()">
-            <span>&times;</span>
-          </button>
-        </div>
-        <div class="transaction-modal-body">
-          <form [formGroup]="budgetForm" (ngSubmit)="createBudget()">
-            <div class="form-group">
-              <label>عنوان الميزانية *</label>
-              <input type="text" class="form-control" formControlName="title" 
-                     required placeholder="أدخل عنوان الميزانية">
-            </div>
-            
-            <div class="form-group">
-              <label>المبلغ *</label>
-              <input type="number" class="form-control" formControlName="amount" 
-                     min="1" required placeholder="أدخل المبلغ">
-            </div>
-            
-            <div class="form-group">
-              <label>التصنيف *</label>
-              <select class="form-control" formControlName="category" required>
-                <option value="operational">تشغيلي</option>
-                <option value="salaries">رواتب</option>
-                <option value="development">تطوير</option>
-                <option value="marketing">تسويق</option>
-                <option value="other">أخرى</option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label>الوصف (اختياري)</label>
-              <textarea class="form-control" formControlName="description" 
-                        rows="2" placeholder="وصف الميزانية"></textarea>
-            </div>
-            
-            <div class="row">
-              <div class="col-md-6">
-                <div class="form-group">
-                  <label>تاريخ البدء *</label>
-                  <input type="date" class="form-control" formControlName="startDate" required>
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="form-group">
-                  <label>تاريخ الانتهاء *</label>
-                  <input type="date" class="form-control" formControlName="endDate" required>
-                </div>
-              </div>
-            </div>
-            
-            <div class="transaction-modal-footer">
-              <button type="submit" class="btn btn-primary" 
-                      [disabled]="budgetForm.invalid || loading.transactions">
-                <i class="fas fa-check"></i> إنشاء
-              </button>
-              <button type="button" class="btn btn-secondary" 
-                      (click)="closeBudgetModal()">
-                <i class="fas fa-times"></i> إلغاء
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- School Fee Modal -->
-  <div class="transaction-modal" data-modal="school-fee-modal">
-    <div class="transaction-modal-dialog">
-      <div class="transaction-modal-content">
-        <div class="transaction-modal-header">
-          <h5 class="transaction-modal-title">
-            <i class="fas fa-user-graduate"></i> تسجيل رسوم تسجيل
-          </h5>
-          <button type="button" class="close" (click)="closeSchoolFeeModal()">
-            <span>&times;</span>
-          </button>
-        </div>
-        <div class="transaction-modal-body">
-          <form [formGroup]="schoolFeeForm" (ngSubmit)="addSchoolFee()">
-            <div class="form-group">
-              <label>رقم الطالب *</label>
-              <input type="text" class="form-control" formControlName="studentId" 
-                     required placeholder="أدخل رقم الطالب">
-            </div>
-            
-            <div class="form-group">
-              <label>المبلغ *</label>
-              <input type="number" class="form-control" formControlName="amount" 
-                     min="1" required value="60">
-            </div>
-            
-            <div class="form-group">
-              <label>طريقة الدفع *</label>
-              <select class="form-control" formControlName="paymentMethod" required>
-                <option value="cash">نقداً</option>
-                <option value="bank">تحويل بنكي</option>
-                <option value="online">دفع إلكتروني</option>
-              </select>
-            </div>
-            
-            <div class="transaction-modal-footer">
-              <button type="submit" class="btn btn-primary" 
-                      [disabled]="schoolFeeForm.invalid || loading.transactions">
-                <i class="fas fa-check"></i> تسجيل
-              </button>
-              <button type="button" class="btn btn-secondary" 
-                      (click)="closeSchoolFeeModal()">
-                <i class="fas fa-times"></i> إلغاء
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Class Commission Modal -->
-  <div class="transaction-modal" data-modal="class-commission-modal">
-    <div class="transaction-modal-dialog">
-      <div class="transaction-modal-content">
-        <div class="transaction-modal-header">
-          <h5 class="transaction-modal-title">
-            <i class="fas fa-calculator"></i> حساب عمولة الحصة
-          </h5>
-          <button type="button" class="close" (click)="closeClassCommissionModal()">
-            <span>&times;</span>
-          </button>
-        </div>
-        <div class="transaction-modal-body">
-          <form [formGroup]="classCommissionForm" (ngSubmit)="calculateClassCommission()">
-            <div class="form-group">
-              <label>الأستاذ *</label>
-              <select class="form-control" formControlName="teacherId" required>
-                <option value="">اختر الأستاذ</option>
-                <option *ngFor="let teacher of teachersList" [value]="teacher._id">
-                  {{ teacher.name }}
-                </option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label>الحصة *</label>
-              <select class="form-control" formControlName="classId" required>
-                <option value="">اختر الحصة</option>
-                <option *ngFor="let lesson of lessonsList" [value]="lesson._id">
-                  {{ lesson.name }} - {{ lesson.subject }} ({{ lesson.teacher?.name || 'غير معروف' }})
-                </option>
-              </select>
-            </div>
-            
-            <div class="form-group">
-              <label>الشهر *</label>
-              <input type="month" class="form-control" formControlName="month" required>
-            </div>
-            
-            <div class="form-group">
-              <label>طريقة الدفع</label>
-              <select class="form-control" formControlName="paymentMethod">
-                <option value="cash">نقداً</option>
-                <option value="bank">تحويل بنكي</option>
-                <option value="online">دفع إلكتروني</option>
-              </select>
-            </div>
-            
-            <div class="transaction-modal-footer">
-              <button type="submit" class="btn btn-primary" 
-                      [disabled]="classCommissionForm.invalid || loading.classCommission">
-                <i class="fas fa-calculator"></i> حساب
-              </button>
-              <button type="button" class="btn btn-secondary" 
-                      (click)="closeClassCommissionModal()">
-                <i class="fas fa-times"></i> إلغاء
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>

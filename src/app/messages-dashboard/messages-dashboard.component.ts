@@ -4,8 +4,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { debounceTime, distinctUntilChanged, Subject } from 'rxjs';
-import { environment } from '../../environments/environment';
-
+import { environment } from '../../environments/environment.development';
 interface Student {
   _id: string;
   name: string;

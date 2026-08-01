@@ -1,10 +1,17 @@
-// ==================== printer.service.ts ====================
 import { Injectable, NgZone } from '@angular/core';
 import Swal from 'sweetalert2';
 
 declare const navigator: any;
 
 // ==================== INTERFACES ====================
+export type ConnectionType = 'usb' | 'com';
+
+export interface ConnectionSettings {
+  type: ConnectionType;
+  comPort?: string;
+  baudRate?: number;
+}
+
 export interface BulkReceiptData {
   receiptNumber: string;
   date: string;
@@ -51,6 +58,10 @@ export class PrinterService {
   private interfaceNumber: number = 0;
   private endpointNumber: number | null = null;
   private isConnected: boolean = false;
+  private connectionType: ConnectionType = 'usb';
+  private comPort: string = 'COM1';
+  private baudRate: number = 9600;
+  private comConnection: any = null;
   
   // عرض الورق الحراري 80 مم
   private readonly CANVAS_WIDTH = 576;
@@ -70,12 +81,62 @@ export class PrinterService {
     window.addEventListener('beforeunload', () => {
       this.disconnect();
     });
+    
+    // استرجاع الإعدادات المحفوظة
+    this.loadConnectionSettings();
   }
 
-  // ==================== CONNECTION METHODS ====================
+  // ==================== CONNECTION SETTINGS ====================
+  
+  private saveConnectionSettings(): void {
+    try {
+      const settings: ConnectionSettings = {
+        type: this.connectionType,
+        comPort: this.comPort,
+        baudRate: this.baudRate
+      };
+      localStorage.setItem('printer_connection_settings', JSON.stringify(settings));
+    } catch (e) {
+      console.error('Error saving printer settings:', e);
+    }
+  }
+
+  private loadConnectionSettings(): void {
+    try {
+      const saved = localStorage.getItem('printer_connection_settings');
+      if (saved) {
+        const settings: ConnectionSettings = JSON.parse(saved);
+        this.connectionType = settings.type || 'usb';
+        this.comPort = settings.comPort || 'COM1';
+        this.baudRate = settings.baudRate || 9600;
+      }
+    } catch (e) {
+      console.error('Error loading printer settings:', e);
+    }
+  }
+
+  getConnectionSettings(): ConnectionSettings | null {
+    try {
+      const saved = localStorage.getItem('printer_connection_settings');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error('Error loading printer settings:', e);
+    }
+    return null;
+  }
+
+  getConnectionType(): ConnectionType {
+    return this.connectionType;
+  }
+
+  // ==================== USB CONNECTION METHODS ====================
 
   async connectToThermalPrinter(): Promise<boolean> {
     try {
+      this.connectionType = 'usb';
+      
       if (!('usb' in navigator)) {
         throw new Error('WebUSB غير مدعوم في هذا المتصفح. يرجى استخدام Chrome أو Edge.');
       }
@@ -127,7 +188,8 @@ export class PrinterService {
       await this.writeToPrinter(new Uint8Array([0x1B, 0x40]));
 
       this.isConnected = true;
-      this.showSuccessToast('تم الاتصال بالطابعة بنجاح');
+      this.saveConnectionSettings();
+      this.showSuccessToast('تم الاتصال بالطابعة عبر USB بنجاح');
       return true;
 
     } catch (err: any) {
@@ -137,11 +199,89 @@ export class PrinterService {
     }
   }
 
+  // ==================== COM PORT CONNECTION METHODS ====================
+
+  async connectToComPort(portName: string = 'COM1', baudRate: number = 9600): Promise<boolean> {
+    try {
+      this.connectionType = 'com';
+      this.comPort = portName;
+      this.baudRate = baudRate;
+      
+      // التحقق من وجود Web Serial API
+      if (!('serial' in navigator)) {
+        throw new Error('Web Serial API غير مدعوم في هذا المتصفح. يرجى استخدام Chrome أو Edge.');
+      }
+
+      // طلب إذن المستخدم للاتصال بالمنفذ
+      let port;
+      const availablePorts = await navigator.serial.getPorts();
+      
+      if (availablePorts.length > 0) {
+        // محاولة استخدام منفذ موجود مسبقاً
+        port = availablePorts[0];
+      } else {
+        // طلب اختيار منفذ من المستخدم
+        port = await navigator.serial.requestPort();
+      }
+
+      // فتح المنفذ مع إعدادات السرعة المحددة
+      await port.open({
+        baudRate: baudRate,
+        dataBits: 8,
+        stopBits: 1,
+        parity: 'none',
+        flowControl: 'none'
+      });
+
+      this.comConnection = port;
+      this.isConnected = true;
+      this.saveConnectionSettings();
+      
+      this.showSuccessToast(`تم الاتصال بالطابعة عبر ${portName} بنجاح`);
+      return true;
+
+    } catch (err: any) {
+      console.error('COM connection error:', err);
+      
+      let errorMessage = 'فشل الاتصال بالمنفذ التسلسلي';
+      if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      this.showConnectionError({
+        message: errorMessage,
+        name: 'COM Connection Error'
+      });
+      
+      this.isConnected = false;
+      return false;
+    }
+  }
+
+  // ==================== GENERIC WRITE METHODS ====================
+
   private async writeToPrinter(data: Uint8Array): Promise<void> {
-    if (!this.device || this.endpointNumber === null) {
+    if (!this.isConnected) {
       throw new Error('الطابعة غير متصلة');
     }
-    await this.device.transferOut(this.endpointNumber, data);
+
+    if (this.connectionType === 'usb' && this.device) {
+      // كتابة عبر USB
+      if (this.endpointNumber === null) {
+        throw new Error('نقطة النهاية غير محددة');
+      }
+      await this.device.transferOut(this.endpointNumber, data);
+    } else if (this.connectionType === 'com' && this.comConnection) {
+      // كتابة عبر COM
+      const writer = this.comConnection.writable.getWriter();
+      try {
+        await writer.write(data);
+      } finally {
+        writer.releaseLock();
+      }
+    } else {
+      throw new Error('لا يوجد اتصال نشط بالطابعة');
+    }
   }
 
   private async writeText(text: string): Promise<void> {
@@ -149,14 +289,19 @@ export class PrinterService {
     await this.writeToPrinter(encoder.encode(text));
   }
 
+  // ==================== DISCONNECT ====================
+
   async disconnect(): Promise<void> {
     try {
-      if (this.device) {
+      if (this.connectionType === 'usb' && this.device) {
         if (this.interfaceNumber !== undefined) {
           await this.device.releaseInterface(this.interfaceNumber);
         }
         await this.device.close();
         this.device = null;
+      } else if (this.connectionType === 'com' && this.comConnection) {
+        await this.comConnection.close();
+        this.comConnection = null;
       }
       this.isConnected = false;
     } catch (err) {
@@ -165,14 +310,19 @@ export class PrinterService {
   }
 
   checkConnectionStatus(): boolean {
-    return this.isConnected && this.device !== null;
+    return this.isConnected;
   }
 
   // ==================== PRINTING METHODS ====================
 
   async printProfessionalReceipt(data: ReceiptData): Promise<boolean> {
     if (!this.isConnected) {
-      const connected = await this.connectToThermalPrinter();
+      let connected = false;
+      if (this.connectionType === 'usb') {
+        connected = await this.connectToThermalPrinter();
+      } else if (this.connectionType === 'com') {
+        connected = await this.connectToComPort(this.comPort, this.baudRate);
+      }
       if (!connected) return false;
     }
 
@@ -223,7 +373,12 @@ export class PrinterService {
   async printReceiptSilent(paymentData: any, classData?: any): Promise<boolean> {
     try {
       if (!this.isConnected) {
-        const connected = await this.connectToThermalPrinter();
+        let connected = false;
+        if (this.connectionType === 'usb') {
+          connected = await this.connectToThermalPrinter();
+        } else if (this.connectionType === 'com') {
+          connected = await this.connectToComPort(this.comPort, this.baudRate);
+        }
         if (!connected) return false;
       }
 
@@ -261,7 +416,16 @@ export class PrinterService {
   }
 
   async printBulkReceipt(data: BulkReceiptData): Promise<boolean> {
-    if (!this.isConnected && !(await this.connectToThermalPrinter())) return false;
+    if (!this.isConnected) {
+      let connected = false;
+      if (this.connectionType === 'usb') {
+        connected = await this.connectToThermalPrinter();
+      } else if (this.connectionType === 'com') {
+        connected = await this.connectToComPort(this.comPort, this.baudRate);
+      }
+      if (!connected) return false;
+    }
+    
     if (!data || !data.payments || data.payments.length === 0) return false;
 
     try {
@@ -791,7 +955,7 @@ export class PrinterService {
     const day = d.getDate().toString().padStart(2, '0');
     const month = (d.getMonth() + 1).toString().padStart(2, '0');
     const year = d.getFullYear().toString();
-    return `${year}-${month}-${day}`; // أرقام عالمية لاتينية 100%
+    return `${year}-${month}-${day}`;
   }
 
   private formatTimeEn(dateInput: any): string {
@@ -808,7 +972,7 @@ export class PrinterService {
     const d = new Date(dateInput);
     const month = (d.getMonth() + 1).toString().padStart(2, '0');
     const year = d.getFullYear().toString();
-    return `${year}-${month}`; // أرقام عالمية للشهر والسنة (مثال: 2026-07)
+    return `${year}-${month}`;
   }
 
   private formatAmount(amount: number): string {
@@ -855,7 +1019,7 @@ export class PrinterService {
       Swal.fire({
         icon: 'error',
         title: 'خطأ في الاتصال',
-        text: 'يرجى التأكد من توصيل الطابعة وتوفر الصلاحيات',
+        text: err.message || 'يرجى التأكد من توصيل الطابعة وتوفر الصلاحيات',
         confirmButtonText: 'موافق'
       });
     });

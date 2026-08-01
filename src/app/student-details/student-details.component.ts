@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import Swal from 'sweetalert2';
 import { environment } from '../../environments/environment.development';
-import { PrinterService, ReceiptData, BulkReceiptData } from '../services/printer.service';
+import { PrinterService, ReceiptData, BulkReceiptData, ConnectionType } from '../services/printer.service';
 
 // ==================== INTERFACES ====================
 interface Student {
@@ -159,15 +159,23 @@ interface RoundPayment {
               </svg>
               تقرير
             </button>
-            <button class="action-btn printer-connect-btn" (click)="connectPrinter()">
-              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
-                <rect x="6" y="14" width="12" height="8" rx="1" ry="1"/>
-                <line x1="9" y1="4" x2="15" y2="4"/>
-                <line x1="9" y1="6" x2="13" y2="6"/>
-              </svg>
-              {{ printerConnected ? '🖨️ طابعة متصلة' : '🔌 اتصال طابعة' }}
-            </button>
+            
+            <!-- زر اتصال الطابعة مع اختيار نوع الاتصال -->
+            <div class="printer-connect-group">
+              <button class="action-btn printer-connect-btn" (click)="showPrinterConnectionModal()">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+                  <rect x="6" y="14" width="12" height="8" rx="1" ry="1"/>
+                  <line x1="9" y1="4" x2="15" y2="4"/>
+                  <line x1="9" y1="6" x2="13" y2="6"/>
+                </svg>
+                {{ printerConnected ? '🖨️ طابعة متصلة' : '🔌 اتصال طابعة' }}
+                <span class="connection-badge" [class.connected]="printerConnected" [class.disconnected]="!printerConnected">
+                  {{ printerConnected ? (connectionType === 'usb' ? 'USB' : 'COM') : 'غير متصل' }}
+                </span>
+              </button>
+            </div>
+            
             <button class="action-btn whatsapp-btn" (click)="sendWhatsAppMessage()" *ngIf="student?.parentPhone">
               <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21z"/>
@@ -1236,6 +1244,76 @@ interface RoundPayment {
         </div>
       </div>
     </div>
+
+    <!-- Printer Connection Modal -->
+    <div class="modal-overlay" *ngIf="showPrinterConnectionModalFlag" (click)="closePrinterConnectionModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h3>
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+              <rect x="6" y="14" width="12" height="8" rx="1" ry="1"/>
+              <line x1="9" y1="4" x2="15" y2="4"/>
+              <line x1="9" y1="6" x2="13" y2="6"/>
+            </svg>
+            اختيار طريقة الاتصال بالطابعة
+          </h3>
+          <button class="close-btn" (click)="closePrinterConnectionModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>🔌 نوع الاتصال</label>
+            <select [(ngModel)]="connectionType" class="form-control">
+              <option value="usb">USB</option>
+              <option value="com">COM (منفذ تسلسلي)</option>
+            </select>
+          </div>
+          
+          <div *ngIf="connectionType === 'com'" class="form-group">
+            <label>📟 منفذ COM</label>
+            <select [(ngModel)]="selectedComPort" class="form-control">
+              <option *ngFor="let port of comPorts" [value]="port">{{ port }}</option>
+            </select>
+            <small class="text-muted">اختر المنفذ التسلسلي المتصل به الطابعة</small>
+          </div>
+          
+          <div *ngIf="connectionType === 'com'" class="form-group">
+            <label>⚡ سرعة الاتصال (Baud Rate)</label>
+            <select [(ngModel)]="selectedBaudRate" class="form-control">
+              <option *ngFor="let rate of baudRates" [value]="rate">{{ rate }}</option>
+            </select>
+          </div>
+          
+          <div class="alert alert-info mt-3">
+            <small>
+              <strong>📌 ملاحظة:</strong>
+              <span *ngIf="connectionType === 'usb'">الطابعات المتصلة عبر USB يتم اكتشافها تلقائياً. تأكد من توصيل الطابعة.</span>
+              <span *ngIf="connectionType === 'com'">للطابعات المتصلة عبر منفذ COM، يرجى اختيار المنفذ الصحيح (مثل COM1, COM2, إلخ).</span>
+            </small>
+          </div>
+          
+          <div class="printer-status mt-3" *ngIf="printerConnected">
+            <div class="status-indicator connected">
+              <span class="status-dot"></span>
+              <span>✅ الطابعة متصلة عبر {{ connectionType === 'usb' ? 'USB' : 'COM' }}</span>
+            </div>
+          </div>
+          <div class="printer-status mt-3" *ngIf="!printerConnected">
+            <div class="status-indicator disconnected">
+              <span class="status-dot"></span>
+              <span>❌ الطابعة غير متصلة</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closePrinterConnectionModal()">إلغاء</button>
+          <button class="btn-primary" (click)="connectPrinterWithSettings()" [disabled]="isConnectingPrinter">
+            <span *ngIf="!isConnectingPrinter">🔌 اتصال</span>
+            <span *ngIf="isConnectingPrinter">⏳ جاري الاتصال...</span>
+          </button>
+        </div>
+      </div>
+    </div>
   `,
   styles: [`
     /* Modern CSS Variables */
@@ -1383,13 +1461,38 @@ interface RoundPayment {
     .print-btn:hover {
       background: var(--gray-300);
     }
+    
+    /* Printer Connect Button Styles */
+    .printer-connect-group {
+      position: relative;
+    }
     .printer-connect-btn {
       background: #6366f1;
       color: white;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
     .printer-connect-btn:hover {
       background: #4f46e5;
     }
+    .connection-badge {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 12px;
+      font-size: 0.6rem;
+      font-weight: 600;
+      margin-left: 0.3rem;
+    }
+    .connection-badge.connected {
+      background: #10b981;
+      color: white;
+    }
+    .connection-badge.disconnected {
+      background: #ef4444;
+      color: white;
+    }
+    
     .whatsapp-btn {
       background: #25D366;
       color: white;
@@ -2619,6 +2722,48 @@ interface RoundPayment {
       color: var(--gray-600);
     }
 
+    /* Printer Status Styles */
+    .printer-status {
+      padding: 0.5rem;
+      border-radius: var(--radius-sm);
+    }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      border-radius: var(--radius-sm);
+    }
+    .status-indicator.connected {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status-indicator.disconnected {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .status-indicator .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .status-indicator.connected .status-dot {
+      background: #10b981;
+    }
+    .status-indicator.disconnected .status-dot {
+      background: #ef4444;
+    }
+    .alert-info {
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 0.75rem;
+      border-radius: var(--radius-sm);
+    }
+    .mt-3 {
+      margin-top: 1rem;
+    }
+
     /* Icons */
     .icon, .icon-sm, .icon-xs {
       stroke-width: 2;
@@ -2858,6 +3003,7 @@ export class StudentDetailsComponent implements OnInit {
   showAddToLessonsModal: boolean = false;
   showRoundSelectionModal: boolean = false;
   showAbsencesModal: boolean = false;
+  showPrinterConnectionModalFlag: boolean = false;
   
   // Payment Data
   classPaymentGroups: ClassPaymentGroup[] = [];
@@ -2925,6 +3071,12 @@ export class StudentDetailsComponent implements OnInit {
   
   // Printer Status
   printerConnected: boolean = false;
+  connectionType: ConnectionType = 'usb';
+  selectedComPort: string = 'COM1';
+  selectedBaudRate: number = 9600;
+  comPorts: string[] = ['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'COM10'];
+  baudRates: number[] = [9600, 19200, 38400, 57600, 115200];
+  isConnectingPrinter: boolean = false;
   
   // Static Data
   months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
@@ -4657,31 +4809,48 @@ loadAvailableClasses(): void {
   
   checkPrinterConnection(): void {
     this.printerConnected = this.printerService.checkConnectionStatus();
+    this.connectionType = this.printerService.getConnectionType() || 'usb';
     this.cdr.detectChanges();
   }
 
-  async connectPrinter(): Promise<void> {
-    try {
-      Swal.fire({
-        title: '🔌 اتصال الطابعة الحرارية',
-        text: 'الرجاء اختيار الطابعة من النافذة المنبثقة',
-        icon: 'info',
-        showCancelButton: true,
-        confirmButtonText: '🖨️ اختيار الطابعة',
-        cancelButtonText: 'إلغاء',
-        allowOutsideClick: false
-      });
+  showPrinterConnectionModal(): void {
+    this.showPrinterConnectionModalFlag = true;
+    // استرجاع الإعدادات المحفوظة
+    const savedSettings = this.printerService.getConnectionSettings();
+    if (savedSettings) {
+      this.connectionType = savedSettings.type || 'usb';
+      this.selectedComPort = savedSettings.comPort || 'COM1';
+      this.selectedBaudRate = savedSettings.baudRate || 9600;
+    }
+  }
 
-      const connected = await this.printerService.connectToThermalPrinter();
+  closePrinterConnectionModal(): void {
+    this.showPrinterConnectionModalFlag = false;
+    this.isConnectingPrinter = false;
+  }
+
+  async connectPrinterWithSettings(): Promise<void> {
+    this.isConnectingPrinter = true;
+    
+    try {
+      let success = false;
       
-      if (connected) {
+      if (this.connectionType === 'usb') {
+        success = await this.printerService.connectToThermalPrinter();
+      } else if (this.connectionType === 'com') {
+        success = await this.printerService.connectToComPort(this.selectedComPort, this.selectedBaudRate);
+      }
+      
+      this.isConnectingPrinter = false;
+      
+      if (success) {
         this.printerConnected = true;
-        this.cdr.detectChanges();
+        this.closePrinterConnectionModal();
         
         Swal.fire({
           icon: 'success',
-          title: '✅ تم الاتصال',
-          text: 'تم الاتصال بالطابعة الحرارية بنجاح!',
+          title: '✅ تم الاتصال بالطابعة',
+          text: `تم الاتصال بالطابعة عبر ${this.connectionType === 'usb' ? 'USB' : `COM (${this.selectedComPort})`} بنجاح`,
           timer: 2000,
           showConfirmButton: false
         });
@@ -4689,11 +4858,12 @@ loadAvailableClasses(): void {
         Swal.fire({
           icon: 'error',
           title: '❌ فشل الاتصال',
-          text: 'لم يتم الاتصال بالطابعة. تأكد من أن الطابعة متصلة ومشغلة.',
+          text: `لم يتم الاتصال بالطابعة عبر ${this.connectionType === 'usb' ? 'USB' : `COM (${this.selectedComPort})`}. تأكد من توصيل الطابعة.`,
           confirmButtonText: 'حسناً'
         });
       }
     } catch (error: any) {
+      this.isConnectingPrinter = false;
       console.error('خطأ في الاتصال بالطابعة:', error);
       Swal.fire({
         icon: 'error',
@@ -4710,7 +4880,7 @@ loadAvailableClasses(): void {
         title: '⚠️ الطابعة غير متصلة',
         html: `
           <div class="text-start">
-            <p>لم يتم الاتصال بالطابعة الحرارية بعد.</p>
+            <p>لم يتم الاتصال بالطابعة بعد.</p>
             <p>يرجى النقر على "اتصال" لاختيار الطابعة من القائمة.</p>
             <div class="alert alert-info mt-3">
               <small>📌 ملاحظة: تأكد من أن الطابعة متصلة بالجهاز ومشغلة.</small>
@@ -4726,10 +4896,8 @@ loadAvailableClasses(): void {
       });
 
       if (result.isConfirmed) {
-        await this.connectPrinter();
-        if (!this.printerService.checkConnectionStatus()) {
-          return;
-        }
+        this.showPrinterConnectionModal();
+        return;
       } else if (result.isDenied) {
         await this.printRegularReceipt(payment);
         return;
@@ -4756,7 +4924,7 @@ loadAvailableClasses(): void {
     try {
       Swal.fire({
         title: '🖨️ جاري الطباعة...',
-        text: 'يرجى الانتظار، يتم إرسال البيانات إلى الطابعة الحرارية.',
+        text: 'يرجى الانتظار، يتم إرسال البيانات إلى الطابعة.',
         allowOutsideClick: false,
         didOpen: () => Swal.showLoading()
       });
@@ -4769,7 +4937,7 @@ loadAvailableClasses(): void {
         Swal.fire({
           icon: 'success',
           title: '✅ تمت الطباعة',
-          text: 'تم طباعة الإيصال على الطابعة الحرارية بنجاح',
+          text: 'تم طباعة الإيصال على الطابعة بنجاح',
           timer: 2000,
           showConfirmButton: false
         });
@@ -4782,10 +4950,10 @@ loadAvailableClasses(): void {
       Swal.close();
       
       const fallbackResult = await Swal.fire({
-        title: '❌ فشل الطباعة على الطابعة الحرارية',
+        title: '❌ فشل الطباعة على الطابعة',
         html: `
           <div class="text-start">
-            <p>حدث خطأ أثناء محاولة الطباعة على الطابعة الحرارية.</p>
+            <p>حدث خطأ أثناء محاولة الطباعة على الطابعة.</p>
             <p>الأسباب المحتملة:</p>
             <ul>
               <li>الطابعة غير متصلة</li>
@@ -4802,8 +4970,7 @@ loadAvailableClasses(): void {
       });
 
       if (fallbackResult.isConfirmed) {
-        await this.connectPrinter();
-        await this.printPaymentReceipt(payment);
+        this.showPrinterConnectionModal();
       } else if (fallbackResult.isDenied) {
         await this.printRegularReceipt(payment);
       }
@@ -5071,7 +5238,7 @@ loadAvailableClasses(): void {
       Swal.close();
       
       const fallbackResult = await Swal.fire({
-        title: '❌ فشل الطباعة على الطابعة الحرارية',
+        title: '❌ فشل الطباعة على الطابعة',
         html: `
           <div class="text-start">
             <p>حدث خطأ أثناء محاولة طباعة الإيصال الموحد.</p>

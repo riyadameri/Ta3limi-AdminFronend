@@ -5017,131 +5017,133 @@ loadAvailableClasses(): void {
     }
   }
 
-  private generateSimpleReceiptHTML(data: any): string {
-    return `
-      <!DOCTYPE html>
-      <html dir="rtl">
-      <head>
-        <meta charset="UTF-8">
-        <title>إيصال دفع - ${data.receiptNumber}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body {
-            font-family: 'Cairo', 'Tahoma', 'Arial', sans-serif;
-            background: #f5f5f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-          }
-          .receipt {
-            max-width: 350px;
-            width: 100%;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-            direction: rtl;
-          }
-          .receipt-header {
-            background: linear-gradient(135deg, #1e3c72, #2a5298);
-            color: white;
-            text-align: center;
-            padding: 20px;
-          }
-          .receipt-header h1 { font-size: 20px; margin-bottom: 5px; }
-          .receipt-header p { font-size: 12px; opacity: 0.9; }
-          .receipt-body { padding: 20px; }
-          .info-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px dashed #e0e0e0;
-          }
-          .info-label { font-weight: bold; color: #555; font-size: 13px; }
-          .info-value { color: #333; font-size: 13px; }
-          .amount-row {
-            background: #e8f5e9;
-            margin: 15px -20px -20px -20px;
-            padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
-          .amount-label { font-weight: bold; font-size: 16px; color: #2e7d32; }
-          .amount-value { font-size: 22px; font-weight: bold; color: #2e7d32; }
-          .receipt-footer {
-            background: #f9f9f9;
-            padding: 15px 20px;
-            text-align: center;
-            font-size: 11px;
-            color: #888;
-            border-top: 1px solid #e0e0e0;
-          }
-          @media print {
-            body { background: white; padding: 0; }
-            .receipt { box-shadow: none; border: 1px solid #ddd; }
-            .receipt-header { background: #1e3c72; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .amount-row { background: #e8f5e9; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="receipt">
-          <div class="receipt-header">
-            <h1>أكاديمية الرواد للتعليم والمعارف</h1>
-            <p>إيصال دفع رسمي</p>
+// في student-details.component.ts - تحديث دالة generateSimpleReceiptHTML
+
+private generateSimpleReceiptHTML(data: any): string {
+  return `
+    <!DOCTYPE html>
+    <html dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <title>إيصال دفع - ${data.receiptNumber}</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Cairo', 'Tahoma', 'Arial', sans-serif;
+          background: #f5f5f5;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 100vh;
+          padding: 20px;
+        }
+        .receipt {
+          max-width: 350px;
+          width: 100%;
+          background: white;
+          border-radius: 16px;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+          overflow: hidden;
+          direction: rtl;
+        }
+        .receipt-header {
+          background: linear-gradient(135deg, #1e3c72, #2a5298);
+          color: white;
+          text-align: center;
+          padding: 20px;
+        }
+        .receipt-header h1 { font-size: 20px; margin-bottom: 5px; }
+        .receipt-header p { font-size: 12px; opacity: 0.9; }
+        .receipt-body { padding: 20px; }
+        .info-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          border-bottom: 1px dashed #e0e0e0;
+        }
+        .info-label { font-weight: bold; color: #555; font-size: 13px; }
+        .info-value { color: #333; font-size: 13px; }
+        .amount-row {
+          background: #e8f5e9;
+          margin: 15px -20px -20px -20px;
+          padding: 15px 20px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .amount-label { font-weight: bold; font-size: 16px; color: #2e7d32; }
+        .amount-value { font-size: 22px; font-weight: bold; color: #2e7d32; }
+        .receipt-footer {
+          background: #f9f9f9;
+          padding: 15px 20px;
+          text-align: center;
+          font-size: 11px;
+          color: #888;
+          border-top: 1px solid #e0e0e0;
+        }
+        @media print {
+          body { background: white; padding: 0; }
+          .receipt { box-shadow: none; border: 1px solid #ddd; }
+          .receipt-header { background: #1e3c72; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .amount-row { background: #e8f5e9; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="receipt">
+        <div class="receipt-header">
+          <h1>أكاديمية الرواد للتعليم والمعارف</h1>
+          <p>إيصال دفع رسمي</p>
+        </div>
+        <div class="receipt-body">
+          <div class="info-row">
+            <span class="info-label">رقم الإيصال:</span>
+            <span class="info-value">${data.receiptNumber}</span>
           </div>
-          <div class="receipt-body">
-            <div class="info-row">
-              <span class="info-label">رقم الإيصال:</span>
-              <span class="info-value">${data.receiptNumber}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">التاريخ:</span>
-              <span class="info-value">${data.date}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">الوقت:</span>
-              <span class="info-value">${data.time}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">الطالب:</span>
-              <span class="info-value">${data.studentName} (${data.studentId})</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">الحصة:</span>
-              <span class="info-value">${data.className}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">الشهر:</span>
-              <span class="info-value">${data.month}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">طريقة الدفع:</span>
-              <span class="info-value">${this.getPaymentMethodLabel(data.paymentMethod)}</span>
-            </div>
-            ${data.notes ? `
-            <div class="info-row">
-              <span class="info-label">ملاحظات:</span>
-              <span class="info-value">${data.notes}</span>
-            </div>
-            ` : ''}
-            <div class="amount-row">
-              <span class="amount-label">المبلغ المدفوع:</span>
-              <span class="amount-value">${data.amount.toLocaleString()} د.ج</span>
-            </div>
+          <div class="info-row">
+            <span class="info-label">التاريخ:</span>
+            <span class="info-value">${data.date}</span>
           </div>
-          <div class="receipt-footer">
-            <p>شكراً لثقتكم</p>
-            <p>نظام إدارة التعليم - ريدوكس</p>
+          <div class="info-row">
+            <span class="info-label">الوقت:</span>
+            <span class="info-value">${data.time}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">الطالب:</span>
+            <span class="info-value">${data.studentName} (${data.studentId})</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">الحصة:</span>
+            <span class="info-value">${data.className || 'غير محدد'}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">الشهر:</span>
+            <span class="info-value">${data.month}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">طريقة الدفع:</span>
+            <span class="info-value">${this.getPaymentMethodLabel(data.paymentMethod)}</span>
+          </div>
+          ${data.notes ? `
+          <div class="info-row">
+            <span class="info-label">ملاحظات:</span>
+            <span class="info-value">${data.notes}</span>
+          </div>
+          ` : ''}
+          <div class="amount-row">
+            <span class="amount-label">المبلغ المدفوع:</span>
+            <span class="amount-value">${data.amount.toLocaleString()} د.ج</span>
           </div>
         </div>
-      </body>
-      </html>
-    `;
-  }
+        <div class="receipt-footer">
+          <p>شكراً لثقتكم</p>
+          <p>نظام إدارة التعليم - ريدوكس</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
 
   private async printMultipleReceipts(payments: Payment[]): Promise<void> {
     if (!payments?.length) {
@@ -5183,79 +5185,89 @@ loadAvailableClasses(): void {
     Swal.fire({ title: 'نتائج الطباعة', html: `<div class="alert alert-success"><h6>✅ تمت الطباعة بنجاح</h6><p><strong>المطبوع:</strong> ${printedCount}</p><p><strong>الإجمالي:</strong> ${payments.length}</p></div>`, icon: 'success', confirmButtonText: 'حسناً' });
   }
 
-  private async printSingleReceiptForMultiplePayments(payments: Payment[], paymentMethod: string, notes?: string): Promise<void> {
-    if (!payments?.length) return;
+// في student-details.component.ts - تحديث دالة printSingleReceiptForMultiplePayments
+
+private async printSingleReceiptForMultiplePayments(payments: Payment[], paymentMethod: string, notes?: string): Promise<void> {
+  if (!payments?.length) return;
+  
+  try {
+    Swal.fire({ 
+      title: '🖨️ جاري إنشاء الإيصال الموحد...', 
+      allowOutsideClick: false, 
+      didOpen: () => Swal.showLoading() 
+    });
     
-    try {
-      Swal.fire({ title: 'جاري إنشاء الإيصال الموحد...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-      
-      const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
-      const bulkReceiptData: BulkReceiptData = {
-        receiptNumber: `BLK-${Date.now().toString().slice(-8)}`,
-        date: new Date().toLocaleDateString('ar-SA'),
-        time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
-        totalAmount: totalAmount,
-        paymentCount: payments.length,
-        studentCount: new Set(payments.map(p => p.studentName || this.student?.name || '')).size,
-        paymentMethod: paymentMethod,
-        payments: payments.map(p => ({
-          studentName: p.studentName || this.student?.name || 'طالب',
-          studentId: p.studentId || this.student?.studentId || '',
-          className: p.className || 'عام',
-          month: p.month,
-          amount: p.amount,
-          notes: p.notes
-        })),
-        notes: notes || `دفع جماعي لـ ${payments.length} دفعة`
-      };
-      
-      Swal.close();
+    const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+    
+    // 🔥 جمع أسماء الحصص لكل دفعة
+    const bulkReceiptData: BulkReceiptData = {
+      receiptNumber: `BLK-${Date.now().toString().slice(-8)}`,
+      date: new Date().toLocaleDateString('ar-SA'),
+      time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
+      totalAmount: totalAmount,
+      paymentCount: payments.length,
+      studentCount: new Set(payments.map(p => p.studentName || this.student?.name || '')).size,
+      paymentMethod: paymentMethod,
+      payments: payments.map(p => ({
+        studentName: p.studentName || this.student?.name || 'طالب',
+        studentId: p.studentId || this.student?.studentId || '',
+        className: p.className || p.class?.name || 'غير محدد', // 🔥 اسم الحصة
+        month: p.month,
+        amount: p.amount,
+        notes: p.notes
+      })),
+      notes: notes || `دفع جماعي لـ ${payments.length} دفعة`
+    };
+    
+    console.log('📤 بيانات الإيصال الموحد:', bulkReceiptData);
+    
+    Swal.close();
 
+    Swal.fire({
+      title: '🖨️ جاري طباعة الإيصال الموحد...',
+      text: 'يرجى الانتظار، يتم إرسال البيانات إلى الطابعة.',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    const success = await this.printerService.printBulkReceipt(bulkReceiptData);
+    
+    Swal.close();
+
+    if (success) {
       Swal.fire({
-        title: '🖨️ جاري طباعة الإيصال الموحد...',
-        text: 'يرجى الانتظار، يتم إرسال البيانات إلى الطابعة.',
-        allowOutsideClick: false,
-        didOpen: () => Swal.showLoading()
+        icon: 'success',
+        title: '✅ تمت الطباعة',
+        text: 'تم طباعة الإيصال الموحد بنجاح مع تفاصيل الحصص',
+        timer: 2000,
+        showConfirmButton: false
       });
+    } else {
+      throw new Error('فشل في طباعة الإيصال الموحد');
+    }
+  } catch (error) {
+    console.error('خطأ في طباعة الإيصال الموحد:', error);
+    Swal.close();
+    
+    const fallbackResult = await Swal.fire({
+      title: '❌ فشل الطباعة على الطابعة',
+      html: `
+        <div class="text-start">
+          <p>حدث خطأ أثناء محاولة طباعة الإيصال الموحد.</p>
+          <p>هل تريد طباعة إيصالات منفصلة بدلاً من ذلك؟</p>
+        </div>
+      `,
+      icon: 'error',
+      showCancelButton: true,
+      confirmButtonText: '📄 طباعة إيصالات منفصلة',
+      cancelButtonText: 'إلغاء'
+    });
 
-      const success = await this.printerService.printBulkReceipt(bulkReceiptData);
-      
-      Swal.close();
-
-      if (success) {
-        Swal.fire({
-          icon: 'success',
-          title: '✅ تمت الطباعة',
-          text: 'تم طباعة الإيصال الموحد بنجاح',
-          timer: 2000,
-          showConfirmButton: false
-        });
-      } else {
-        throw new Error('فشل في طباعة الإيصال الموحد');
-      }
-    } catch (error) {
-      console.error('خطأ في طباعة الإيصال الموحد:', error);
-      Swal.close();
-      
-      const fallbackResult = await Swal.fire({
-        title: '❌ فشل الطباعة على الطابعة',
-        html: `
-          <div class="text-start">
-            <p>حدث خطأ أثناء محاولة طباعة الإيصال الموحد.</p>
-            <p>هل تريد طباعة إيصالات منفصلة بدلاً من ذلك؟</p>
-          </div>
-        `,
-        icon: 'error',
-        showCancelButton: true,
-        confirmButtonText: '📄 طباعة إيصالات منفصلة',
-        cancelButtonText: 'إلغاء'
-      });
-
-      if (fallbackResult.isConfirmed) {
-        await this.printMultipleReceipts(payments);
-      }
+    if (fallbackResult.isConfirmed) {
+      await this.printMultipleReceipts(payments);
     }
   }
+}
 
   printStudentReport(): void {
     if (!this.student) return;

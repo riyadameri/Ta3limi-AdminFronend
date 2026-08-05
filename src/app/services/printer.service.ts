@@ -12,6 +12,8 @@ export interface ConnectionSettings {
   baudRate?: number;
 }
 
+// في printer.service.ts - تحديث واجهة BulkReceiptData
+
 export interface BulkReceiptData {
   receiptNumber: string;
   date: string;
@@ -23,14 +25,13 @@ export interface BulkReceiptData {
   payments: {
     studentName: string;
     studentId: string;
-    className: string;
+    className: string; // 🔥 اسم الحصة مطلوب
     month: string;
     amount: number;
     notes?: string;
   }[];
   notes?: string;
 }
-
 export interface ReceiptData {
   receiptNumber: string;
   date: string;
@@ -675,150 +676,165 @@ export class PrinterService {
     return finalCanvas;
   }
 
-  async createBulkReceiptCanvas(data: BulkReceiptData): Promise<HTMLCanvasElement> {
-    const canvas = document.createElement('canvas');
-    canvas.width = this.CANVAS_WIDTH;
-    canvas.height = 3500;
-    
-    const ctx = canvas.getContext('2d')!;
-    ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000000';
-    ctx.textBaseline = 'top';
-    
-    let yPos = 15;
+// في printer.service.ts - تحديث دالة createBulkReceiptCanvas
 
-    // --- Professional Compact Header ---
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 26px "Cairo", sans-serif';
-    ctx.fillText(this.COMPANY_NAME, canvas.width - 20, yPos);
-    yPos += 34;
+async createBulkReceiptCanvas(data: BulkReceiptData): Promise<HTMLCanvasElement> {
+  const canvas = document.createElement('canvas');
+  canvas.width = this.CANVAS_WIDTH;
+  canvas.height = 3500;
+  
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#000000';
+  ctx.textBaseline = 'top';
+  
+  let yPos = 15;
 
-    ctx.font = 'bold 16px "Cairo", sans-serif';
-    ctx.fillText(this.COMPANY_ADDRESS, canvas.width - 20, yPos);
-    
-    ctx.font = 'bold 16px Arial, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(this.COMPANY_PHONE, 20, yPos);
-    yPos += 30;
-    
-    this.drawDashedLine(ctx, 15, yPos, canvas.width - 30);
-    yPos += 15;
+  // --- Professional Compact Header ---
+  ctx.textAlign = 'right';
+  ctx.font = 'bold 26px "Cairo", sans-serif';
+  ctx.fillText(this.COMPANY_NAME, canvas.width - 20, yPos);
+  yPos += 34;
 
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 20px "Cairo", sans-serif';
-    ctx.fillText('إيصال دفع جماعي', canvas.width / 2, yPos);
-    yPos += 30;
+  ctx.font = 'bold 16px "Cairo", sans-serif';
+  ctx.fillText(this.COMPANY_ADDRESS, canvas.width - 20, yPos);
+  
+  ctx.font = 'bold 16px Arial, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(this.COMPANY_PHONE, 20, yPos);
+  yPos += 30;
+  
+  this.drawDashedLine(ctx, 15, yPos, canvas.width - 30);
+  yPos += 15;
 
-    // --- Info ---
-    const infoItems = [
-      { label: 'رقم الإيصال:', value: data.receiptNumber },
-      { label: 'التاريخ:', value: data.date },
-      { label: 'عدد الدفعات:', value: data.paymentCount.toString() },
-      { label: 'إجمالي الطلاب:', value: data.studentCount.toString() },
-      { label: 'طبع بواسطة:', value: this.USER }
-    ];
-    
-    infoItems.forEach(item => {
-      this.drawKeyValue(ctx, item.label, item.value, yPos);
-      yPos += 26;
-    });
-    
-    yPos += 10;
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 20px "Cairo", sans-serif';
+  ctx.fillText('إيصال دفع جماعي', canvas.width / 2, yPos);
+  yPos += 30;
 
-    // --- Payments Table ---
-    yPos = this.drawSectionBanner(ctx, 'بيانات الدفعات', yPos);
-    
-    ctx.font = 'bold 16px "Cairo", sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText('الطالب', canvas.width - 20, yPos);
-    ctx.textAlign = 'center';
-    ctx.fillText('الشهر', canvas.width / 2, yPos);
-    ctx.textAlign = 'left';
-    ctx.fillText('المبلغ', 20, yPos);
-    
-    yPos += 28;
-    this.drawSolidLine(ctx, 15, yPos, canvas.width - 30);
-    yPos += 12;
+  // --- Info ---
+  const infoItems = [
+    { label: 'رقم الإيصال:', value: data.receiptNumber },
+    { label: 'التاريخ:', value: data.date },
+    { label: 'عدد الدفعات:', value: data.paymentCount.toString() },
+    { label: 'إجمالي الطلاب:', value: data.studentCount.toString() },
+    { label: 'طريقة الدفع:', value: this.translatePaymentMethod(data.paymentMethod) },
+    { label: 'طبع بواسطة:', value: this.USER }
+  ];
+  
+  infoItems.forEach(item => {
+    this.drawKeyValue(ctx, item.label, item.value, yPos);
+    yPos += 26;
+  });
+  
+  yPos += 10;
 
-    data.payments.forEach(payment => {
-      ctx.font = 'bold 16px "Cairo", sans-serif';
-      ctx.textAlign = 'right';
-      
-      const shortName = payment.studentName.length > 20 ? payment.studentName.substring(0, 18) + '..' : payment.studentName;
-      ctx.fillText(shortName, canvas.width - 20, yPos);
-      
-      ctx.textAlign = 'center';
-      ctx.fillText(payment.month, canvas.width / 2, yPos);
-      
-      ctx.font = 'bold 16px Arial, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(this.formatAmount(payment.amount), 20, yPos);
-      
-      yPos += 32;
-    });
+  // --- Payments Table with Class Name ---
+  yPos = this.drawSectionBanner(ctx, '📚 تفاصيل الدفعات', yPos);
+  
+  // Table Header - مع إضافة عمود الحصة
+  ctx.font = 'bold 15px "Cairo", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('الطالب', canvas.width - 20, yPos);
+  ctx.textAlign = 'right';
+  ctx.fillText('الحصة', canvas.width - 20 - 140, yPos); // عمود الحصة
+  ctx.textAlign = 'center';
+  ctx.fillText('الشهر', canvas.width / 2, yPos);
+  ctx.textAlign = 'left';
+  ctx.fillText('المبلغ', 20, yPos);
+  
+  yPos += 28;
+  this.drawSolidLine(ctx, 15, yPos, canvas.width - 30);
+  yPos += 12;
 
-    this.drawSolidLine(ctx, 15, yPos, canvas.width - 30);
-    yPos += 22;
-
-    // --- Total ---
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 22px "Cairo", sans-serif';
-    ctx.fillText('الإجمالي الكلي:', canvas.width - 20, yPos);
-    
-    ctx.textAlign = 'left';
-    ctx.font = 'bold 22px Arial, sans-serif';
-    ctx.fillText(`${this.formatAmount(data.totalAmount)} DZD`, 20, yPos);
-    yPos += 38;
-    
-    this.drawDashedLine(ctx, 15, yPos, canvas.width - 30);
-    yPos += 20;
-
-    // --- Notes ---
-    if (data.notes && data.notes.trim()) {
-      ctx.textAlign = 'right';
-      ctx.font = 'bold 16px "Cairo", sans-serif';
-      ctx.fillText('ملاحظات:', canvas.width - 20, yPos);
-      yPos += 24;
-      
-      const lines = this.splitTextIntoLines(ctx, data.notes, canvas.width - 40, 15);
-      lines.forEach(line => {
-        ctx.fillText(line.trim(), canvas.width - 20, yPos);
-        yPos += 22;
-      });
-      yPos += 10;
-    }
-
-    // --- Footer ---
-    ctx.textAlign = 'center';
+  // Table Rows with Class Name
+  data.payments.forEach(payment => {
     ctx.font = 'bold 15px "Cairo", sans-serif';
-    ctx.fillText('نظام إدارة التعليم - رواد المعرفة', canvas.width / 2, yPos);
-    yPos += 22;
     
-    ctx.font = 'bold 13px Arial, sans-serif';
-    ctx.fillText(`Powered By: ${this.DEVELOPER_NAME}`, canvas.width / 2, yPos);
-    yPos += 22;
+    // اسم الطالب
+    ctx.textAlign = 'right';
+    const shortName = payment.studentName.length > 15 ? payment.studentName.substring(0, 13) + '..' : payment.studentName;
+    ctx.fillText(shortName, canvas.width - 20, yPos);
     
-    ctx.font = 'bold 13px "Cairo", sans-serif';
-    ctx.fillText('إيصال رسمي - يرجى الاحتفاظ به', canvas.width / 2, yPos);
-    yPos += 25;
+    // اسم الحصة (جديد)
+    ctx.textAlign = 'right';
+    const shortClass = payment.className.length > 15 ? payment.className.substring(0, 13) + '..' : payment.className;
+    ctx.fillText(shortClass, canvas.width - 20 - 140, yPos);
     
-    ctx.font = 'bold 16px "Cairo", sans-serif';
-    ctx.fillText('شكراً لثقتكم بنا', canvas.width / 2, yPos);
-    yPos += 35;
+    // الشهر
+    ctx.textAlign = 'center';
+    ctx.fillText(payment.month || 'غير محدد', canvas.width / 2, yPos);
+    
+    // المبلغ
+    ctx.font = 'bold 15px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(this.formatAmount(payment.amount), 20, yPos);
+    
+    yPos += 32;
+  });
 
-    const finalCanvas = document.createElement('canvas');
-    finalCanvas.width = this.CANVAS_WIDTH;
-    finalCanvas.height = yPos;
-    const finalCtx = finalCanvas.getContext('2d')!;
-    finalCtx.imageSmoothingEnabled = false;
-    finalCtx.fillStyle = '#FFFFFF';
-    finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
-    finalCtx.drawImage(canvas, 0, 0);
+  this.drawSolidLine(ctx, 15, yPos, canvas.width - 30);
+  yPos += 22;
+
+  // --- Total ---
+  ctx.textAlign = 'right';
+  ctx.font = 'bold 22px "Cairo", sans-serif';
+  ctx.fillText('الإجمالي الكلي:', canvas.width - 20, yPos);
+  
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 22px Arial, sans-serif';
+  ctx.fillText(`${this.formatAmount(data.totalAmount)} DZD`, 20, yPos);
+  yPos += 38;
+  
+  this.drawDashedLine(ctx, 15, yPos, canvas.width - 30);
+  yPos += 20;
+
+  // --- Notes ---
+  if (data.notes && data.notes.trim()) {
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 16px "Cairo", sans-serif';
+    ctx.fillText('📝 ملاحظات:', canvas.width - 20, yPos);
+    yPos += 24;
     
-    return finalCanvas;
+    const lines = this.splitTextIntoLines(ctx, data.notes, canvas.width - 40, 15);
+    lines.forEach(line => {
+      ctx.fillText(line.trim(), canvas.width - 20, yPos);
+      yPos += 22;
+    });
+    yPos += 10;
   }
+
+  // --- Footer ---
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 15px "Cairo", sans-serif';
+  ctx.fillText('نظام إدارة التعليم - رواد المعرفة', canvas.width / 2, yPos);
+  yPos += 22;
+  
+  ctx.font = 'bold 13px Arial, sans-serif';
+  ctx.fillText(`Powered By: ${this.DEVELOPER_NAME}`, canvas.width / 2, yPos);
+  yPos += 22;
+  
+  ctx.font = 'bold 13px "Cairo", sans-serif';
+  ctx.fillText('إيصال رسمي - يرجى الاحتفاظ به', canvas.width / 2, yPos);
+  yPos += 25;
+  
+  ctx.font = 'bold 16px "Cairo", sans-serif';
+  ctx.fillText('شكراً لثقتكم بنا', canvas.width / 2, yPos);
+  yPos += 35;
+
+  const finalCanvas = document.createElement('canvas');
+  finalCanvas.width = this.CANVAS_WIDTH;
+  finalCanvas.height = yPos;
+  const finalCtx = finalCanvas.getContext('2d')!;
+  finalCtx.imageSmoothingEnabled = false;
+  finalCtx.fillStyle = '#FFFFFF';
+  finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+  finalCtx.drawImage(canvas, 0, 0);
+  
+  return finalCanvas;
+}
 
   // ==================== IMAGE PROCESSING ====================
 

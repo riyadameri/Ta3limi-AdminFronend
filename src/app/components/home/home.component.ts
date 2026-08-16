@@ -15,11 +15,18 @@ import { NavBarComponent } from '../layout/nav-bar/nav-bar.component';
     NavBarComponent
   ],
   template: `
-    <div class="layout-wrapper" [class.sidebar-hidden]="!sidebarOpen && isMobile" dir="rtl">
+    <!-- الكلاسات الديناميكية هنا تتفاعل مع حالة النافبار بفضل الـ Template Reference (#navBar) -->
+    <div class="layout-wrapper" 
+         [class.sidebar-hidden]="!sidebarOpen && isMobile" 
+         [class.sidebar-mini]="navBar.isMiniMode"
+         [class.sidebar-collapsed]="navBar.collapsed"
+         dir="rtl">
+      
       <app-header class="main-header-fixed"></app-header>
       
       <div class="layout-container">
-        <app-nav-bar 
+        <!-- متغير مرجعي #navBar للوصول لخصائص الشريط الجانبي -->
+        <app-nav-bar #navBar
           class="side-navigation" 
           [class.mobile-active]="sidebarOpen" 
           [isMobile]="isMobile"
@@ -50,9 +57,11 @@ import { NavBarComponent } from '../layout/nav-bar/nav-bar.component';
     :host {
       --header-height: 80px;
       --sidebar-width: 280px;
-      --sidebar-collapsed-width: 85px;
+      --sidebar-mini-width: 65px; 
+      --sidebar-collapsed-width: 85px; 
       --bg-canvas: #f4f7fe;
-      --transition-speed: 0.35s;
+      --transition-speed: 0.3s;
+      --transition-curve: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .layout-wrapper {
@@ -60,9 +69,9 @@ import { NavBarComponent } from '../layout/nav-bar/nav-bar.component';
       flex-direction: column;
       min-height: 100vh;
       background-color: var(--bg-canvas);
+      overflow-x: hidden;
     }
 
-    /* تنسيق الهيدر الثابت */
     .main-header-fixed {
       position: fixed;
       top: 0;
@@ -78,7 +87,6 @@ import { NavBarComponent } from '../layout/nav-bar/nav-bar.component';
       min-height: calc(100vh - var(--header-height));
     }
 
-    /* تنسيق القائمة الجانبية */
     .side-navigation {
       position: fixed;
       right: 0;
@@ -86,27 +94,34 @@ import { NavBarComponent } from '../layout/nav-bar/nav-bar.component';
       bottom: 0;
       width: var(--sidebar-width);
       z-index: 1040;
-      transition: transform var(--transition-speed) ease;
     }
 
-    /* منطقة المحتوى */
     .main-viewport {
       flex: 1;
-      margin-right: var(--sidebar-width); /* حجز مساحة للسايدبار */
+      margin-right: var(--sidebar-width); 
       padding: 2rem;
-      transition: margin var(--transition-speed) ease;
+      transition: margin-right var(--transition-speed) var(--transition-curve);
       display: flex;
       flex-direction: column;
+    }
+    
+    /* 1. تمدد المحتوى عند تفعيل الوضع الإبداعي */
+    .layout-wrapper.sidebar-mini .main-viewport {
+      margin-right: var(--sidebar-mini-width);
+    }
+
+    /* 2. تمدد المحتوى عند تفعيل وضع الطي العادي */
+    .layout-wrapper.sidebar-collapsed .main-viewport {
+      margin-right: var(--sidebar-collapsed-width);
     }
 
     .content-canvas {
       width: 100%;
-      max-width: 1400px; /* تحديد أقصى عرض لراحة العين */
+      max-width: 1400px;
       margin: 0 auto;
       animation: fadeIn 0.5s ease-out;
     }
 
-    /* التحكم في الجوال */
     .mobile-control-bar {
       margin-bottom: 1.5rem;
     }
@@ -125,7 +140,6 @@ import { NavBarComponent } from '../layout/nav-bar/nav-bar.component';
       box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
     }
 
-    /* طبقة التعتيم الجمالية */
     .glass-shield {
       position: fixed;
       inset: 0;
@@ -133,11 +147,6 @@ import { NavBarComponent } from '../layout/nav-bar/nav-bar.component';
       backdrop-filter: blur(4px);
       z-index: 1030;
       animation: shieldFade 0.3s ease;
-    }
-
-    /* حالات الشاشات الكبيرة (عندما يكون السايدبار مصغراً) */
-    :host-context(.is-collapsed) .main-viewport {
-      margin-right: var(--sidebar-collapsed-width);
     }
 
     @keyframes fadeIn {
@@ -150,15 +159,15 @@ import { NavBarComponent } from '../layout/nav-bar/nav-bar.component';
       to { opacity: 1; }
     }
 
-    /* التجاوب مع الجوال */
     @media (max-width: 768px) {
       .main-viewport {
-        margin-right: 0 !important;
+        margin-right: 0 !important; 
         padding: 1rem;
       }
 
       .side-navigation {
-        transform: translateX(100%); /* إخفاء السايدبار خارج الشاشة يميناً */
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
       }
 
       .side-navigation.mobile-active {
@@ -166,7 +175,6 @@ import { NavBarComponent } from '../layout/nav-bar/nav-bar.component';
       }
     }
 
-    /* منع التمرير عند فتح القائمة */
     :host ::ng-deep body.no-scroll {
       overflow: hidden;
     }

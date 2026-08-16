@@ -5,7 +5,7 @@ import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { environment } from '../../environments/environment.development';
 import { Subject, takeUntil, debounceTime, distinctUntilChanged } from 'rxjs';
-
+import { SoundService } from '../sound.service';
 // ==========================================
 // واجهات البيانات
 // ==========================================
@@ -2110,7 +2110,7 @@ subjectsList: string[] = [
   
   'علوم طبيعية', 
   'رياضيات', 
-  'فيزياء', 'علوم', 
+  'فيزياء', 
   'لغة عربية', 
   'لغة فرنسية', 
   'لغة انجليزية', 
@@ -2119,7 +2119,6 @@ subjectsList: string[] = [
   'كيمياء', 
   'تربية إسلامية', 
   "تسيير و اقتصاد",
-  'علوم فيزيائية', 
 ];
 
   // ==========================================
@@ -2161,7 +2160,8 @@ subjectsList: string[] = [
   // ==========================================
   constructor(
     private http: HttpClient,
-    private router: Router
+    private router: Router,
+    private soundService: SoundService, 
   ) {}
 
   // ==========================================
@@ -2304,12 +2304,14 @@ subjectsList: string[] = [
       .subscribe({
         next: (response: any) => {
           this.showToast('✅ تم إضافة الأستاذ بنجاح', 'success');
+          this.soundService.playStudentAdded();
           this.loadTeachers();
           this.closeAllPopups();
           this.isSaving = false;
         },
         error: (err) => {
           this.showToast('❌ حدث خطأ أثناء إضافة الأستاذ', 'error');
+          this.soundService.playError();
           this.isSaving = false;
         }
       });
@@ -2448,6 +2450,7 @@ subjectsList: string[] = [
   }
 
   openEditModal(teacher: Teacher): void {
+    this.soundService.playClick();
     this.selectedTeacher = teacher;
     this.teacherForm = {
       name: teacher.name,
@@ -2469,6 +2472,7 @@ subjectsList: string[] = [
   }
 
   selectTeacher(teacher: Teacher): void {
+    this.soundService.playClick();
     this.selectedTeacher = teacher;
     this.selectedTeacherId = teacher._id;
     this.loadTeacherDetails();
@@ -2477,6 +2481,7 @@ subjectsList: string[] = [
   }
 
   closeAllPopups(): void {
+    this.soundService.playClick();
     this.showAddPopup = false;
     this.showEditModal = false;
     this.showDetailsPopup = false;

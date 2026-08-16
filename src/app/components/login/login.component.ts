@@ -4,8 +4,9 @@
   import Swal from 'sweetalert2';
   import { CommonModule } from '@angular/common';
 import { environment } from '../../../environments/environment.development';
+import { SoundService } from '../../sound.service';
 
-  @Component({
+@Component({
     selector: 'app-login',
     standalone: true,
     imports: [FormsModule, CommonModule],
@@ -33,7 +34,7 @@ import { environment } from '../../../environments/environment.development';
       classes: 0
     };
 
-    constructor(private router: Router) {}
+    constructor(private router: Router, private soundService: SoundService) {}
 
     ngOnInit(): void {
       this.loadSavedSchoolKey();
@@ -204,7 +205,8 @@ import { environment } from '../../../environments/environment.development';
           
           const token = localStorage.getItem('token');
           console.log('التوكن المحفوظ:', token ? 'موجود (طول: ' + token.length + ')' : 'غير موجود');
-          
+                    this.soundService.playLogin();
+
           await Swal.fire({
             title: 'تم تسجيل الدخول بنجاح',
             text: `مرحبا ${data.data.user.fullName || data.data.user.username}`,
@@ -259,12 +261,17 @@ import { environment } from '../../../environments/environment.development';
         localStorage.setItem('user', JSON.stringify(userData));
         
         if (data.data.school) {
-          localStorage.setItem('school', JSON.stringify(data.data.school));
-          console.log('تم حفظ المدرسة:', {
-            id: data.data.school._id,
-            name: data.data.school.name,
-            schoolKey: data.data.school.schoolKey
-          });
+          const schoolData = {
+        _id: data.data.school._id,
+        name: data.data.school.name,
+        schoolKey: data.data.school.schoolKey,
+        phone: data.data.school.phone || '',
+        email: data.data.school.email || '',
+        address: data.data.school.address || ''  // ✅ إضافة هذا السطر
+
+          };
+          localStorage.setItem('school', JSON.stringify(schoolData));
+          console.log('تم حفظ المدرسة:', schoolData);
         }
         
         if (data.data.school?.subscription) {
@@ -394,8 +401,9 @@ import { environment } from '../../../environments/environment.development';
         const data = await response.json();
 
         if (response.ok && data.success) {
+          this.soundService.playLogin();
           this.saveSessionData(data);
-
+          this.soundService.playNotification();
           await Swal.fire({
             title: 'تم تسجيل الدخول بنجاح',
             text: 'جاري تحويلك إلى واجهة المحاسبة...',

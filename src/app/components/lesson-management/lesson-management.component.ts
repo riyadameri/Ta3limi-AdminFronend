@@ -4,6 +4,7 @@ import { Router, RouterModule } from '@angular/router';
 import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { environment } from '../../../environments/environment.development';
+import { SoundService } from '../../sound.service';
 // ==============================================
 // الواجهات (Interfaces)
 // ==============================================
@@ -29,6 +30,12 @@ interface Class {
       name: string;
     };
   }>;
+  description?: string;
+  roundSettings?: {
+    sessionCount: number;
+    sessionDuration: number;
+    breakBetweenSessions: number;
+  };
   createdAt: Date;
 }
 
@@ -205,7 +212,7 @@ interface Classroom {
                 </td>
                 <td class="text-center" (click)="$event.stopPropagation()">
                   <div class="action-btns">
-                    <button class="icon-btn edit" (click)="navigateToDetails(lesson._id)" title="تعديل">
+                    <button class="icon-btn edit" (click)="openEditLessonDialog(lesson)" title="تعديل">
                       <i class="fas fa-edit"></i>
                     </button>
                     <button class="icon-btn delete" (click)="deleteLesson(lesson._id, $event)" title="حذف">
@@ -235,7 +242,7 @@ interface Classroom {
                 <strong>{{ lesson.name }}</strong>
               </div>
               <div class="card-actions">
-                <button class="icon-btn edit" (click)="navigateToDetails(lesson._id)" title="تعديل">
+                <button class="icon-btn edit" (click)="openEditLessonDialog(lesson)" title="تعديل">
                   <i class="fas fa-edit"></i>
                 </button>
                 <button class="icon-btn delete" (click)="deleteLesson(lesson._id, $event)" title="حذف">
@@ -300,7 +307,9 @@ interface Classroom {
         </div>
       </div>
 
+      <!-- ========================================== -->
       <!-- نافذة إضافة حصة جديدة -->
+      <!-- ========================================== -->
       <div class="popup-backdrop" *ngIf="showAddDialog" (click)="closeDialogOnBackdrop($event)">
         <div class="popup-container">
           <div class="popup-header">
@@ -376,8 +385,86 @@ interface Classroom {
         </div>
       </div>
 
+      <!-- ========================================== -->
+      <!-- نافذة تعديل حصة (جديدة) -->
+      <!-- ========================================== -->
+      <div class="popup-backdrop" *ngIf="showEditDialog" (click)="closeDialogOnBackdrop($event)">
+        <div class="popup-container">
+          <div class="popup-header">
+            <h3>تعديل حصة تعليمية</h3>
+            <button class="close-btn" (click)="showEditDialog = false">&times;</button>
+          </div>
+          <div class="popup-body">
+            <div class="form-grid">
+              <div class="form-group full">
+                <label>اسم الحصة *</label>
+                <input type="text" [(ngModel)]="editLesson.name" class="form-control" 
+                       placeholder="مثلاً: مراجعة الميكانيك للباكالوريا">
+              </div>
+              <div class="form-group">
+                <label>المادة</label>
+                <select [(ngModel)]="editLesson.subject" class="form-control">
+                  <option *ngFor="let s of subjects" [value]="s">{{s}}</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>المستوى</label>
+                <select [(ngModel)]="editLesson.academicYear" class="form-control">
+                  <option *ngFor="let y of academicYears" [value]="y">{{y}}</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>الأستاذ</label>
+                <select [(ngModel)]="editLesson.teacher" class="form-control">
+                  <option value="">اختر الأستاذ</option>
+                  <option *ngFor="let t of teachers" [value]="t._id">{{t.name}}</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>سعر الحصة (د.ج)</label>
+                <input type="number" [(ngModel)]="editLesson.price" class="form-control" min="0">
+              </div>
+              <div class="form-group">
+                <label>نظام الدفع</label>
+                <select [(ngModel)]="editLesson.paymentSystem" class="form-control">
+                  <option value="monthly">شهري</option>
+                  <option value="rounds">جولات</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="schedule-section">
+              <div class="section-title">
+                <h4>التوقيت والمكان</h4>
+                <button class="btn-text" (click)="addEditScheduleRow()">+ إضافة موعد</button>
+              </div>
+              <div class="schedule-rows">
+                <div class="schedule-row" *ngFor="let row of editLesson.schedule; let i = index">
+                  <select [(ngModel)]="row.day" class="form-control small">
+                    <option value="">اليوم</option>
+                    <option *ngFor="let d of days" [value]="d">{{d}}</option>
+                  </select>
+                  <input type="time" [(ngModel)]="row.time" class="form-control small">
+                  <select [(ngModel)]="row.classroom" class="form-control small">
+                    <option value="">القاعة</option>
+                    <option *ngFor="let c of classrooms" [value]="c._id">{{c.name}}</option>
+                  </select>
+                  <button class="remove-btn" (click)="removeEditScheduleRow(i)">&times;</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="popup-footer">
+            <button class="btn btn-outline" (click)="showEditDialog = false">إلغاء</button>
+            <button class="btn btn-primary" (click)="updateLesson()" [disabled]="loading">
+              {{ loading ? 'جاري التحديث...' : 'تحديث الحصة' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- رسائل التنبيه -->
-      <div class="toast success" *ngIf="successMessage">
+      <div class="toast success" *ngIf="successMessage" >
         <i class="fas fa-check-circle"></i>
         <span>{{ successMessage }}</span>
       </div>
@@ -1090,6 +1177,7 @@ export class LessonManagementComponent implements OnInit {
   filterAcademicYear = '';
   filterTeacher = '';
   
+  // نافذة الإضافة
   showAddDialog = false;
   newLesson = {
     name: '',
@@ -1099,6 +1187,29 @@ export class LessonManagementComponent implements OnInit {
     teacher: '',
     description: '',
     paymentSystem: 'monthly' as 'monthly' | 'rounds',
+    roundSettings: {
+      sessionCount: 8,
+      sessionDuration: 2,
+      breakBetweenSessions: 0
+    },
+    schedule: [] as Array<{
+      day: string;
+      time: string;
+      classroom: string;
+    }>
+  };
+  
+  // نافذة التعديل (جديدة)
+  showEditDialog = false;
+  editLesson: any = {
+    _id: '',
+    name: '',
+    subject: '',
+    academicYear: '',
+    price: 0,
+    teacher: '',
+    description: '',
+    paymentSystem: 'monthly',
     roundSettings: {
       sessionCount: 8,
       sessionDuration: 2,
@@ -1124,7 +1235,7 @@ export class LessonManagementComponent implements OnInit {
   sortDirection: 'asc' | 'desc' = 'asc';
   selectedLessons = new Set<string>();
   
-  // ✅ عنوان API
+  // عنوان API
   private apiUrl = environment.apiUrl;
 
   // ==========================================
@@ -1133,7 +1244,8 @@ export class LessonManagementComponent implements OnInit {
   
   constructor(
     private http: HttpClient,
-    private router: Router
+    private router: Router, 
+    private soundService: SoundService
   ) {}
 
   // ==========================================
@@ -1152,7 +1264,6 @@ export class LessonManagementComponent implements OnInit {
 
   private getSchoolId(): string | null {
     try {
-      // ✅ من user object
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const user = JSON.parse(userStr);
@@ -1162,7 +1273,6 @@ export class LessonManagementComponent implements OnInit {
         }
       }
 
-      // ✅ من school object
       const schoolStr = localStorage.getItem('school');
       if (schoolStr) {
         const school = JSON.parse(schoolStr);
@@ -1172,7 +1282,6 @@ export class LessonManagementComponent implements OnInit {
         }
       }
 
-      // ✅ من token (JWT)
       const token = localStorage.getItem('token');
       if (token) {
         try {
@@ -1231,7 +1340,6 @@ export class LessonManagementComponent implements OnInit {
       return;
     }
     
-    // ✅ استخدم النقطة العامة مع فلترة schoolId
     const url = `${this.apiUrl}/classes?schoolId=${schoolId}`;
     console.log('📚 جلب الحصص للمدرسة:', schoolId);
     
@@ -1246,7 +1354,6 @@ export class LessonManagementComponent implements OnInit {
         },
         error: (err) => {
           console.error('❌ خطأ في تحميل الحصص:', err);
-          // ✅ محاولة بديلة
           this.loadClassesBySchoolId(schoolId);
         }
       });
@@ -1291,13 +1398,11 @@ export class LessonManagementComponent implements OnInit {
     this.http.get<Teacher[]>(url, { headers: this.getHeaders() })
       .subscribe({
         next: (teachers) => {
-          // ✅ تصفية الأساتذة النشطين فقط
           this.teachers = teachers.filter(t => t.active !== false);
           console.log(`✅ تم تحميل ${this.teachers.length} أستاذ`);
         },
         error: (err) => {
           console.error('❌ خطأ في تحميل الأساتذة:', err);
-          // ✅ محاولة بديلة
           this.loadTeachersFallback();
         }
       });
@@ -1338,13 +1443,11 @@ export class LessonManagementComponent implements OnInit {
     this.http.get<Classroom[]>(url, { headers: this.getHeaders() })
       .subscribe({
         next: (classrooms) => {
-          // ✅ تصفية الغرف المتاحة فقط للجدولة
           this.classrooms = classrooms.filter(c => c.status === 'available' || c.status === 'occupied');
           console.log(`✅ تم تحميل ${this.classrooms.length} غرفة`);
         },
         error: (err) => {
           console.error('❌ خطأ في تحميل الغرف:', err);
-          // ✅ محاولة بديلة
           this.loadClassroomsFallback();
         }
       });
@@ -1375,6 +1478,7 @@ export class LessonManagementComponent implements OnInit {
   // ==========================================
 
   applyFilter(): void {
+    this.soundService.playRefresh();
     this.filteredLessons = this.lessons.filter(lesson => {
       const matchesSubject = !this.filterSubject || lesson.subject === this.filterSubject;
       const matchesAcademicYear = !this.filterAcademicYear || lesson.academicYear === this.filterAcademicYear;
@@ -1388,6 +1492,7 @@ export class LessonManagementComponent implements OnInit {
   }
   
   clearFilters(): void {
+    this.soundService.playRefresh();
     this.filterSubject = '';
     this.filterAcademicYear = '';
     this.filterTeacher = '';
@@ -1422,6 +1527,7 @@ export class LessonManagementComponent implements OnInit {
   // ==========================================
 
   navigateToDetails(lessonId: string): void {
+    this.soundService.playTabSwitch();
     this.router.navigate(['/home/lesson-detail', lessonId]);
   }
   
@@ -1430,6 +1536,8 @@ export class LessonManagementComponent implements OnInit {
   // ==========================================
 
   openAddLessonDialog(): void {
+    this.soundService.playRefresh();
+    this.soundService.playClick();
     this.showAddDialog = true;
     this.newLesson = {
       name: '',
@@ -1447,15 +1555,55 @@ export class LessonManagementComponent implements OnInit {
   closeDialogOnBackdrop(event: MouseEvent): void {
     if ((event.target as HTMLElement).classList.contains('popup-backdrop')) {
       this.showAddDialog = false;
+      this.showEditDialog = false;
+      this.soundService.playClick();
     }
   }
   
   addScheduleRow(): void {
     this.newLesson.schedule.push({ day: '', time: '', classroom: '' });
+    this.soundService.playTabSwitch();
   }
   
   removeScheduleRow(index: number): void {
+    this.soundService.playDelete();
     this.newLesson.schedule.splice(index, 1);
+  }
+
+  // ==========================================
+  // دوال نافذة التعديل (جديدة)
+  // ==========================================
+
+  openEditLessonDialog(lesson: Class): void {
+    this.soundService.playRefresh();
+    // ✅ نسخ بيانات الحصة مع تحويل الـ classroom من كائن إلى ID
+    this.editLesson = {
+      _id: lesson._id,
+      name: lesson.name,
+      subject: lesson.subject,
+      academicYear: lesson.academicYear,
+      price: lesson.price,
+      teacher: lesson.teacher?._id || '',
+      description: lesson.description || '',
+      paymentSystem: lesson.paymentSystem || 'monthly',
+      roundSettings: lesson.roundSettings || { sessionCount: 8, sessionDuration: 2, breakBetweenSessions: 0 },
+      schedule: (lesson.schedule || []).map(s => ({
+        day: s.day || '',
+        time: s.time || '',
+        classroom: s.classroom?._id || ''
+      }))
+    };
+    
+    this.showEditDialog = true;
+    console.log('📝 فتح نافذة تعديل الحصة:', this.editLesson);
+  }
+  
+  addEditScheduleRow(): void {
+    this.editLesson.schedule.push({ day: '', time: '', classroom: '' });
+  }
+  
+  removeEditScheduleRow(index: number): void {
+    this.editLesson.schedule.splice(index, 1);
   }
   
   // ==========================================
@@ -1463,7 +1611,6 @@ export class LessonManagementComponent implements OnInit {
   // ==========================================
 
   createLesson(): void {
-    // التحقق من الحقول المطلوبة
     if (!this.newLesson.name || !this.newLesson.subject || !this.newLesson.academicYear || !this.newLesson.price) {
       this.showToast('يرجى ملء جميع الحقول المطلوبة', 'error');
       return;
@@ -1477,14 +1624,13 @@ export class LessonManagementComponent implements OnInit {
     
     this.loading = true;
     
-    // ✅ إضافة schoolId إلى بيانات الحصة الجديدة
     const lessonData = {
       ...this.newLesson,
       schoolId: schoolId
     };
     
     console.log('📤 إرسال بيانات حصة جديدة:', lessonData);
-    
+    this.soundService.playStudentAdded();
     this.http.post(`${this.apiUrl}/classes`, lessonData, { headers: this.getHeaders() })
       .subscribe({
         next: (response: any) => {
@@ -1501,13 +1647,73 @@ export class LessonManagementComponent implements OnInit {
         }
       });
   }
+
+  // ==========================================
+  // ✅ تحديث حصة (جديد)
+  // ==========================================
+
+  updateLesson(): void {
+    if (!this.editLesson.name || !this.editLesson.subject || !this.editLesson.academicYear || !this.editLesson.price) {
+      this.showToast('يرجى ملء جميع الحقول المطلوبة', 'error');
+      return;
+    }
+
+    const schoolId = this.getSchoolId();
+    if (!schoolId) {
+      this.showToast('⚠️ لا يمكن تحديث حصة بدون تحديد المدرسة', 'error');
+      return;
+    }
+    
+    this.loading = true;
+    
+    // ✅ تحضير البيانات للتحديث مع schoolId
+    const updateData = {
+      name: this.editLesson.name,
+      subject: this.editLesson.subject,
+      academicYear: this.editLesson.academicYear,
+      price: this.editLesson.price,
+      teacher: this.editLesson.teacher || null,
+      description: this.editLesson.description || '',
+      paymentSystem: this.editLesson.paymentSystem || 'monthly',
+      roundSettings: this.editLesson.roundSettings || { sessionCount: 8, sessionDuration: 2, breakBetweenSessions: 0 },
+      schedule: this.editLesson.schedule.map((s: any) => ({
+        day: s.day,
+        time: s.time,
+        classroom: s.classroom || null
+      })),
+      schoolId: schoolId
+    };
+    
+    console.log('📤 إرسال بيانات تحديث الحصة:', updateData);
+    
+    this.http.put(`${this.apiUrl}/classes/${this.editLesson._id}`, updateData, { headers: this.getHeaders() })
+    
+      .subscribe({
+        next: (response: any) => {
+          console.log('✅ تم تحديث الحصة:', response);
+          this.showToast(response.message || 'تم تحديث الحصة بنجاح', 'success');
+          this.showEditDialog = false;
+          this.loadClasses();
+          this.loading = false;
+        },
+        error: (err) => {
+          console.error('❌ خطأ في تحديث الحصة:', err);
+          this.showToast(err.error?.error || 'فشل تحديث الحصة', 'error');
+          this.loading = false;
+        }
+      });
+      this.soundService.playEdit();
+  }
   
   deleteLesson(lessonId: string, event: Event): void {
+        this.soundService.playDelete();
+
     event.stopPropagation();
     if (confirm('هل أنت متأكد من حذف هذه الحصة؟')) {
       this.http.delete(`${this.apiUrl}/classes/${lessonId}`, { headers: this.getHeaders() })
         .subscribe({
           next: () => {
+            this.soundService.playRefresh();
             this.showToast('تم حذف الحصة بنجاح', 'success');
             this.loadClasses();
           },
@@ -1520,6 +1726,7 @@ export class LessonManagementComponent implements OnInit {
   }
 
   deleteSelectedLessons(): void {
+    this.soundService.playDelete();
     if (this.selectedLessons.size === 0) return;
     
     if (confirm(`حذف ${this.selectedLessons.size} حصص؟`)) {
@@ -1539,6 +1746,7 @@ export class LessonManagementComponent implements OnInit {
   }
 
   refreshData(): void {
+
     this.showToast('جاري تحديث البيانات...', 'success');
     this.loadClasses();
     this.loadTeachers();
@@ -1595,14 +1803,19 @@ export class LessonManagementComponent implements OnInit {
   
   goToPage(page: any): void { 
     if (typeof page === 'number') this.currentPage = page; 
+        this.soundService.playRefresh();
+
   }
   
   prevPage(): void { 
     if (this.currentPage > 1) this.currentPage--; 
+        this.soundService.playRefresh();
+
   }
   
   nextPage(): void { 
     if (this.currentPage < this.totalPages) this.currentPage++; 
+    this.soundService.playRefresh();
   }
 
   getVisiblePages(): (number | string)[] {
@@ -1650,6 +1863,8 @@ export class LessonManagementComponent implements OnInit {
   }
   
   exportToExcel(): void { 
-    this.showToast('جاري تحضير ملف الإكسل...', 'success'); 
+    this.soundService.playClick();
+    this.showToast('جاري تحضير ملف الإكسل...', 'success');
+    this.soundService.playRefresh(); 
   }
 }

@@ -6,6 +6,7 @@ import { forkJoin } from 'rxjs';
 import { NotificationsComponent } from '../../notifications/notifications/notifications.component';
 import { RouterModule } from '@angular/router';
 import { environment } from '../../../../environments/environment.development';
+import { SoundService } from '../../../sound.service';
 
 @Component({
   selector: 'app-header',
@@ -739,7 +740,7 @@ export class HeaderComponent implements OnInit {
   isLoadingNotifications: boolean = false;
   isLoading: boolean = true;
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private soundService: SoundService) {}
 
   ngOnInit(): void {
     this.loadSchoolData();
@@ -928,6 +929,7 @@ export class HeaderComponent implements OnInit {
         
         if (this.notificationCount > oldCount) {
           this.ringBell();
+          this.soundService.playNotification();
         }
       },
       error: (err) => {

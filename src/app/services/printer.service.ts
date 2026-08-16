@@ -66,17 +66,17 @@ export class PrinterService {
   
   // عرض الورق الحراري 80 مم
   private readonly CANVAS_WIDTH = 576;
-  
+  school : any = localStorage.getItem('school') 
+  user : any = localStorage.getItem('user')
   // بيانات المؤسسة
-  private readonly COMPANY_NAME = (typeof window !== 'undefined' && window.localStorage
-    ? window.localStorage.getItem('school.name')
-    : null) || 'ROUAD AL-MAARIFA';
-  private readonly DEVELOPER_NAME = 'Tawlimi';
-  private readonly COMPANY_ADDRESS = 'الجزائر، تقرت';
-  private readonly COMPANY_PHONE = '+213 673586274';
-  private readonly USER = (typeof window !== 'undefined' && window.localStorage
-    ? window.localStorage.getItem('user.name')
-    : null) || 'مستخدم';
+  private readonly COMPANY_NAME = this.school.name;
+  private readonly DEVELOPER_NAME = 'Redox';
+  private readonly COMPANY_ADDRESS = this.school.address ;
+  private readonly COMPANY_PHONE = this.school.phone;
+  private readonly USER = this.user.fullName
+
+
+  
 
   constructor(private ngZone: NgZone) {
     window.addEventListener('beforeunload', () => {

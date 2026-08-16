@@ -1,17 +1,31 @@
-import { Component, OnInit, HostListener, Input, Output, EventEmitter, inject } from '@angular/core';
+import { Component, OnInit, HostListener, Input, Output, EventEmitter, inject, ElementRef, Renderer2 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
+import { SoundService } from '../../../sound.service';
 
 @Component({
   selector: 'app-nav-bar',
   standalone: true,
   imports: [CommonModule, RouterModule],
   template: `
+    <!-- النافبار الرئيسي -->
     <aside class="sidebar-container" 
            [class.is-collapsed]="collapsed" 
            [class.mobile-open]="isMobile"
+           [class.is-mini]="isMiniMode"
+           [class.slide-out]="isMiniMode && !isMobile"
            dir="rtl">
       
+      <!-- شريط التصغير الإبداعي (ملتصق بالحافة اليسرى) -->
+      <div class="mini-control-bar" *ngIf="!isMobile">
+        <button class="mini-toggle-btn" 
+                (click)="toggleMiniMode()"
+                [class.active]="isMiniMode">
+          <i [class]="isMiniMode ? 'bi bi-chevron-left' : 'bi bi-chevron-right'"></i>
+          <span class="mini-tooltip">{{ isMiniMode ? 'توسيع القائمة' : 'تصغير القائمة' }}</span>
+        </button>
+      </div>
+
       <div class="sidebar-header">
         <div class="logo-box">
           <i class="bi bi-shield-check-fill logo-icon"></i>
@@ -38,7 +52,8 @@ import { Router, RouterModule } from '@angular/router';
               class="nav-item"
               [class.active]="activeSection === item.id"
               (mouseenter)="onItemHover(item.id)"
-              (mouseleave)="onItemLeave()">
+              (mouseleave)="onItemLeave()"
+              (click)="playClickSound()">
             
             <a class="nav-link" (click)="navigateTo(item.route, item.id)">
               <div class="icon-box">
@@ -76,6 +91,7 @@ import { Router, RouterModule } from '@angular/router';
       --side-text-active: #2b2d42;
       --side-border: #f1f5f9;
       --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      --shadow-color: rgba(67, 97, 238, 0.15);
     }
 
     .sidebar-container {
@@ -93,17 +109,132 @@ import { Router, RouterModule } from '@angular/router';
       box-shadow: -4px 0 15px rgba(0,0,0,0.02);
     }
 
+    .mini-control-bar {
+      position: absolute;
+      top: 50%;
+      left: -14px; 
+      transform: translateY(-50%);
+      z-index: 1120;
+    }
+
+    .mini-toggle-btn {
+      width: 28px;
+      height: 48px;
+      border: none;
+      border-radius: 12px 0 0 12px; 
+      background: var(--side-primary);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      transition: var(--transition);
+      box-shadow: -2px 0 10px rgba(67, 97, 238, 0.2);
+      position: relative;
+    }
+
+    .mini-toggle-btn:hover {
+      background: #3651d4;
+      width: 34px;
+      transform: translateX(-6px); 
+    }
+
+    .mini-toggle-btn .mini-tooltip {
+      position: absolute;
+      right: 40px; 
+      background: var(--side-text-active);
+      color: #fff;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: var(--transition);
+      white-space: nowrap;
+    }
+
+    .mini-toggle-btn:hover .mini-tooltip {
+      opacity: 1;
+    }
+
+    .sidebar-container.is-mini {
+      transform: translateX(calc(100% - 65px));
+      box-shadow: -2px 0 20px rgba(0,0,0,0.05);
+    }
+
+    .sidebar-container.is-mini .sidebar-header {
+      padding: 1.5rem 12px;
+      justify-content: flex-end; 
+    }
+
+    .sidebar-container.is-mini .logo-text,
+    .sidebar-container.is-mini .user-context,
+    .sidebar-container.is-mini .link-label,
+    .sidebar-container.is-mini .sub-arrow,
+    .sidebar-container.is-mini .logout-link span,
+    .sidebar-container.is-mini .toggle-btn {
+      display: none;
+    }
+
+    .sidebar-container.is-mini .nav-link {
+      padding: 12px 10px;
+      justify-content: flex-end; 
+    }
+
+    .sidebar-container.is-mini .icon-box {
+      margin: 0;
+      width: 40px;
+      height: 40px;
+    }
+
+    .sidebar-container.is-mini .nav-item.active .nav-link {
+      background: var(--side-primary);
+      border-radius: 12px;
+    }
+
+    .sidebar-container.is-mini .sidebar-footer {
+      padding: 1rem 12px;
+    }
+
+    .sidebar-container.is-mini .logout-link {
+      justify-content: flex-end;
+      padding: 12px 10px;
+      border-radius: 12px;
+    }
+
     .sidebar-container.is-collapsed {
       width: 85px;
     }
 
-    /* Header & Logo */
+    .sidebar-container.is-collapsed .sidebar-header {
+      padding: 1.5rem 0.5rem;
+      justify-content: center;
+    }
+
+    .sidebar-container.is-collapsed .logo-text,
+    .sidebar-container.is-collapsed .user-context,
+    .sidebar-container.is-collapsed .link-label,
+    .sidebar-container.is-collapsed .sub-arrow,
+    .sidebar-container.is-collapsed .logout-link span {
+      display: none;
+    }
+
+    .sidebar-container.is-collapsed .icon-box {
+      margin: 0;
+    }
+
+    .sidebar-container.is-collapsed .logout-link {
+      justify-content: center;
+    }
+
     .sidebar-header {
       padding: 1.5rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
       height: 80px;
+      position: relative;
     }
 
     .logo-box {
@@ -127,9 +258,14 @@ import { Router, RouterModule } from '@angular/router';
       align-items: center;
       justify-content: center;
       color: var(--side-text);
+      transition: var(--transition);
     }
 
-    /* User Profile Section */
+    .toggle-btn:hover {
+      background: var(--side-active);
+      color: var(--side-primary);
+    }
+
     .user-context {
       padding: 1rem 1.5rem;
       margin: 0.5rem 1rem 1.5rem;
@@ -151,17 +287,26 @@ import { Router, RouterModule } from '@angular/router';
       width: 40px;
       height: 40px;
       border-radius: 50%;
+      object-fit: cover;
     }
 
     .user-meta { display: flex; flex-direction: column; overflow: hidden; }
     .u-name { font-weight: 700; font-size: 0.9rem; color: var(--side-text-active); }
     .u-role { font-size: 0.75rem; color: var(--side-text); }
 
-    /* Menu & Links */
     .menu-wrapper {
       flex: 1;
       overflow-y: auto;
       padding: 0 0.8rem;
+    }
+
+    .menu-wrapper::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .menu-wrapper::-webkit-scrollbar-thumb {
+      background: var(--side-border);
+      border-radius: 4px;
     }
 
     .nav-list { list-style: none; padding: 0; margin: 0; }
@@ -181,6 +326,7 @@ import { Router, RouterModule } from '@angular/router';
       cursor: pointer;
       transition: var(--transition);
       white-space: nowrap;
+      position: relative;
     }
 
     .nav-link:hover {
@@ -194,6 +340,10 @@ import { Router, RouterModule } from '@angular/router';
       box-shadow: 0 4px 12px rgba(67, 97, 238, 0.2);
     }
 
+    .nav-item.active .nav-link .bi {
+      color: #fff;
+    }
+
     .icon-box {
       width: 30px;
       height: 30px;
@@ -202,6 +352,7 @@ import { Router, RouterModule } from '@angular/router';
       justify-content: center;
       font-size: 1.2rem;
       position: relative;
+      flex-shrink: 0;
     }
 
     .link-label {
@@ -221,11 +372,12 @@ import { Router, RouterModule } from '@angular/router';
       padding: 2px 6px;
       border-radius: 10px;
       border: 2px solid #fff;
+      min-width: 18px;
+      text-align: center;
     }
 
-    .sub-arrow { font-size: 0.8rem; opacity: 0.5; }
+    .sub-arrow { font-size: 0.8rem; opacity: 0.5; margin-right: auto; }
 
-    /* Collapsed Tooltip */
     .floating-label {
       position: absolute;
       right: 95px;
@@ -238,9 +390,14 @@ import { Router, RouterModule } from '@angular/router';
       font-size: 0.85rem;
       z-index: 100;
       pointer-events: none;
+      animation: fadeInTooltip 0.2s ease;
     }
 
-    /* Footer */
+    @keyframes fadeInTooltip {
+      from { opacity: 0; transform: translateY(-50%) translateX(10px); }
+      to { opacity: 1; transform: translateY(-50%) translateX(0); }
+    }
+
     .sidebar-footer {
       padding: 1.5rem;
       border-top: 1px solid var(--side-border);
@@ -259,28 +416,94 @@ import { Router, RouterModule } from '@angular/router';
       cursor: pointer;
       font-weight: 600;
       transition: 0.3s;
+      font-size: 0.95rem;
     }
-    .logout-link:hover { background: #fee2e2; }
 
-    .is-collapsed .logout-link { justify-content: center; padding: 12px 0; }
-    .is-collapsed .icon-box { margin: 0 auto; }
+    .logout-link:hover {
+      background: #fee2e2;
+      transform: scale(1.02);
+    }
 
-    /* Mobile Handling */
+    .logout-link i {
+      font-size: 1.2rem;
+    }
+
     .nav-glass-backdrop {
       position: fixed;
       inset: 0;
       background: rgba(0,0,0,0.3);
       backdrop-filter: blur(4px);
       z-index: 1050;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     @media (max-width: 768px) {
       .sidebar-container {
         right: -100%;
+        width: 300px;
+        box-shadow: -8px 0 30px rgba(0,0,0,0.1);
       }
+
       .sidebar-container.mobile-open {
         right: 0;
       }
+
+      .sidebar-container.is-mini {
+        transform: translateX(0);
+      }
+
+      .mini-control-bar {
+        display: none;
+      }
+    }
+
+    .sidebar-container.is-collapsed .nav-item.active .nav-link {
+      border-radius: 12px;
+      background: var(--side-primary);
+    }
+
+    .sidebar-container.is-collapsed .icon-box {
+      width: 40px;
+      height: 40px;
+      font-size: 1.4rem;
+    }
+
+    .sidebar-container.is-mini .nav-link:hover {
+      background: var(--side-active);
+      border-radius: 12px;
+    }
+
+    .sidebar-container.is-mini .nav-item.active .nav-link:hover {
+      background: var(--side-primary);
+    }
+
+    .sidebar-container.slide-out {
+      transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .sidebar-container.is-mini .logo-box {
+      animation: pulseLogo 2s infinite;
+    }
+
+    @keyframes pulseLogo {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .sidebar-container.is-mini::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 3px;
+      height: 100%;
+      background: linear-gradient(to bottom, var(--side-primary), #7c3aed, var(--side-primary));
+      opacity: 0.3;
     }
   `]
 })
@@ -289,22 +512,25 @@ export class NavBarComponent implements OnInit {
   @Output() sidebarClosed = new EventEmitter<void>();
   
   private router = inject(Router);
+  private soundService = inject(SoundService);
+  private renderer = inject(Renderer2);
+  private el = inject(ElementRef);
 
   collapsed = false;
+  isMiniMode = false;
   activeSection = 'dashboard';
   hoveredItem: string | null = null;
 
   userName = 'ياسر خيشه';
   userRole = 'مدير النظام';
-  userAvatar = 'https://ui-avatars.com/api/?name=ياسر+خيشه&background=4361ee&color=fff';
+  userAvatar = 'https://ui-avatars.com/api/?name=ياسر+خيشه&background=4361ee&color=fff&size=128';
 
   menuItems = [
     { id: 'dashboard', icon: 'bi-speedometer2', label: 'لوحة التحكم', route: '/home/dashboard', notification: 3 },
     { id: 'live-classes', icon: 'bi-camera-video', label: 'الحصص الحية', route: '/home/live-class' },
     { id: 'students', icon: 'bi-people', label: 'إدارة الطلاب', route: '/home/students-management', subItems: true },
     { id: 'teachers', icon: 'bi-person-video3', label: 'إدارة الأساتذة', route: '/home/teachers-management' },
-    {id : 'messages', icon: 'bi-chat-dots', label: 'الرسائل', route: '/home/messages', notification: 8},
-    
+    { id: 'messages', icon: 'bi-chat-dots', label: 'الرسائل', route: '/home/messages', notification: 8 },
     { id: 'classes', icon: 'bi-book', label: 'إدارة الحصص', route: '/home/lesson-management' },
     { id: 'classrooms', icon: 'bi-building', label: 'إدارة القاعات', route: '/home/rooms-management' },
     { id: 'payments', icon: 'bi-cash-coin', label: 'المدفوعات', route: '/home/add-expense', notification: 5 },
@@ -316,6 +542,7 @@ export class NavBarComponent implements OnInit {
   ngOnInit(): void {
     this.setActiveFromRoute();
     this.checkScreenSize();
+    this.loadStateFromLocalStorage();
   }
 
   @HostListener('window:resize')
@@ -325,7 +552,45 @@ export class NavBarComponent implements OnInit {
 
   checkScreenSize() {
     this.isMobile = window.innerWidth <= 768;
-    if (!this.isMobile) this.collapsed = false;
+    if (this.isMobile) {
+      this.isMiniMode = false;
+    }
+  }
+
+  private loadStateFromLocalStorage(): void {
+    try {
+      const savedState = localStorage.getItem('navBarState');
+      if (savedState) {
+        const state = JSON.parse(savedState);
+        this.isMiniMode = state.isMiniMode || false;
+        this.collapsed = state.collapsed || false;
+      }
+    } catch (e) {
+      console.warn('⚠️ خطأ في تحميل حالة النافبار');
+    }
+  }
+
+  private saveStateToLocalStorage(): void {
+    try {
+      localStorage.setItem('navBarState', JSON.stringify({
+        isMiniMode: this.isMiniMode,
+        collapsed: this.collapsed
+      }));
+    } catch (e) {
+      console.warn('⚠️ خطأ في حفظ حالة النافبار');
+    }
+  }
+
+  playClickSound(): void {
+    this.soundService.playClick(0.15);
+  }
+
+  playSwitchSound(): void {
+    this.soundService.playTabSwitch(0.2);
+  }
+
+  playLogoutSound(): void {
+    this.soundService.playLogout(0.3);
   }
 
   setActiveFromRoute(): void {
@@ -335,10 +600,29 @@ export class NavBarComponent implements OnInit {
   }
 
   toggleCollapsed(): void {
-    if (!this.isMobile) this.collapsed = !this.collapsed;
+    if (this.isMobile) return;
+    this.collapsed = !this.collapsed;
+    this.playSwitchSound();
+    this.saveStateToLocalStorage();
+    
+    if (this.isMiniMode && this.collapsed) {
+      this.isMiniMode = false;
+    }
+  }
+
+  toggleMiniMode(): void {
+    if (this.isMobile) return;
+    this.isMiniMode = !this.isMiniMode;
+    this.playSwitchSound();
+    this.saveStateToLocalStorage();
+    
+    if (this.isMiniMode) {
+      this.collapsed = false;
+    }
   }
 
   navigateTo(route: string, sectionId: string): void {
+    this.playClickSound();
     this.activeSection = sectionId;
     this.router.navigate([route]).then(() => {
       if (this.isMobile) this.closeSidebar();
@@ -350,11 +634,16 @@ export class NavBarComponent implements OnInit {
   }
 
   logout(): void {
+    this.playLogoutSound();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     this.router.navigate(['/login']);
   }
 
   onItemHover(itemId: string): void {
-    if (this.collapsed && !this.isMobile) this.hoveredItem = itemId;
+    if (this.collapsed && !this.isMobile && !this.isMiniMode) {
+      this.hoveredItem = itemId;
+    }
   }
 
   onItemLeave(): void {

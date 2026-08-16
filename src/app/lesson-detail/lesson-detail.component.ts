@@ -7,7 +7,8 @@ import { environment } from '../../environments/environment.development';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { forkJoin, debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 import Swal from 'sweetalert2';
-import { PrinterService } from '../services/printer.service';
+import { PrinterService, ReceiptData, BulkReceiptData } from '../services/printer.service';
+import { SoundService } from '../sound.service';
 // ==================== INTERFACES ====================
 interface Student {
   _id: string;
@@ -40,6 +41,8 @@ interface Payment {
   notes?: string;
   createdAt?: Date;
   studentDetails?: Student | null;
+  studentName?: string;
+  className?: string;
 }
 
 interface Class {
@@ -91,7 +94,7 @@ interface AttendanceStats {
 }
 
 // ==============================================
-// المكون الرئيسي
+// المكون الرئيسي مع HTML و CSS
 // ==============================================
 
 @Component({
@@ -121,7 +124,7 @@ interface AttendanceStats {
           <div class="header-actions">
             <button class="action-btn primary" (click)="openAddStudentPopup()">
               <i class="fas fa-user-plus"></i>
-              <span>إضافة طالب</span>
+              <span>إضافة طلاب</span>
             </button>
             <button class="action-btn secondary" (click)="openAddPaymentPopup()">
               <i class="fas fa-money-bill-wave"></i>
@@ -367,7 +370,7 @@ interface AttendanceStats {
                     <tr *ngFor="let p of paginatedPayments">
                       <td>{{ getStudentName(p.student) }}</td>
                       <td class="amount">{{ formatPrice(p.amount) }}</td>
-                      <td>{{ p.month }}</td>
+                      <td>{{ p.monthCode }}</td>
                       <td>{{ formatDate(p.paymentDate) }}</td>
                       <td>{{ getPaymentMethodText(p.paymentMethod) }}</td>
                       <td>
@@ -422,7 +425,7 @@ interface AttendanceStats {
                   </div>
                   <div class="info-row">
                     <span class="info-label">الشهر:</span>
-                    <span class="info-value">{{ p.month }}</span>
+                    <span class="info-value">{{ p.monthCode }}</span>
                   </div>
                   <div class="info-row">
                     <span class="info-label">تاريخ الدفع:</span>
@@ -621,11 +624,11 @@ interface AttendanceStats {
 
         <!-- ==================== DIALOGS ==================== -->
 
-        <!-- Add Student Dialog -->
+        <!-- Add Student Dialog - مع إضافة عدة طلاب دفعة واحدة -->
         <div class="dialog-overlay" *ngIf="showAddStudentPopup" (click)="closeAddStudentPopup($event)">
-          <div class="dialog" (click)="$event.stopPropagation()">
+          <div class="dialog large" (click)="$event.stopPropagation()">
             <div class="dialog-header">
-              <h3><i class="fas fa-user-plus"></i> إضافة طالب للحصة</h3>
+              <h3><i class="fas fa-user-plus"></i> إضافة طلاب للحصة</h3>
               <button class="dialog-close" (click)="closeAddStudentPopup()">&times;</button>
             </div>
             <div class="dialog-body">
@@ -639,22 +642,62 @@ interface AttendanceStats {
                   class="search-input"
                 />
               </div>
-              <form [formGroup]="addStudentForm">
-                <div class="form-group">
-                  <label>اختر الطالب</label>
-                  <select formControlName="studentId" class="form-control" size="8">
-                    <option value="">-- اختر طالب --</option>
-                    <option *ngFor="let s of filteredAvailableStudents" [value]="s._id">
-                      {{ s.name }} ({{ s.studentId }}) - {{ s.academicYear }}
-                    </option>
-                  </select>
+              
+              <!-- Bulk selection bar -->
+              <div class="bulk-select-bar">
+                <label class="select-all-label">
+                  <input type="checkbox" 
+                         [checked]="selectAllAvailable" 
+                         (change)="toggleSelectAllAvailable()">
+                  <span>اختيار الكل ({{ filteredAvailableStudents.length }})</span>
+                </label>
+                <button class="btn-bulk-enroll" 
+                        (click)="enrollMultipleStudents()" 
+                        [disabled]="selectedStudentsForEnrollment.length === 0">
+                  <i class="fas fa-users"></i>
+                  تسجيل {{ selectedStudentsForEnrollment.length }} طالب
+                </button>
+              </div>
+              
+              <!-- Student list with checkboxes -->
+              <div class="student-list">
+                <div *ngFor="let student of filteredAvailableStudents" 
+                     class="student-checkbox-item"
+                     [class.selected]="isStudentSelected(student)">
+                  <div class="item-content" (click)="toggleStudentSelection(student)">
+                    <div class="item-info">
+                      <h4>{{ student.name }}</h4>
+                      <p>{{ student.studentId }} - {{ student.academicYear }}</p>
+                      <p class="parent-info" *ngIf="student.parentPhone">
+                        <i class="fas fa-phone"></i> {{ student.parentPhone }}
+                      </p>
+                    </div>
+                    <div class="item-select">
+                      <input type="checkbox" 
+                             [checked]="isStudentSelected(student)" 
+                             (change)="toggleStudentSelection(student)"
+                             (click)="$event.stopPropagation()">
+                    </div>
+                  </div>
                 </div>
-              </form>
+                <div *ngIf="filteredAvailableStudents.length === 0" class="empty-state">
+                  <i class="fas fa-users-slash"></i>
+                  <p>{{ availableStudentSearchTerm ? 'لا توجد نتائج مطابقة للبحث' : 'جميع الطلاب مسجلون بالفعل' }}</p>
+                </div>
+              </div>
+              
+              <!-- Selection summary -->
+              <div class="selection-summary" *ngIf="selectedStudentsForEnrollment.length > 0">
+                <span>✅ تم اختيار <strong>{{ selectedStudentsForEnrollment.length }}</strong> طالب</span>
+                <button class="btn-clear-selection" (click)="selectedStudentsForEnrollment = []; selectAllAvailable = false;">
+                  <i class="fas fa-times"></i> إلغاء التحديد
+                </button>
+              </div>
             </div>
             <div class="dialog-footer">
               <button class="btn-cancel" (click)="closeAddStudentPopup()">إلغاء</button>
-              <button class="btn-save" (click)="enrollStudent()" [disabled]="addStudentForm.invalid">
-                <i class="fas fa-check"></i> تأكيد
+              <button class="btn-save" (click)="enrollMultipleStudents()" [disabled]="selectedStudentsForEnrollment.length === 0">
+                <i class="fas fa-check"></i> تسجيل {{ selectedStudentsForEnrollment.length }} طالب
               </button>
             </div>
           </div>
@@ -1236,6 +1279,7 @@ interface AttendanceStats {
       background: white; width: 100%; max-width: 500px;
       border-radius: var(--radius); max-height: 90vh; overflow-y: auto;
     }
+    .dialog.large { max-width: 600px; }
     .dialog-header {
       padding: 16px; border-bottom: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: center;
@@ -1266,6 +1310,135 @@ interface AttendanceStats {
     .btn-save { background: var(--primary); color: white; }
     .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
     .btn-cancel { background: transparent; border: 1px solid var(--border); }
+
+    /* ==================== BULK STUDENT SELECTION ==================== */
+    .bulk-select-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .select-all-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .select-all-label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--primary);
+    }
+
+    .btn-bulk-enroll {
+      padding: 6px 16px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-bulk-enroll:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .student-list {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    .student-checkbox-item {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .student-checkbox-item:hover {
+      background: #f8fafc;
+    }
+
+    .student-checkbox-item.selected {
+      background: var(--primary-light);
+    }
+
+    .item-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .item-info h4 {
+      margin: 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .item-info p {
+      margin: 2px 0;
+      font-size: 0.8rem;
+      color: var(--text-light);
+    }
+
+    .item-info .parent-info {
+      font-size: 0.7rem;
+      color: var(--text-medium);
+    }
+
+    .item-select input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--primary);
+    }
+
+    .selection-summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      background: #f0fdf4;
+      border-radius: var(--radius-sm);
+      margin-top: 12px;
+      font-size: 0.9rem;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .selection-summary strong {
+      color: var(--primary);
+    }
+
+    .btn-clear-selection {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-clear-selection:hover {
+      text-decoration: underline;
+    }
 
     /* ==================== LOADING ==================== */
     .loading-overlay {
@@ -1313,6 +1486,7 @@ interface AttendanceStats {
       .payments-summary { justify-content: space-between; }
       .form-row { flex-direction: column; gap: 0; }
       .dialog { width: calc(100% - 24px); margin: 0 auto; }
+      .dialog.large { max-width: 100%; margin: 0 8px; }
       .info-item { flex-direction: column; align-items: flex-start; gap: 4px; }
       .stats-horizontal { gap: 8px; }
       .stat-card { width: 140px; padding: 10px; }
@@ -1320,6 +1494,17 @@ interface AttendanceStats {
       .tab-btn span { display: none; }
       .tab-btn i { font-size: 1.2rem; }
       .search-input { font-size: 0.8rem; padding: 8px 35px 8px 10px; }
+      .bulk-select-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .btn-bulk-enroll {
+        justify-content: center;
+      }
+      .selection-summary {
+        flex-direction: column;
+        text-align: center;
+      }
     }
   `]
 })
@@ -1331,7 +1516,7 @@ export class LessonDetailComponent implements OnInit {
   private fb = inject(FormBuilder);
   private sanitizer = inject(DomSanitizer);
   private printerService = inject(PrinterService);
-  
+  private soundService = inject(SoundService);
   // ==================== PROPERTIES ====================
   lessonId!: string;
   lesson: Class | null = null;
@@ -1351,12 +1536,17 @@ export class LessonDetailComponent implements OnInit {
   availableStudentSearchTerm: string = '';
   filteredAvailableStudents: Student[] = [];
   
+  // Bulk Student Selection
+  selectedStudentsForEnrollment: Student[] = [];
+  showBulkStudentSelection: boolean = false;
+  selectAllAvailable: boolean = false;
+  
   attendanceFilter = {
     startDate: this.getDefaultStartDate(),
     endDate: this.getDefaultEndDate()
   };
   
-  // Dialog Popup Flags (using Popup naming for template compatibility)
+  // Dialog Popup Flags
   showAddStudentPopup = false;
   showAddPaymentPopup = false;
   showEditPaymentPopup = false;
@@ -1408,7 +1598,7 @@ export class LessonDetailComponent implements OnInit {
   // ==================== CONSTRUCTOR ====================
   constructor() {
     this.generateAvailableMonths();
-    
+    this.soundService = new SoundService(); // Initialize the sound service
     this.addStudentForm = this.fb.group({
       studentId: ['', Validators.required]
     });
@@ -1562,7 +1752,9 @@ export class LessonDetailComponent implements OnInit {
         this.payments = paymentsData.filter(payment => payment && payment.student !== null);
         this.payments = this.payments.map(payment => ({
           ...payment,
-          studentDetails: typeof payment.student === 'object' ? payment.student : null
+          studentDetails: typeof payment.student === 'object' ? payment.student : null,
+          studentName: this.getStudentName(payment.student),
+          className: this.lesson?.name || 'حصة'
         }));
         
         this.applyMonthFilter();
@@ -1577,6 +1769,7 @@ export class LessonDetailComponent implements OnInit {
   }
 
   loadAttendance(): void {
+    this.soundService.playRefresh;
     if (!this.lessonId) return;
     
     this.loading = true;
@@ -1659,6 +1852,8 @@ export class LessonDetailComponent implements OnInit {
         
         this.availableStudents = studentsList.filter(s => s && s._id && !enrolledIds.has(s._id));
         this.filteredAvailableStudents = [...this.availableStudents];
+        this.selectedStudentsForEnrollment = [];
+        this.selectAllAvailable = false;
       },
       error: (err) => {
         console.error('Error loading students:', err);
@@ -1699,6 +1894,175 @@ export class LessonDetailComponent implements OnInit {
     this.filteredAvailableStudents = this.availableStudents.filter(student => {
       return student.name.toLowerCase().includes(term) || 
              student.studentId.toLowerCase().includes(term);
+    });
+  }
+
+  // ==================== BULK STUDENT ENROLLMENT ====================
+  
+  toggleStudentSelection(student: Student): void {
+    const index = this.selectedStudentsForEnrollment.findIndex(s => s._id === student._id);
+    if (index > -1) {
+      this.selectedStudentsForEnrollment.splice(index, 1);
+    } else {
+      this.selectedStudentsForEnrollment.push(student);
+    }
+    this.updateSelectAllState();
+  }
+
+  isStudentSelected(student: Student): boolean {
+    return this.selectedStudentsForEnrollment.some(s => s._id === student._id);
+  }
+
+  toggleSelectAllAvailable(): void {
+    this.selectAllAvailable = !this.selectAllAvailable;
+    if (this.selectAllAvailable) {
+      this.selectedStudentsForEnrollment = [...this.filteredAvailableStudents];
+    } else {
+      this.selectedStudentsForEnrollment = [];
+    }
+  }
+
+  updateSelectAllState(): void {
+    this.selectAllAvailable = this.filteredAvailableStudents.length > 0 && 
+      this.filteredAvailableStudents.every(s => this.isStudentSelected(s));
+  }
+
+  // ==================== ENROLL STUDENTS ====================
+
+  /**
+   * تسجيل طالب واحد للحصة (طريقة فردية)
+   */
+  enrollStudent(): void {
+    const studentId = this.addStudentForm.value.studentId;
+    if (!studentId) {
+      this.showError('يرجى اختيار طالب');
+      return;
+    }
+    
+    this.loading = true;
+    const url = `${this.apiUrl}/students/${studentId}/enroll-multiple`;
+    const payload = {
+      classIds: [this.lessonId],
+      schoolId: this.getSchoolId()
+    };
+    
+    console.log('📤 Enrolling student:', { studentId, classId: this.lessonId });
+    
+    this.http.post(url, payload, { headers: this.getHeaders() }).subscribe({
+      next: () => {
+        this.loadLessonDetails();
+        this.closeAddStudentPopup();
+        this.showSuccess('✅ تم إضافة الطالب بنجاح');
+        this.loading = false;
+      },
+      error: (err) => {
+        console.error('❌ Enrollment error:', err);
+        this.showError(err.error?.error || err.error?.message || 'فشل في إضافة الطالب');
+        this.loading = false;
+      }
+    });
+  }
+
+  /**
+   * تسجيل عدة طلاب دفعة واحدة للحصة
+   */
+  enrollMultipleStudents(): void {
+    if (this.selectedStudentsForEnrollment.length === 0) {
+      this.showError('يرجى اختيار طالب واحد على الأقل');
+      return;
+    }
+    
+    Swal.fire({
+      title: 'تأكيد التسجيل الجماعي',
+      html: `
+        <p>هل تريد تسجيل <strong>${this.selectedStudentsForEnrollment.length}</strong> طالب في الحصة <strong>${this.lesson?.name}</strong>؟</p>
+        <div class="text-start mt-3" style="max-height: 200px; overflow-y: auto;">
+          <ul>
+            ${this.selectedStudentsForEnrollment.map(s => `<li>${s.name} (${s.studentId})</li>`).join('')}
+          </ul>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '✅ تأكيد التسجيل',
+      cancelButtonText: 'إلغاء',
+      reverseButtons: true
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.processBulkEnrollment();
+      }
+    });
+  }
+
+  private processBulkEnrollment(): void {
+    this.loading = true;
+    
+    const studentIds = this.selectedStudentsForEnrollment.map(s => s._id);
+    const schoolId = this.getSchoolId();
+    
+    const promises = studentIds.map(studentId => {
+      const url = `${this.apiUrl}/students/${studentId}/enroll-multiple`;
+      const payload = {
+        classIds: [this.lessonId],
+        schoolId: schoolId
+      };
+      return this.http.post(url, payload, { headers: this.getHeaders() }).toPromise();
+    });
+    
+    Promise.allSettled(promises).then((results) => {
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+      
+      this.loading = false;
+      
+      if (successful > 0) {
+        this.showSuccess(`✅ تم تسجيل ${successful} طالب بنجاح${failed > 0 ? `، فشل ${failed} طالب` : ''}`);
+      } else {
+        this.showError('❌ فشل في تسجيل جميع الطلاب');
+      }
+      
+      this.selectedStudentsForEnrollment = [];
+      this.selectAllAvailable = false;
+      this.showBulkStudentSelection = false;
+      this.closeAddStudentPopup();
+      this.loadLessonDetails();
+    });
+  }
+
+  /**
+   * إزالة طالب من الحصة
+   */
+  removeStudent(studentId: string): void {
+    Swal.fire({
+      title: 'تأكيد الإزالة',
+      text: 'هل أنت متأكد من إزالة هذا الطالب من الحصة؟',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، إزالة',
+      cancelButtonText: 'إلغاء',
+      reverseButtons: true
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.loading = true;
+        const url = `${this.apiUrl}/students/${studentId}/unenroll-multiple`;
+        const payload = {
+          classIds: [this.lessonId],
+          schoolId: this.getSchoolId()
+        };
+        
+        this.http.post(url, payload, { headers: this.getHeaders() }).subscribe({
+          next: () => {
+            this.loadLessonDetails();
+            this.showSuccess('✅ تم إزالة الطالب بنجاح');
+            this.loading = false;
+          },
+          error: (err) => {
+            console.error('❌ Error removing student:', err);
+            this.showError('فشل في إزالة الطالب');
+            this.loading = false;
+          }
+        });
+      }
     });
   }
 
@@ -1758,53 +2122,11 @@ export class LessonDetailComponent implements OnInit {
     return payment ? payment.status : 'not-paid';
   }
 
-  // ==================== STUDENT MANAGEMENT ====================
-  
-  enrollStudent(): void {
-    const studentId = this.addStudentForm.value.studentId;
-    if (!studentId) {
-      this.showError('يرجى اختيار طالب');
-      return;
-    }
-    
-    this.loading = true;
-    const url = `${this.apiUrl}/classes/${this.lessonId}/enroll/${studentId}`;
-    
-    this.http.post(url, {}, { headers: this.getHeaders() }).subscribe({
-      next: () => {
-        this.loadLessonDetails();
-        this.closeAddStudentPopup();
-        this.showSuccess('تم إضافة الطالب بنجاح');
-        this.loading = false;
-      },
-      error: (err) => {
-        console.error('Error:', err);
-        this.showError(err.error?.error || err.error?.message || 'فشل في إضافة الطالب');
-        this.loading = false;
-      }
-    });
-  }
-
-  removeStudent(studentId: string): void {
-    if (!confirm('هل أنت متأكد من إزالة هذا الطالب من الحصة؟')) return;
-    
-    this.loading = true;
-    this.http.delete(`${this.apiUrl}/classes/${this.lessonId}/unenroll/${studentId}`).subscribe({
-      next: () => {
-        this.loadLessonDetails();
-        this.showSuccess('تم إزالة الطالب بنجاح');
-        this.loading = false;
-      },
-      error: (err) => {
-        console.error('Error removing student:', err);
-        this.showError('فشل في إزالة الطالب');
-        this.loading = false;
-      }
-    });
-  }
-
   // ==================== PAYMENT OPERATIONS ====================
   
+  /**
+   * معالجة الدفع الجديد مع طباعة الإيصال
+   */
   processPayment(): void {
     if (this.paymentForm.invalid) {
       this.showError('يرجى تعبئة جميع الحقول المطلوبة');
@@ -1812,6 +2134,8 @@ export class LessonDetailComponent implements OnInit {
     }
 
     this.loading = true;
+    const schoolId = this.getSchoolId();
+    
     const paymentData = {
       student: this.paymentForm.value.studentId,
       class: this.lessonId,
@@ -1821,45 +2145,41 @@ export class LessonDetailComponent implements OnInit {
       paymentMethod: this.paymentForm.value.paymentMethod,
       status: 'paid',
       notes: this.paymentForm.value.notes,
-      paymentDate: new Date()
+      paymentDate: new Date(),
+      schoolId: schoolId
     };
+
+    console.log('📤 Processing payment:', paymentData);
 
     this.http.post(`${this.apiUrl}/payments`, paymentData, { headers: this.getHeaders() }).subscribe({
       next: (response: any) => {
         const newPayment = response.payment || response;
         
-        // ✅ عرض نجاح التسجيل
         this.loadPayments();
         this.closeAddPaymentPopup();
-        this.showSuccess('✅ تم تسجيل الدفع بنجاح');
         this.loading = false;
         
-        // ✅ طباعة الإيصال تلقائياً
         Swal.fire({
           icon: 'success',
           title: '✅ تم الدفع بنجاح',
-          text: 'هل تريد طباعة الإيصال؟',
-          showCancelButton: true,
-          confirmButtonText: '🖨️ طباعة',
-          cancelButtonText: 'تخطي',
-          reverseButtons: true
-        }).then(result => {
-          if (result.isConfirmed) {
-            // محاولة طباعة الإيصال
-            this.printReceipt(newPayment);
-          } else {
-            this.showSuccess('تم حفظ الدفع - يمكنك الطباعة لاحقاً');
-          }
+          text: `تم دفع مبلغ ${paymentData.amount.toLocaleString()} د.ج`,
+          timer: 2000,
+          showConfirmButton: false
         });
+        
+        this.printReceipt(newPayment);
       },
       error: (err) => {
-        console.error('Error processing payment:', err);
+        console.error('❌ Error processing payment:', err);
         this.showError(err.error?.error || 'فشل في تسجيل الدفع');
         this.loading = false;
       }
     });
   }
 
+  /**
+   * تعديل الدفعة
+   */
   editPayment(payment: Payment): void {
     this.selectedPayment = payment;
     this.editPaymentForm.patchValue({
@@ -1886,17 +2206,20 @@ export class LessonDetailComponent implements OnInit {
       next: () => {
         this.loadPayments();
         this.closeEditPaymentPopup();
-        this.showSuccess('تم تحديث الدفعة بنجاح');
+        this.showSuccess('✅ تم تحديث الدفعة بنجاح');
         this.loading = false;
       },
       error: (err) => {
-        console.error('Error updating payment:', err);
+        console.error('❌ Error updating payment:', err);
         this.showError('فشل في تحديث الدفعة');
         this.loading = false;
       }
     });
   }
 
+  /**
+   * تسديد دفعة معلقة
+   */
   markPaymentAsPaid(payment: Payment): void {
     this.selectedPayment = payment;
     this.markPaidPaymentMethod = payment.paymentMethod || 'cash';
@@ -1907,49 +2230,80 @@ export class LessonDetailComponent implements OnInit {
     if (!this.selectedPayment) return;
     
     this.loading = true;
+    const schoolId = this.getSchoolId();
+    
     const updateData = {
       status: 'paid',
       paymentMethod: this.markPaidPaymentMethod,
-      paymentDate: new Date()
+      paymentDate: new Date(),
+      schoolId: schoolId
     };
     
-    this.http.put(`${this.apiUrl}/payments/${this.selectedPayment._id}`, updateData, { headers: this.getHeaders() }).subscribe({
-      next: () => {
+    this.http.put(`${this.apiUrl}/payments/${this.selectedPayment._id}/pay`, updateData, { headers: this.getHeaders() }).subscribe({
+      next: (response: any) => {
+        this.soundService.playSuccess();
         this.loadPayments();
         this.closeMarkPaidPopup();
-        this.showSuccess('تم تسديد الدفعة بنجاح');
+        this.showSuccess('✅ تم تسديد الدفعة بنجاح');
         this.loading = false;
+        
+        const updatedPayment = response.payment || this.selectedPayment;
+        this.printReceipt(updatedPayment);
       },
       error: (err) => {
-        console.error('Error marking payment as paid:', err);
+        console.error('❌ Error marking payment as paid:', err);
         this.showError('فشل في تسديد الدفعة');
         this.loading = false;
       }
     });
   }
 
+  /**
+   * إلغاء دفعة مدفوعة
+   */
   cancelPayment(): void {
     if (!this.selectedPayment) return;
     
     this.loading = true;
-    this.http.put(`${this.apiUrl}/payments/${this.selectedPayment._id}/cancel`, {
-      reason: this.cancelReason
-    }, { headers: this.getHeaders() }).subscribe({
+    const payload: any = {
+      reason: this.cancelReason || 'تم الإلغاء من قبل المستخدم'
+    };
+    
+    const schoolId = this.getSchoolId();
+    if (schoolId) {
+      payload.schoolId = schoolId;
+    }
+    
+    this.http.put(`${this.apiUrl}/payments/${this.selectedPayment._id}/cancel`, payload, { headers: this.getHeaders() }).subscribe({
       next: () => {
         this.loadPayments();
+        this.soundService.playSuccess();
         this.closeCancelPaymentPopup();
-        this.showSuccess('تم إلغاء الدفعة بنجاح');
+        this.showSuccess('✅ تم إلغاء الدفعة بنجاح');
         this.loading = false;
       },
       error: (err) => {
-        console.error('Error canceling payment:', err);
+        console.error('❌ Error canceling payment:', err);
         this.showError('فشل في إلغاء الدفعة');
         this.loading = false;
       }
     });
   }
 
+  /**
+   * حذف دفعة
+   */
   deletePayment(payment: Payment): void {
+    if (payment.status === 'paid') {
+      Swal.fire({
+        icon: 'warning',
+        title: 'لا يمكن الحذف المباشر',
+        text: 'هذه الدفعة مدفوعة. لاسترجاعها، يرجى استخدام زر "إلغاء الدفعة" بدلاً من الحذف.',
+        confirmButtonText: 'حسناً'
+      });
+      return;
+    }
+    
     this.selectedPayment = payment;
     this.showDeleteConfirmPopup = true;
   }
@@ -1960,13 +2314,14 @@ export class LessonDetailComponent implements OnInit {
     this.loading = true;
     this.http.delete(`${this.apiUrl}/payments/${this.selectedPayment._id}`, { headers: this.getHeaders() }).subscribe({
       next: () => {
+        this.soundService.playDelete();
         this.loadPayments();
         this.closeDeleteConfirmPopup();
-        this.showSuccess('تم حذف الدفعة بنجاح');
+        this.showSuccess('✅ تم حذف الدفعة بنجاح');
         this.loading = false;
       },
       error: (err) => {
-        console.error('Error deleting payment:', err);
+        console.error('❌ Error deleting payment:', err);
         this.showError('فشل في حذف الدفعة');
         this.loading = false;
       }
@@ -1976,63 +2331,102 @@ export class LessonDetailComponent implements OnInit {
   // ==================== PRINTING ====================
 
   /**
-   * طباعة إيصال الدفع بعد التسديد
+   * طباعة إيصال الدفع
    */
   async printReceipt(payment: Payment): Promise<void> {
     try {
-      this.loading = true;
-      
-      // عرض رسالة انتظار
-      this.showSuccess('جاري الاتصال بالطابعة...');
-      
-      // طباعة الإيصال
-      const success = await this.printerService.printPaymentReceipt(
-        payment, 
-        this.lesson
-      );
-      
-      if (success) {
-        this.showSuccess('✅ تم طباعة الإيصال بنجاح');
-      } else {
-        // عرض خيارات بديلة في حال فشل الطباعة
+      // التحقق من اتصال الطابعة
+      if (!this.printerService.checkConnectionStatus()) {
         const result = await Swal.fire({
+          title: '⚠️ الطابعة غير متصلة',
+          html: `
+            <div class="text-start">
+              <p>لم يتم الاتصال بالطابعة بعد.</p>
+              <p>يرجى النقر على "اتصال" لاختيار الطابعة من القائمة.</p>
+              <div class="alert alert-info mt-3">
+                <small>📌 ملاحظة: تأكد من أن الطابعة متصلة بالجهاز ومشغلة.</small>
+              </div>
+            </div>
+          `,
           icon: 'warning',
-          title: '⚠️ فشل الطباعة',
-          text: 'هل تريد محاولة الطباعة مرة أخرى؟',
           showCancelButton: true,
-          confirmButtonText: 'محاولة مرة أخرى',
-          cancelButtonText: 'طباعة عبر المتصفح',
+          confirmButtonText: '🖨️ اتصال بالطابعة',
+          cancelButtonText: '📄 طباعة عادية',
           reverseButtons: true
         });
-        
+
         if (result.isConfirmed) {
-          // محاولة مرة أخرى
-          await this.printReceipt(payment);
+          this.showPrinterConnectionModal();
+          return;
         } else if (result.dismiss === Swal.DismissReason.cancel) {
-          // طباعة عبر المتصفح (نسخة احتياطية)
           this.printReceiptViaWindow(payment);
+          return;
         } else {
-          this.showError('تم تخطي الطباعة');
+          return;
         }
       }
+
+      // تحضير بيانات الإيصال
+      const receiptData: ReceiptData = {
+        receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
+        date: new Date().toLocaleDateString('en-US'),
+        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        studentName: this.getStudentName(payment.student) || 'طالب',
+        studentId: this.getStudentDetails(payment.student)?.studentId || '',
+        className: this.lesson?.name || payment.className || 'حصة',
+        month: payment.month || '',
+        amount: payment.amount || 0,
+        paymentMethod: payment.paymentMethod || 'cash',
+        academicYear: this.lesson?.academicYear || '',
+        parentPhone: this.getStudentDetails(payment.student)?.parentPhone || '',
+        notes: payment.notes || 'دفعة فردية'
+      };
+
+      console.log('📤 Printing receipt:', receiptData);
+
+      Swal.fire({
+        title: '🖨️ جاري الطباعة...',
+        text: 'يرجى الانتظار، يتم إرسال البيانات إلى الطابعة.',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      const success = await this.printerService.printProfessionalReceipt(receiptData);
       
-      this.loading = false;
+      Swal.close();
+
+      if (success) {
+        Swal.fire({
+          icon: 'success',
+          title: '✅ تمت الطباعة',
+          text: 'تم طباعة الإيصال على الطابعة بنجاح',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } else {
+        throw new Error('فشلت الطباعة');
+      }
+
     } catch (error) {
-      console.error('خطأ في الطباعة:', error);
-      this.loading = false;
+      console.error('❌ خطأ في طباعة الإيصال:', error);
+      Swal.close();
       
-      // عرض خيار الطباعة عبر المتصفح
-      const result = await Swal.fire({
+      const fallbackResult = await Swal.fire({
+        title: '❌ فشل الطباعة على الطابعة',
+        html: `
+          <div class="text-start">
+            <p>حدث خطأ أثناء محاولة الطباعة على الطابعة.</p>
+            <p>هل تريد طباعة الإيصال عبر المتصفح بدلاً من ذلك؟</p>
+          </div>
+        `,
         icon: 'error',
-        title: '❌ فشل الاتصال بالطابعة',
-        text: 'هل تريد طباعة الإيصال عبر المتصفح؟',
         showCancelButton: true,
-        confirmButtonText: 'نعم، طباعة عبر المتصفح',
+        confirmButtonText: '📄 طباعة عبر المتصفح',
         cancelButtonText: 'تخطي',
         reverseButtons: true
       });
-      
-      if (result.isConfirmed) {
+
+      if (fallbackResult.isConfirmed) {
         this.printReceiptViaWindow(payment);
       }
     }
@@ -2055,83 +2449,224 @@ export class LessonDetailComponent implements OnInit {
   }
 
   /**
-   * توليد HTML للإيصال للطباعة عبر المتصفح
+   * توليد HTML للإيصال
    */
   private generateReceiptHTML(payment: Payment): string {
-    // Safely resolve student name: payment.student can be null, string, or an object
-    let studentName = 'طالب';
-    if (payment.student) {
-      if (typeof payment.student === 'string') {
-        studentName = payment.student;
-      } else {
-        // payment.student may be typed as object; use a safe any cast to access name
-        const s: any = payment.student as any;
-        if (s && (s.name || s.fullName || s.username)) {
-          studentName = s.name || s.fullName || s.username;
-        }
-      }
-    }
+    const studentName = this.getStudentName(payment.student) || 'طالب';
+    const studentObj = this.getStudentDetails(payment.student);
     
     return `
       <!DOCTYPE html>
       <html dir="rtl">
       <head>
         <meta charset="UTF-8">
-        <title>إيصال الدفع</title>
+        <title>إيصال الدفع - ${payment.invoiceNumber || 'REC-' + Date.now().toString().slice(-6)}</title>
         <style>
-          body { font-family: 'Arial', sans-serif; padding: 20px; max-width: 350px; margin: auto; direction: rtl; }
-          .receipt { border: 1px solid #ddd; padding: 20px; border-radius: 8px; }
-          .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
-          .header h2 { margin: 0; color: #2563eb; }
-          .header small { color: #666; }
-          .info { margin: 15px 0; }
-          .info-item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed #eee; }
-          .total { font-size: 20px; font-weight: bold; text-align: center; color: #dc2626; margin: 15px 0; }
-          .footer { text-align: center; font-size: 12px; color: #666; border-top: 2px solid #333; padding-top: 10px; margin-top: 10px; }
-          .status-paid { color: #16a34a; font-weight: bold; }
-          .btn-print { display: block; width: 100%; padding: 10px; background: #2563eb; color: white; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 15px; }
-          .btn-print:hover { background: #1d4ed8; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: 'Cairo', 'Tahoma', 'Arial', sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            direction: rtl;
+          }
+          .receipt {
+            max-width: 350px;
+            width: 100%;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+          }
+          .receipt-header {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            text-align: center;
+            padding: 20px;
+          }
+          .receipt-header h1 { font-size: 20px; margin-bottom: 5px; }
+          .receipt-header p { font-size: 12px; opacity: 0.9; }
+          .receipt-body { padding: 20px; }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed #e0e0e0;
+          }
+          .info-label { font-weight: bold; color: #555; font-size: 13px; }
+          .info-value { color: #333; font-size: 13px; }
+          .amount-row {
+            background: #e8f5e9;
+            margin: 15px -20px -20px -20px;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .amount-label { font-weight: bold; font-size: 16px; color: #2e7d32; }
+          .amount-value { font-size: 22px; font-weight: bold; color: #2e7d32; }
+          .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            background: #d1fae5;
+            color: #065f46;
+          }
+          .receipt-footer {
+            background: #f9f9f9;
+            padding: 15px 20px;
+            text-align: center;
+            font-size: 11px;
+            color: #888;
+            border-top: 1px solid #e0e0e0;
+          }
           @media print {
-            .btn-print { display: none; }
+            body { background: white; padding: 0; }
+            .receipt { box-shadow: none; border: 1px solid #ddd; }
+            .receipt-header { background: #1e3c72; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .amount-row { background: #e8f5e9; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           }
         </style>
       </head>
       <body>
         <div class="receipt">
-          <div class="header">
-            <h2>ROUAD AL-MAARIFA ACADEMY</h2>
-            <small>Algeria, Touggourt</small>
+          <div class="receipt-header">
+            <h1>أكاديمية الرواد للتعليم والمعارف</h1>
+            <p>إيصال دفع رسمي</p>
           </div>
-          
-          <div class="info">
-            <div class="info-item"><span>رقم الإيصال:</span> <span>${payment.invoiceNumber || 'REC-' + Date.now().toString().slice(-6)}</span></div>
-            <div class="info-item"><span>التاريخ:</span> <span>${new Date(payment.paymentDate || Date.now()).toLocaleDateString('ar-EG')}</span></div>
-            <div class="info-item"><span>الطالب:</span> <span>${studentName}</span></div>
-            <div class="info-item"><span>الحصة:</span> <span>${this.lesson?.name || 'حصة'}</span></div>
-            <div class="info-item"><span>الشهر:</span> <span>${payment.month || ''}</span></div>
-            <div class="info-item"><span>طريقة الدفع:</span> <span>${this.getPaymentMethodText(payment.paymentMethod)}</span></div>
+          <div class="receipt-body">
+            <div class="info-row">
+              <span class="info-label">رقم الإيصال:</span>
+              <span class="info-value">${payment.invoiceNumber || 'REC-' + Date.now().toString().slice(-6)}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">التاريخ:</span>
+              <span class="info-value">${new Date(payment.paymentDate || Date.now()).toLocaleDateString('ar-EG')}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">الطالب:</span>
+              <span class="info-value">${studentName} ${studentObj?.studentId ? '(' + studentObj.studentId + ')' : ''}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">الحصة:</span>
+              <span class="info-value">${this.lesson?.name || 'حصة'}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">الشهر:</span>
+              <span class="info-value">${payment.month || ''}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">طريقة الدفع:</span>
+              <span class="info-value">${this.getPaymentMethodText(payment.paymentMethod)}</span>
+            </div>
+            ${payment.notes ? `
+            <div class="info-row">
+              <span class="info-label">ملاحظات:</span>
+              <span class="info-value">${payment.notes}</span>
+            </div>
+            ` : ''}
+            <div style="text-align: center; margin: 10px 0;">
+              <span class="status-badge">✅ مدفوع</span>
+            </div>
+            <div class="amount-row">
+              <span class="amount-label">المبلغ المدفوع:</span>
+              <span class="amount-value">${(payment.amount || 0).toLocaleString()} د.ج</span>
+            </div>
           </div>
-          
-          <div class="total">
-            ${payment.amount.toLocaleString()} د.ج
+          <div class="receipt-footer">
+            <p>شكراً لثقتكم</p>
+            <p>نظام إدارة التعليم - ريدوكس</p>
           </div>
-          
-          <div style="text-align: center; margin: 10px 0;">
-            <span class="status-paid">✅ مدفوع</span>
-          </div>
-          
-          ${payment.notes ? `<div style="font-size: 12px; color: #666; margin: 10px 0;">ملاحظات: ${payment.notes}</div>` : ''}
-          
-          <div class="footer">
-            <div>نظام إدارة التعليم</div>
-            <div style="font-size: 10px;">شكراً لثقتكم</div>
-          </div>
-          
-          <button class="btn-print" onclick="window.print()">🖨️ طباعة</button>
         </div>
       </body>
       </html>
     `;
+  }
+
+  // ==================== PRINTER CONNECTION ====================
+  
+  private showPrinterConnectionModal(): void {
+    Swal.fire({
+      title: '🖨️ اختيار طريقة الاتصال بالطابعة',
+      html: `
+        <div class="text-start">
+          <div class="form-group">
+            <label>🔌 نوع الاتصال</label>
+            <select id="connectionType" class="form-control" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+              <option value="usb">USB</option>
+              <option value="com">COM (منفذ تسلسلي)</option>
+            </select>
+          </div>
+          <div class="form-group" id="comPortGroup">
+            <label>📟 منفذ COM</label>
+            <select id="comPort" class="form-control" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+              <option value="COM1">COM1</option>
+              <option value="COM2">COM2</option>
+              <option value="COM3">COM3</option>
+              <option value="COM4">COM4</option>
+              <option value="COM5">COM5</option>
+              <option value="COM6">COM6</option>
+              <option value="COM7">COM7</option>
+              <option value="COM8">COM8</option>
+              <option value="COM9">COM9</option>
+              <option value="COM10">COM10</option>
+            </select>
+          </div>
+          <div class="alert alert-info mt-3" style="background:#dbeafe;color:#1e40af;padding:10px;border-radius:6px;">
+            <small>📌 ملاحظة: تأكد من أن الطابعة متصلة بالجهاز ومشغلة.</small>
+          </div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: '🔌 اتصال',
+      cancelButtonText: 'إلغاء',
+      preConfirm: () => {
+        const connectionType = (document.getElementById('connectionType') as HTMLSelectElement).value;
+        const comPort = (document.getElementById('comPort') as HTMLSelectElement).value;
+        return { connectionType, comPort };
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed && result.value) {
+        const { connectionType, comPort } = result.value;
+        
+        try {
+          let success = false;
+          if (connectionType === 'usb') {
+            success = await this.printerService.connectToThermalPrinter();
+          } else {
+            success = await this.printerService.connectToComPort(comPort, 9600);
+          }
+          
+          if (success) {
+            Swal.fire({
+              icon: 'success',
+              title: '✅ تم الاتصال بالطابعة',
+              timer: 2000,
+              showConfirmButton: false
+            });
+          } else {
+            Swal.fire({
+              icon: 'error',
+              title: '❌ فشل الاتصال',
+              text: 'تأكد من توصيل الطابعة وتشغيلها',
+              confirmButtonText: 'حسناً'
+            });
+          }
+        } catch (error) {
+          Swal.fire({
+            icon: 'error',
+            title: '❌ خطأ',
+            text: 'حدث خطأ أثناء محاولة الاتصال بالطابعة',
+            confirmButtonText: 'حسناً'
+          });
+        }
+      }
+    });
   }
 
   // ==================== UTILITY FUNCTIONS ====================
@@ -2190,7 +2725,10 @@ export class LessonDetailComponent implements OnInit {
     const map: { [key: string]: string } = {
       'cash': 'نقداً',
       'baridimob': 'بريدي موب',
-      'bank': 'تحويل بنكي'
+      'bank': 'تحويل بنكي',
+      'card': 'بطاقة ائتمان',
+      'online': 'دفع إلكتروني',
+      'mobile': 'دفع محمول'
     };
     return method ? (map[method] || method) : '---';
   }
@@ -2279,6 +2817,7 @@ export class LessonDetailComponent implements OnInit {
   // ==================== DIALOG POPUP CONTROLS ====================
   
   setActiveTab(tab: string): void {
+    this.soundService.playClick();
     this.activeTab = tab;
     if (tab === 'attendance' && !this.attendanceRecords.length) {
       this.loadAttendance();
@@ -2296,6 +2835,8 @@ export class LessonDetailComponent implements OnInit {
   openAddStudentPopup(): void {
     this.showAddStudentPopup = true;
     this.availableStudentSearchTerm = '';
+    this.selectedStudentsForEnrollment = [];
+    this.selectAllAvailable = false;
     this.loadAvailableStudents();
   }
 
@@ -2303,9 +2844,11 @@ export class LessonDetailComponent implements OnInit {
     if (event && event.target === event.currentTarget) {
       this.showAddStudentPopup = false;
       this.addStudentForm.reset();
+      this.selectedStudentsForEnrollment = [];
     } else if (!event) {
       this.showAddStudentPopup = false;
       this.addStudentForm.reset();
+      this.selectedStudentsForEnrollment = [];
     }
   }
 

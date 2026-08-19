@@ -521,8 +521,14 @@ export class NavBarComponent implements OnInit {
   activeSection = 'dashboard';
   hoveredItem: string | null = null;
 
-  userName = 'ياسر خيشه';
-  userRole = 'مدير النظام';
+  userData = (() => {
+    const rawUser = localStorage.getItem('user');
+    const parsedUser = rawUser ? JSON.parse(rawUser) : null;
+    return parsedUser ?? {};
+  })();
+
+  userName = this.userData?.fullName ?? 'المستخدم';
+  userRole = this.userData?.role ?? 'Admin';
   userAvatar = 'https://ui-avatars.com/api/?name=ياسر+خيشه&background=4361ee&color=fff&size=128';
 
   menuItems = [

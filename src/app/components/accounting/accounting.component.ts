@@ -1,4 +1,8 @@
 // comprehensive-accounting.component.ts
+// ================================================================
+// ===== الفاتورة الاحترافية - الهيدر المحترف بالكامل =====
+// ================================================================
+
 import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -195,37 +199,31 @@ interface NavTab {
   icon: string;
 }
 
+interface SchoolInfo {
+  name: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  schoolKey?: string;
+  logo?: string;
+}
+
 interface InvoiceData {
   invoiceNumber: string;
   date: string;
-  school: { name: string; address?: string; phone?: string; email?: string; schoolKey?: string } | null;
+  school: SchoolInfo | null;
   teacher: { name: string };
   class: { name: string };
   month: string;
-  students: { name: string; sessions: string | number; teacherShare: number }[];
+  totalSessions: number;
+  students: { name: string; sessions: string; attendanceRate: number; teacherShare: number }[];
   totalAmount: number;
   totalPaid: number;
   remainingAmount: number;
   status: string;
+  statusText: string;
 }
 
-// ==================== دوال مساعدة ====================
-function generateStudentUsername(name: string, academicYear: string): string {
-  const cleanName = name.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').toLowerCase();
-  const yearCode = academicYear || 'STU';
-  const timestamp = Date.now().toString().slice(-4);
-  const randomNum = Math.floor(100 + Math.random() * 900);
-  return `${cleanName}_${yearCode}_${timestamp}${randomNum}`.substring(0, 30);
-}
-
-function generateStudentPassword(name: string, academicYear: string): string {
-  const namePart = name.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '').substring(0, 4);
-  const yearPart = academicYear || 'STU';
-  const randomPart = Math.floor(1000 + Math.random() * 9000);
-  return `${namePart}${yearPart}${randomPart}`;
-}
-
-// ==================== واجهة بيانات العمولة المتاحة ====================
 interface AvailableCommission {
   classId: string;
   className: string;
@@ -246,7 +244,6 @@ interface AvailableCommission {
   paymentSystem: string;
 }
 
-// ==================== واجهة ملخص مستحقات الأساتذة ====================
 interface TeacherDuesSummary {
   summary: {
     totalAmount: number;
@@ -282,7 +279,6 @@ interface TeacherDuesSummary {
   }[];
 }
 
-// ==================== واجهة تفاصيل مدفوعات الأستاذ ====================
 interface TeacherPaymentDetails {
   teacher: {
     _id: string;
@@ -406,7 +402,7 @@ interface TeacherPaymentDetails {
         <div class="brand-mark"><svg class="icon"><use href="#icon-ledger"></use></svg></div>
         <div class="brand-text">
           <span class="brand-title">{{ schoolName || 'لوحة المحاسبة' }}</span>
-          <span class="brand-sub">النظام المحاسبي الشامل</span>
+          <span class="brand-sub">Redox Accounting MR-AC 1</span>
         </div>
       </div>
     </div>
@@ -990,7 +986,7 @@ interface TeacherPaymentDetails {
     </div>
   </div>
 
-  <!-- ===== مودال إنشاء العمولات المتعددة (Bulk) ===== -->
+  <!-- مودال إنشاء العمولات المتعددة (Bulk) -->
   <div class="modal-overlay" *ngIf="showBulkCommissionModal" (click)="closeBulkCommissionModal()">
     <div class="modal-box modal-box-lg" (click)="$event.stopPropagation()">
       <h3 class="modal-title">إنشاء عمولات الشهر</h3>
@@ -1034,7 +1030,7 @@ interface TeacherPaymentDetails {
     </div>
   </div>
 
-  <!-- مودال تفاصيل العمولة (معدل) -->
+  <!-- مودال تفاصيل العمولة -->
   <div class="modal-overlay" *ngIf="showCommissionDetailsModal" (click)="closeCommissionDetailsModal()">
     <div class="modal-box modal-box-lg" (click)="$event.stopPropagation()">
       <h3 class="modal-title">تفاصيل العمولة</h3>
@@ -1048,7 +1044,6 @@ interface TeacherPaymentDetails {
           <span>الحالة: <span class="badge" [ngClass]="'badge-' + commissionDetails.commission?.status">{{ commissionDetails.commission?.status }}</span></span>
         </div>
 
-        <!-- قسم تحديد النسبة وإلغاء العمولة -->
         <div class="bulk-percentage-bar">
           <span class="bulk-percentage-label">تطبيق نسبة موحدة على كل الطلاب:</span>
           <button class="btn btn-sm btn-primary" (click)="openBulkPercentageModal()"><svg class="icon"><use href="#icon-target"></use></svg> تحديد النسبة تلقائيا</button>
@@ -1199,67 +1194,150 @@ interface TeacherPaymentDetails {
     </div>
   </div>
 
-  <!-- مودال الفاتورة الاحترافية القابلة للطباعة -->
+  <!-- ================================================================ -->
+  <!-- ===== مودال الفاتورة الاحترافية (مستقلة للطباعة) ===== -->
+  <!-- ================================================================ -->
   <div class="modal-overlay" *ngIf="showInvoiceModal" (click)="closeInvoiceModal()">
     <div class="modal-box modal-box-lg invoice-modal" (click)="$event.stopPropagation()">
-      <div class="invoice-print-area" *ngIf="invoiceData as inv">
+      
+      <!-- ===== محتوى الفاتورة القابل للطباعة ===== -->
+      <div class="invoice-print-area" id="invoicePrintArea" *ngIf="invoiceData as inv">
+        
+        <!-- ===== هيدر الفاتورة المحترف ===== -->
         <div class="invoice-header">
-          <div class="invoice-school-info">
-            <h2 class="invoice-school-name">{{ inv.school?.name || 'المؤسسة التعليمية' }}</h2>
-            <p class="invoice-school-detail" *ngIf="inv.school?.address">{{ inv.school?.address }}</p>
-            <p class="invoice-school-detail" *ngIf="inv.school?.phone">هاتف: {{ inv.school?.phone }}</p>
-            <p class="invoice-school-detail" *ngIf="inv.school?.email">{{ inv.school?.email }}</p>
+          <!-- الصف العلوي: المدرسة + رقم الفاتورة -->
+          <div class="invoice-header-row">
+            <div class="school-brand">
+              <div class="school-brand-icon">
+                  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="3" y="5" width="26" height="22" rx="4" stroke="currentColor" stroke-width="1.6"/>
+                    <path d="M10 12L16 7L22 12V21H10V12Z" stroke="currentColor" stroke-width="1.4"/>
+                    <circle cx="16" cy="17" r="2" stroke="currentColor" stroke-width="1.2"/>
+                    <path d="M13 21L16 24L19 21" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                  </svg>
+              </div>
+              <div class="school-brand-text">
+                <h2>{{ inv.school?.name || 'المؤسسة التعليمية' }}</h2>
+                <span class="school-brand-sub">Redox Accounting MR-AC 1</span>
+              </div>
+            </div>
+            <div class="invoice-id">
+              <div class="invoice-id-label">فاتورة عمولة</div>
+              <div class="invoice-id-number">
+                <span class="id-prefix">#</span>
+                <span>{{ inv.invoiceNumber }}</span>
+              </div>
+              <div class="invoice-id-date">{{ inv.date }}</div>
+            </div>
           </div>
-          <div class="invoice-mark">
-            <svg class="icon invoice-mark-shield"><use href="#icon-shield"></use></svg>
-            <span class="invoice-mark-title">فاتورة عمولة</span>
-            <span class="invoice-mark-num">{{ inv.invoiceNumber }}</span>
-            <span class="invoice-mark-date">{{ inv.date }}</span>
+
+          <!-- الفاصل الأنعم -->
+          <div class="invoice-divider-clean"></div>
+
+          <!-- الصف السفلي: معلومات أساسية -->
+          <div class="invoice-info-grid">
+            <div class="info-item">
+              <svg class="info-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="10" cy="6" r="3.5" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M3 16.5C3 13.5 6 11.5 10 11.5C14 11.5 17 13.5 17 16.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              <div>
+                <span class="info-label">الأستاذ</span>
+                <span class="info-value">{{ inv.teacher?.name }}</span>
+              </div>
+            </div>
+            <div class="info-item">
+              <svg class="info-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M3 8H17" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M7 11H11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              <div>
+                <span class="info-label">الحصة</span>
+                <span class="info-value">{{ inv.class?.name }}</span>
+              </div>
+            </div>
+            <div class="info-item">
+              <svg class="info-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="4.5" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M3 8H17" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M6 3V6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M14 3V6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+              <div>
+                <span class="info-label">الشهر</span>
+                <span class="info-value">{{ inv.month }}</span>
+              </div>
+            </div>
+            <div class="info-item">
+              <svg class="info-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M10 6V10L12.5 12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+              <div>
+                <span class="info-label">الحالة</span>
+                <span class="info-status" [class.status-paid]="inv.status === 'paid'" [class.status-pending]="inv.status !== 'paid'">
+                  <span class="status-dot"></span>
+                  {{ inv.statusText }}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <hr class="invoice-divider" />
-
-        <div class="invoice-meta">
-          <div><strong>الأستاذ:</strong> {{ inv.teacher?.name }}</div>
-          <div><strong>الحصة:</strong> {{ inv.class?.name }}</div>
-          <div><strong>الشهر:</strong> {{ inv.month }}</div>
-          <div><strong>الحالة:</strong> {{ inv.status }}</div>
+        <!-- عدد الحصص -->
+        <div class="sessions-banner">
+          📚 عدد الحصص في الشهر: <strong>{{ inv.totalSessions }}</strong>
         </div>
 
+        <!-- جدول الطلاب -->
         <table class="invoice-table">
           <thead>
             <tr>
               <th>#</th>
               <th>الطالب</th>
               <th>عدد الحصص</th>
+              <th>نسبة الحضور</th>
               <th>حصة الأستاذ</th>
             </tr>
           </thead>
           <tbody>
             <tr *ngFor="let s of inv.students; let i = index">
               <td>{{ i + 1 }}</td>
-              <td>{{ s.name }}</td>
-              <td>{{ s.sessions }}</td>
-              <td>{{ s.teacherShare | number:'1.0-0' }}</td>
+              <td class="student-name">{{ s.name }}</td>
+              <td class="sessions-cell">{{ s.sessions }}</td>
+              <td class="attendance-cell">
+                <span class="attendance-rate" [class.high]="s.attendanceRate >= 80" [class.medium]="s.attendanceRate >= 50 && s.attendanceRate < 80" [class.low]="s.attendanceRate < 50">
+                  {{ s.attendanceRate }}%
+                </span>
+              </td>
+              <td class="amount-cell">{{ s.teacherShare | number:'1.0-0' }}</td>
             </tr>
           </tbody>
         </table>
 
+        <!-- الإجماليات -->
         <div class="invoice-totals">
-          <div class="invoice-total-row"><span>الإجمالي المستحق</span><span>{{ inv.totalAmount | number:'1.0-0' }}</span></div>
-          <div class="invoice-total-row"><span>المدفوع</span><span>{{ inv.totalPaid | number:'1.0-0' }}</span></div>
-          <div class="invoice-total-row invoice-total-row-final"><span>المتبقي</span><span>{{ inv.remainingAmount | number:'1.0-0' }}</span></div>
+          <div class="total-row"><span>الإجمالي المستحق</span><span>{{ inv.totalAmount | number:'1.0-0' }}</span></div>
+          <div class="total-row"><span>المدفوع</span><span>{{ inv.totalPaid | number:'1.0-0' }}</span></div>
+          <div class="total-row final"><span>المتبقي</span><span>{{ inv.remainingAmount | number:'1.0-0' }}</span></div>
         </div>
 
+        <!-- تذييل -->
         <div class="invoice-footer">
-          <p>هذه الفاتورة تم إصدارها إلكترونيا عبر النظام المحاسبي لـ {{ inv.school?.name }}</p>
-          <div class="invoice-signature-line"><span>توقيع الإدارة</span><span>توقيع الأستاذ</span></div>
+          <p>تم إصدار هذه الفاتورة إلكترونياً عبر النظام المحاسبي لـ {{ inv.school?.name || 'المؤسسة التعليمية' }}</p>
+          <div class="signature-line">
+            <span>توقيع الإدارة</span>
+            <span>توقيع الأستاذ</span>
+          </div>
         </div>
       </div>
 
+      <!-- أزرار التحكم (تظهر فقط في الواجهة، وتختفي عند الطباعة) -->
       <div class="modal-actions no-print">
-        <button class="btn btn-primary" (click)="printInvoice()"><svg class="icon"><use href="#icon-printer"></use></svg> طباعة الفاتورة</button>
+        <button class="btn btn-primary" (click)="printInvoice()">
+          <svg class="icon"><use href="#icon-printer"></use></svg> طباعة الفاتورة
+        </button>
         <button class="btn btn-outline" (click)="closeInvoiceModal()">إغلاق</button>
       </div>
     </div>
@@ -1268,10 +1346,13 @@ interface TeacherPaymentDetails {
 </div>
   `,
   styles: [`
+    /* ================================================================ */
+    /* ===== الأنماط الأساسية ===== */
+    /* ================================================================ */
+
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 
     :host {
-      /* ===== نظام الألوان: دفتر الأستاذ (Ledger) ===== */
       --ink: #10192b;
       --ink-2: #1c2942;
       --paper: #f6f3ea;
@@ -1280,28 +1361,23 @@ interface TeacherPaymentDetails {
       --text: #1b2436;
       --text-muted: #6b6357;
       --border: #e5ddc9;
-
       --brass: #a97a3c;
       --brass-deep: #86602c;
       --brass-light: #cf9f5e;
       --brass-tint: #f5ead6;
-
       --emerald: #1f6f56;
       --emerald-tint: #e2efe8;
       --rose: #a8434a;
       --rose-tint: #f5e5e4;
       --amber: #b1802b;
       --amber-tint: #f6ecd8;
-
       --success: var(--emerald);
       --danger: var(--rose);
       --warning: var(--amber);
-
       --radius: 14px;
       --radius-lg: 20px;
       --shadow: 0 3px 14px rgba(16, 25, 43, 0.06);
       --shadow-lg: 0 24px 60px rgba(16, 25, 43, 0.22);
-
       display: block;
       direction: rtl;
       font-family: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -1311,10 +1387,12 @@ interface TeacherPaymentDetails {
     }
 
     * { box-sizing: border-box; }
-
     .icon { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; vertical-align: -3px; }
 
-    /* ==================== شاشة الرمز السري ==================== */
+    /* ================================================================ */
+    /* ===== شاشة الرمز السري ===== */
+    /* ================================================================ */
+
     .gate-screen {
       min-height: 100vh;
       display: flex;
@@ -1416,7 +1494,10 @@ interface TeacherPaymentDetails {
       text-decoration: underline;
     }
 
-    /* ==================== الهيكل العام ==================== */
+    /* ================================================================ */
+    /* ===== الهيكل العام ===== */
+    /* ================================================================ */
+
     .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
 
     .app-header {
@@ -1458,7 +1539,10 @@ interface TeacherPaymentDetails {
 
     .app-body { display: flex; flex: 1; min-height: 0; }
 
-    /* التنقل الجانبي - حواسيب */
+    /* ================================================================ */
+    /* ===== التنقل الجانبي ===== */
+    /* ================================================================ */
+
     .side-nav {
       width: 226px;
       flex-shrink: 0;
@@ -1510,7 +1594,10 @@ interface TeacherPaymentDetails {
     .input-sm { padding: 4px 8px; font-size: 12px; width: 62px; }
     .field-label { display: block; font-size: 12px; color: var(--text-muted); margin: 12px 0 5px; font-weight: 600; }
 
-    /* أزرار */
+    /* ================================================================ */
+    /* ===== الأزرار ===== */
+    /* ================================================================ */
+
     .btn {
       padding: 9px 16px; border-radius: 9px; border: none; font-family: inherit;
       font-weight: 700; font-size: 13px; cursor: pointer; transition: filter .15s, transform .1s, opacity .15s;
@@ -1532,7 +1619,10 @@ interface TeacherPaymentDetails {
     .btn-sm { padding: 6px 12px; font-size: 12px; }
     .btn-xs { padding: 5px 10px; font-size: 11px; border-radius: 7px; }
 
-    /* بطاقات إحصائية */
+    /* ================================================================ */
+    /* ===== البطاقات والإحصائيات ===== */
+    /* ================================================================ */
+
     .cards-grid {
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px;
     }
@@ -1562,7 +1652,10 @@ interface TeacherPaymentDetails {
     .stat-neutral { flex-direction: column; align-items: flex-start; gap: 6px; }
     .total-expense-card { margin-bottom: 16px; flex-direction: row; }
 
-    /* ==================== مستحقات الأساتذة ==================== */
+    /* ================================================================ */
+    /* ===== مستحقات الأساتذة ===== */
+    /* ================================================================ */
+
     .teacher-dues-section {
       background: var(--surface);
       border-radius: var(--radius);
@@ -1675,7 +1768,59 @@ interface TeacherPaymentDetails {
       font-variant-numeric: tabular-nums;
     }
 
-    /* ==================== مودال إنشاء العمولات المتعددة ==================== */
+    /* ================================================================ */
+    /* ===== قوائم العناصر ===== */
+    /* ================================================================ */
+
+    .list-card {
+      display: flex; align-items: center; gap: 12px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; margin-bottom: 8px;
+      box-shadow: var(--shadow);
+    }
+    .list-card-icon {
+      width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center;
+      justify-content: center; background: var(--surface-alt); flex-shrink: 0; color: var(--ink);
+    }
+    .list-card-icon.income-tint { background: var(--emerald-tint); color: var(--emerald); }
+    .list-card-icon.expense-tint { background: var(--rose-tint); color: var(--rose); }
+    .list-card-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .list-card-title { font-weight: 700; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+    .list-card-sub { font-size: 11.5px; color: var(--text-muted); }
+    .list-card-amount { font-weight: 800; font-size: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink); }
+    .commission-card { flex-wrap: wrap; }
+    .commission-amounts { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .commission-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .empty-hint { text-align: center; color: var(--text-muted); font-size: 13px; padding: 26px 0; }
+    .loading-row { text-align: center; color: var(--text-muted); font-size: 13px; padding: 16px 0; }
+
+    /* ================================================================ */
+    /* ===== الشارات ===== */
+    /* ================================================================ */
+
+    .badge {
+      display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 700;
+      background: var(--surface-alt); color: var(--text-muted);
+    }
+    .badge-paid { background: var(--emerald-tint); color: var(--emerald); }
+    .badge-pending { background: var(--amber-tint); color: var(--amber); }
+    .badge-partial { background: var(--amber-tint); color: var(--amber); }
+    .badge-cancelled { background: var(--rose-tint); color: var(--rose); }
+
+    /* ================================================================ */
+    /* ===== الجداول ===== */
+    /* ================================================================ */
+
+    .table-wrap { overflow-x: auto; background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 480px; }
+    .data-table th { text-align: right; padding: 12px 14px; background: var(--surface-alt); font-weight: 700; color: var(--text-muted); font-size: 11.5px; }
+    .data-table td { padding: 11px 14px; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+    .table-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* ================================================================ */
+    /* ===== مودال إنشاء العمولات المتعددة ===== */
+    /* ================================================================ */
+
     .bulk-commission-controls {
       display: flex;
       align-items: center;
@@ -1709,7 +1854,10 @@ interface TeacherPaymentDetails {
     .commission-percentage label { font-size: 12px; color: var(--text-muted); }
     .commission-total { font-weight: 800; font-size: 15px; min-width: 80px; text-align: left; font-variant-numeric: tabular-nums; color: var(--ink); }
 
-    /* ==================== تفاصيل الأستاذ ==================== */
+    /* ================================================================ */
+    /* ===== تفاصيل الأستاذ ===== */
+    /* ================================================================ */
+
     .teacher-profile-header {
       display: flex;
       align-items: center;
@@ -1733,7 +1881,10 @@ interface TeacherPaymentDetails {
     .teacher-commissions-list { margin-top: 18px; }
     .teacher-commissions-list h4 { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: var(--ink); }
 
-    /* الرسوم البيانية */
+    /* ================================================================ */
+    /* ===== الرسوم البيانية ===== */
+    /* ================================================================ */
+
     .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px; }
     .chart-card { background: var(--surface); border-radius: var(--radius); padding: 17px; box-shadow: var(--shadow); border: 1px solid var(--border); }
     .chart-title { font-size: 13.5px; font-weight: 700; margin: 0 0 10px; color: var(--ink); }
@@ -1741,65 +1892,34 @@ interface TeacherPaymentDetails {
 
     .sub-panel { background: var(--surface); border-radius: var(--radius); padding: 17px; border: 1px solid var(--border); }
 
-    /* قوائم عناصر */
-    .list-card {
-      display: flex; align-items: center; gap: 12px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; margin-bottom: 8px;
-      box-shadow: var(--shadow);
+    /* ================================================================ */
+    /* ===== تفاصيل العمولة ===== */
+    /* ================================================================ */
+
+    .commission-summary-strip {
+      display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--text-muted);
+      margin-bottom: 14px; font-weight: 600;
     }
-    .list-card-icon {
-      width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center;
-      justify-content: center; background: var(--surface-alt); flex-shrink: 0; color: var(--ink);
-    }
-    .list-card-icon.income-tint { background: var(--emerald-tint); color: var(--emerald); }
-    .list-card-icon.expense-tint { background: var(--rose-tint); color: var(--rose); }
-    .list-card-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-    .list-card-title { font-weight: 700; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
-    .list-card-sub { font-size: 11.5px; color: var(--text-muted); }
-    .list-card-amount { font-weight: 800; font-size: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink); }
-    .commission-card { flex-wrap: wrap; }
-    .commission-amounts { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-    .commission-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-
-    .empty-hint { text-align: center; color: var(--text-muted); font-size: 13px; padding: 26px 0; }
-    .loading-row { text-align: center; color: var(--text-muted); font-size: 13px; padding: 16px 0; }
-
-    /* شارات */
-    .badge {
-      display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 700;
-      background: var(--surface-alt); color: var(--text-muted);
-    }
-    .badge-paid { background: var(--emerald-tint); color: var(--emerald); }
-    .badge-pending { background: var(--amber-tint); color: var(--amber); }
-    .badge-partial { background: var(--amber-tint); color: var(--amber); }
-    .badge-cancelled { background: var(--rose-tint); color: var(--rose); }
-
-    /* جداول */
-    .table-wrap { overflow-x: auto; background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); }
-    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 480px; }
-    .data-table th { text-align: right; padding: 12px 14px; background: var(--surface-alt); font-weight: 700; color: var(--text-muted); font-size: 11.5px; }
-    .data-table td { padding: 11px 14px; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
-    .table-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-
-    /* شريط النسبة الموحدة */
     .bulk-percentage-bar {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
       background: var(--brass-tint); border: 1px dashed var(--brass-light);
       border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; flex-wrap: wrap;
     }
     .bulk-percentage-label { font-size: 13px; font-weight: 700; color: var(--brass-deep); }
-    .commission-summary-strip {
-      display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--text-muted);
-      margin-bottom: 14px; font-weight: 600;
-    }
 
-    /* الحضور */
+    /* ================================================================ */
+    /* ===== الحضور ===== */
+    /* ================================================================ */
+
     .attendance-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; max-height: 340px; overflow-y: auto; margin: 10px 0; }
     .attendance-day { background: var(--surface-alt); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
     .attendance-date { font-size: 12px; font-weight: 700; color: var(--ink); }
     .attendance-status-buttons { display: flex; gap: 5px; }
 
-    /* المودالات */
+    /* ================================================================ */
+    /* ===== المودالات ===== */
+    /* ================================================================ */
+
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(16, 25, 43, 0.6);
       display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px;
@@ -1814,38 +1934,559 @@ interface TeacherPaymentDetails {
     .modal-hint { font-size: 12px; color: var(--text-muted); margin: 0 0 6px; line-height: 1.6; }
     .modal-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
 
-    /* الفاتورة */
-    .invoice-modal { max-width: 720px; }
-    .invoice-print-area { background: #fff; padding: 10px; border-radius: 8px; }
-    .invoice-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
-    .invoice-school-name { font-family: 'Cairo', sans-serif; font-size: 19px; font-weight: 900; margin: 0 0 4px; color: var(--ink); }
-    .invoice-school-detail { font-size: 12px; color: var(--text-muted); margin: 2px 0; }
-    .invoice-mark { text-align: left; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-    .invoice-mark-shield { width: 22px; height: 22px; color: var(--brass); margin-bottom: 2px; }
-    .invoice-mark-title { font-size: 13px; font-weight: 800; color: var(--brass-deep); }
-    .invoice-mark-num { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-    .invoice-mark-date { font-size: 11.5px; color: var(--text-muted); }
-    .invoice-divider { border: none; border-top: 2px solid var(--border); margin: 14px 0; }
-    .invoice-meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 13px; margin-bottom: 16px; }
-    .invoice-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 14px; }
-    .invoice-table th { background: var(--surface-alt); padding: 9px; text-align: right; font-size: 11.5px; }
-    .invoice-table td { padding: 9px; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
-    .invoice-totals { max-width: 260px; margin-inline-start: auto; margin-bottom: 20px; }
-    .invoice-total-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; font-variant-numeric: tabular-nums; }
-    .invoice-total-row-final { font-weight: 900; font-size: 15px; border-top: 2px solid var(--ink); margin-top: 4px; padding-top: 8px; color: var(--brass-deep); }
-    .invoice-footer { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 20px; }
-    .invoice-signature-line { display: flex; justify-content: space-between; margin-top: 40px; font-size: 12px; font-weight: 700; }
+    /* ================================================================ */
+    /* ===== الفاتورة الاحترافية ===== */
+    /* ================================================================ */
 
-    /* ==================== طباعة ==================== */
-    @media print {
-      body * { visibility: hidden; }
-      .invoice-print-area, .invoice-print-area * { visibility: visible; }
-      .invoice-print-area { position: absolute; top: 0; right: 0; width: 100%; padding: 0; margin: 0; }
-      .no-print, .modal-overlay { background: none !important; }
-      .modal-box { box-shadow: none !important; max-height: none !important; }
+    .invoice-modal .modal-box {
+      max-width: 820px;
+      padding: 12px 16px;
     }
 
-    /* ==================== لوحي (تابلت) ==================== */
+    .invoice-print-area {
+      background: #ffffff;
+      padding: 2mm 3mm;
+      border-radius: 6px;
+      font-family: 'IBM Plex Sans Arabic', 'Cairo', sans-serif;
+      color: #1b2436;
+      direction: rtl;
+    }
+
+    /* ===== هيدر الفاتورة المحترف ===== */
+    .invoice-header {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 18px 20px 14px;
+      margin-bottom: 14px;
+      border: 1px solid #e8e3d8;
+      box-shadow: 0 2px 8px rgba(16, 25, 43, 0.04);
+    }
+
+    .invoice-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+    }
+
+    .school-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .school-brand-icon {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      color: #a97a3c;
+      background: #f6f3ea;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .school-brand-icon svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .school-brand-text h2 {
+      font-size: 15px;
+      font-weight: 800;
+      color: #1b2436;
+      margin: 0 0 1px;
+      font-family: 'Cairo', sans-serif;
+      letter-spacing: -0.2px;
+    }
+
+    .school-brand-sub {
+      font-size: 9.5px;
+      color: #8a8276;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+    }
+
+    .invoice-id {
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 1px;
+    }
+
+    .invoice-id-label {
+      font-size: 9px;
+      font-weight: 700;
+      color: #a97a3c;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      background: #f6f3ea;
+      padding: 2px 12px;
+      border-radius: 10px;
+    }
+
+    .invoice-id-number {
+      font-size: 16px;
+      font-weight: 800;
+      color: #1b2436;
+      font-family: 'Cairo', sans-serif;
+      letter-spacing: -0.5px;
+    }
+
+    .invoice-id-number .id-prefix {
+      color: #a97a3c;
+      font-weight: 700;
+    }
+
+    .invoice-id-date {
+      font-size: 10px;
+      color: #8a8276;
+      font-weight: 500;
+    }
+
+    .invoice-divider-clean {
+      height: 1px;
+      background: linear-gradient(to right, transparent, #e8e3d8 20%, #e8e3d8 80%, transparent);
+      margin: 10px 0 12px;
+    }
+
+    .invoice-info-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+    }
+
+    .info-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: #faf9f6;
+      border: 1px solid #f0ebe2;
+    }
+
+    .info-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      color: #8a8276;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.6;
+    }
+
+    .info-item div {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.2;
+      min-width: 0;
+    }
+
+    .info-label {
+      font-size: 8.5px;
+      font-weight: 600;
+      color: #8a8276;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .info-value {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1b2436;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .info-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 1px 0;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .status-paid {
+      color: #1f6f56;
+    }
+
+    .status-paid .status-dot {
+      background: #1f6f56;
+    }
+
+    .status-pending {
+      color: #b1802b;
+    }
+
+    .status-pending .status-dot {
+      background: #b1802b;
+    }
+
+    /* ===== عدد الحصص ===== */
+    .sessions-banner {
+      text-align: center;
+      background: linear-gradient(135deg, #f5ead6, #f6f3ea);
+      border: 1.5px solid #a97a3c;
+      border-radius: 6px;
+      padding: 3px 0;
+      margin-bottom: 5px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #86602c;
+    }
+
+    .sessions-banner strong {
+      font-size: 18px;
+      color: #1b2436;
+      background: #ffffff;
+      padding: 0 10px;
+      border-radius: 4px;
+      margin: 0 4px;
+    }
+
+    /* ===== جدول الفاتورة ===== */
+    .invoice-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10.5px;
+      margin-bottom: 5px;
+    }
+
+    .invoice-table thead th {
+      background: #1b2436;
+      color: #ffffff;
+      padding: 4px 6px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 9.5px;
+      letter-spacing: 0.3px;
+    }
+
+    .invoice-table tbody td {
+      padding: 3px 6px;
+      border-bottom: 1px solid #e5ddc9;
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .invoice-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .invoice-table tbody tr:hover {
+      background: #faf8f4;
+    }
+
+    .student-name {
+      text-align: right;
+      font-weight: 600;
+      padding-right: 8px !important;
+    }
+
+    .sessions-cell {
+      font-weight: 700;
+      color: #1b2436;
+    }
+
+    .attendance-cell {
+      font-weight: 600;
+    }
+
+    .attendance-rate {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 12px;
+      font-size: 9.5px;
+      font-weight: 700;
+    }
+
+    .attendance-rate.high {
+      background: #e2efe8;
+      color: #1f6f56;
+    }
+
+    .attendance-rate.medium {
+      background: #f6ecd8;
+      color: #b1802b;
+    }
+
+    .attendance-rate.low {
+      background: #f5e5e4;
+      color: #a8434a;
+    }
+
+    .amount-cell {
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #1b2436;
+    }
+
+    /* ===== الإجماليات ===== */
+    .invoice-totals {
+      max-width: 260px;
+      margin-right: auto;
+      margin-top: 4px;
+      margin-bottom: 4px;
+      border-top: 1.5px solid #e5ddc9;
+      padding-top: 4px;
+    }
+
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 1.5px 0;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #1b2436;
+    }
+
+    .total-row.final {
+      font-size: 13px;
+      font-weight: 900;
+      color: #86602c;
+      border-top: 2px solid #a97a3c;
+      margin-top: 2px;
+      padding-top: 4px;
+    }
+
+    /* ===== تذييل الفاتورة ===== */
+    .invoice-footer {
+      text-align: center;
+      border-top: 1.5px solid #e5ddc9;
+      padding-top: 4px;
+      margin-top: 4px;
+    }
+
+    .invoice-footer p {
+      font-size: 8.5px;
+      color: #6b6357;
+      margin: 2px 0;
+    }
+
+    .signature-line {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #6b6357;
+      padding: 0 20px;
+    }
+
+    .signature-line span {
+      border-top: 1.5px solid #a97a3c;
+      padding-top: 4px;
+      min-width: 120px;
+      text-align: center;
+    }
+
+    /* ===== أزرار التحكم (تظهر فقط في الواجهة) ===== */
+    .no-print {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    /* ================================================================ */
+    /* ===== أنماط الطباعة - إخفاء الأزرار والحواف ===== */
+    /* ================================================================ */
+
+    /* ================================================================ */
+    /* ===== إصلاح الفاتورة المطبوعة - إخفاء الأزرار نهائياً ===== */
+    /* ================================================================ */
+
+    @media print {
+      body * {
+        visibility: hidden !important;
+      }
+      
+      .invoice-print-area,
+      .invoice-print-area * {
+        visibility: visible !important;
+      }
+      
+      .invoice-print-area {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        padding: 4mm 5mm !important;
+        margin: 0 !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        z-index: 999999 !important;
+        overflow: visible !important;
+      }
+
+      .modal-actions,
+      .modal-actions *,
+      .no-print,
+      .no-print *,
+      button,
+      .btn,
+      .btn-primary,
+      .btn-outline,
+      .btn-success,
+      .btn-danger,
+      .btn-accent,
+      .icon-btn,
+      .modal-overlay .modal-box .modal-actions,
+      .modal-overlay .modal-box .no-print {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        width: 0 !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        overflow: hidden !important;
+        position: absolute !important;
+        top: -9999px !important;
+        left: -9999px !important;
+      }
+
+      .modal-overlay {
+        background: transparent !important;
+        backdrop-filter: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        z-index: 999998 !important;
+        display: block !important;
+      }
+
+      .modal-box {
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        background: transparent !important;
+        max-width: 100% !important;
+        width: 100% !important;
+        max-height: none !important;
+        overflow: visible !important;
+        border-radius: 0 !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+      }
+
+      .invoice-header {
+        background: #faf8f4 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        border-color: #d4c9b8 !important;
+      }
+
+      .school-brand-icon {
+        background: #f6f3ea !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .invoice-id-label {
+        background: #f6f3ea !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .info-item {
+        background: #faf9f6 !important;
+        border-color: #f0ebe2 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .status-paid {
+        color: #1f6f56 !important;
+      }
+
+      .status-paid .status-dot {
+        background: #1f6f56 !important;
+      }
+
+      .status-pending {
+        color: #b1802b !important;
+      }
+
+      .status-pending .status-dot {
+        background: #b1802b !important;
+      }
+
+      .invoice-divider-clean {
+        background: linear-gradient(to right, transparent, #d4c9b8 20%, #d4c9b8 80%, transparent) !important;
+      }
+
+      .attendance-rate.high {
+        background: #e2efe8 !important;
+        color: #1f6f56 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .attendance-rate.medium {
+        background: #f6ecd8 !important;
+        color: #b1802b !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .attendance-rate.low {
+        background: #f5e5e4 !important;
+        color: #a8434a !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .invoice-print-area {
+        page-break-after: avoid !important;
+        page-break-inside: avoid !important;
+      }
+
+      @page {
+        margin: 2mm 3mm 2mm 3mm !important;
+        size: A4 portrait !important;
+      }
+    }
+
+    @media print and (display-mode: browser) {
+      .no-print,
+      .modal-actions,
+      button,
+      .btn {
+        display: none !important;
+        visibility: hidden !important;
+      }
+    }
+
+    /* ================================================================ */
+    /* ===== الاستجابة للهواتف ===== */
+    /* ================================================================ */
+
     @media (max-width: 1024px) {
       .cards-grid, .cards-grid.four { grid-template-columns: repeat(2, 1fr); }
       .dues-cards-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1853,7 +2494,6 @@ interface TeacherPaymentDetails {
       .side-nav { width: 194px; }
     }
 
-    /* ==================== الهاتف ==================== */
     @media (max-width: 768px) {
       .hamburger { display: flex; }
       .brand-sub { display: none; }
@@ -1889,7 +2529,6 @@ interface TeacherPaymentDetails {
       .list-card { flex-wrap: wrap; }
       .commission-actions, .commission-amounts { width: 100%; justify-content: space-between; }
 
-      /* جدول متكيف كبطاقات على الهاتف */
       .data-table thead { display: none; }
       .data-table, .data-table tbody, .data-table tr, .data-table td { display: block; width: 100%; }
       .data-table tr { border-top: 1px solid var(--border); padding: 8px 0; }
@@ -1899,9 +2538,92 @@ interface TeacherPaymentDetails {
 
       .attendance-grid { grid-template-columns: 1fr; }
       .modal-box { padding: 20px; border-radius: 16px; }
-      .invoice-meta { grid-template-columns: 1fr; }
-      .invoice-header { flex-direction: column; }
-      .invoice-mark { align-items: flex-start; text-align: right; }
+
+      /* استجابة الهيدر المحترف */
+      .invoice-header {
+        padding: 14px 14px 12px;
+      }
+
+      .invoice-header-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding-bottom: 8px;
+      }
+
+      .school-brand {
+        gap: 10px;
+      }
+
+      .school-brand-icon {
+        width: 34px;
+        height: 34px;
+      }
+
+      .school-brand-icon svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .school-brand-text h2 {
+        font-size: 13px;
+      }
+
+      .school-brand-sub {
+        font-size: 8.5px;
+      }
+
+      .invoice-id {
+        align-items: flex-start;
+        flex-direction: row;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+
+      .invoice-id-label {
+        font-size: 8px;
+        padding: 1px 10px;
+      }
+
+      .invoice-id-number {
+        font-size: 14px;
+      }
+
+      .invoice-id-date {
+        font-size: 9px;
+      }
+
+      .invoice-divider-clean {
+        margin: 6px 0 8px;
+      }
+
+      .invoice-info-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 4px;
+      }
+
+      .info-item {
+        padding: 4px 8px;
+        gap: 8px;
+      }
+
+      .info-icon {
+        width: 15px;
+        height: 15px;
+      }
+
+      .info-label {
+        font-size: 7.5px;
+      }
+
+      .info-value {
+        font-size: 10px;
+      }
+
+      .info-status {
+        font-size: 10px;
+      }
 
       .gate-card { padding: 34px 24px; }
 
@@ -1909,6 +2631,17 @@ interface TeacherPaymentDetails {
       .available-commission-item { flex-wrap: wrap; }
       .commission-percentage { width: 100%; justify-content: center; }
       .commission-total { width: 100%; text-align: center; }
+    }
+
+    @media (max-width: 400px) {
+      .invoice-info-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 3px;
+      }
+
+      .info-item {
+        padding: 3px 6px;
+      }
     }
 
     @media (min-width: 769px) {
@@ -2024,7 +2757,7 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
   adjustedAmount: number = 0;
   adjustReason: string = '';
 
-  // Modal: Teacher Percentage (لحصة واحدة مستقبلا)
+  // Modal: Teacher Percentage
   showTeacherPercentageModal: boolean = false;
   newTeacherPercentage: number = 70;
 
@@ -2036,13 +2769,13 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
   commissionDetails: any = null;
   commissionDetailsLoading: boolean = false;
 
-  // ==================== Modal: Student Share Adjustment (يدوي لكل طالب) ====================
+  // ==================== Modal: Student Share Adjustment ====================
   showStudentShareModal: boolean = false;
   selectedCommissionStudent: any = null;
   studentShareAmount: number = 0;
   studentShareReason: string = '';
 
-  // ==================== Modal: تحديد نسبة تلقائية لكل طلاب العمولة ====================
+  // ==================== Modal: Bulk Percentage ====================
   showBulkPercentageModal: boolean = false;
   bulkPercentage: number = 70;
   isApplyingBulkPercentage: boolean = false;
@@ -2108,12 +2841,11 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
     }
   }
 
-  /** نغمة نجاح هادئة ذات طابع احترافي (ثلاثية صاعدة) */
   private playSuccessChime(): void {
     const ctx = this.getAudioContext();
     if (!ctx) return;
     const now = ctx.currentTime;
-    const notes = [659.25, 830.61, 987.77]; // E5, G#5, B5
+    const notes = [659.25, 830.61, 987.77];
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -2130,12 +2862,11 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
     });
   }
 
-  /** نغمة فتح القفل (صعود متدرج مع صدى) */
   private playUnlockChime(): void {
     const ctx = this.getAudioContext();
     if (!ctx) return;
     const now = ctx.currentTime;
-    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+    const notes = [523.25, 659.25, 783.99, 1046.5];
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -2152,7 +2883,6 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
     });
   }
 
-  /** نغمة خطأ منخفضة ومحايدة */
   private playErrorTone(): void {
     const ctx = this.getAudioContext();
     if (!ctx) return;
@@ -2241,41 +2971,40 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
     return [year, month, day].join('-');
   }
 
-loadSessionData(): void {
-  try {
-    this.token = localStorage.getItem('token') || '';
-    const schoolStr = localStorage.getItem('school');
-    
-    if (!this.token || !schoolStr) {
-      Swal.fire('خطأ', 'الرجاء تسجيل الدخول أولاً', 'error');
+  loadSessionData(): void {
+    try {
+      this.token = localStorage.getItem('token') || '';
+      const schoolStr = localStorage.getItem('school');
+      
+      if (!this.token || !schoolStr) {
+        Swal.fire('خطأ', 'الرجاء تسجيل الدخول أولاً', 'error');
+        this.router.navigate(['/login']);
+        return;
+      }
+      
+      const schoolObj = JSON.parse(schoolStr);
+      this.schoolId = schoolObj._id;
+      this.schoolName = schoolObj.name || 'المدرسة الحالية';
+      this.schoolInfo = schoolObj;
+      
+      console.log('🏫 School ID:', this.schoolId);
+      
+      this.isLoaded = true;
+      this.loadSummary();
+      this.loadDailyDetails();
+      this.loadCommissionsEnhanced();
+      this.loadPayments();
+      this.loadExpenses();
+      this.loadStudentsAndClasses();
+      this.loadMonthlyNetProfit(this.selectedMonth);
+      this.loadTransactionsByStatus();
+      this.loadTeacherDuesSummary();
+      this.loadTeachersList();
+    } catch (error) {
+      console.error('Session data error:', error);
       this.router.navigate(['/login']);
-      return;
     }
-    
-    const schoolObj = JSON.parse(schoolStr);
-    this.schoolId = schoolObj._id; // ✅ Make sure this is set
-    this.schoolName = schoolObj.name || 'المدرسة الحالية';
-    this.schoolInfo = schoolObj;
-    
-    console.log('🏫 School ID:', this.schoolId);
-    console.log('🏫 School Name:', this.schoolName);
-    
-    this.isLoaded = true;
-    this.loadSummary();
-    this.loadDailyDetails();
-    this.loadCommissionsEnhanced();
-    this.loadPayments(); // ✅ This will now include schoolId
-    this.loadExpenses();
-    this.loadStudentsAndClasses();
-    this.loadMonthlyNetProfit(this.selectedMonth);
-    this.loadTransactionsByStatus();
-    this.loadTeacherDuesSummary();
-    this.loadTeachersList();
-  } catch (error) {
-    console.error('Session data error:', error);
-    this.router.navigate(['/login']);
   }
-}
 
   startAutoRefresh(): void {
     this.refreshInterval = setInterval(() => {
@@ -2427,7 +3156,7 @@ loadSessionData(): void {
       if (response.ok && data.success) {
         this.availableCommissions = data.data.map((item: AvailableCommission) => ({
           ...item,
-          selected: true // تحديد الكل افتراضياً
+          selected: true
         }));
         this.updateSelectedCommissions();
       }
@@ -2455,7 +3184,6 @@ loadSessionData(): void {
   }
 
   updateCommissionTotal(item: AvailableCommission): void {
-    // إعادة حساب المبلغ الإجمالي بناءً على النسبة الجديدة
     const percentage = item.teacherPercentage / 100;
     item.students.forEach(s => {
       s.teacherShare = s.amount * percentage;
@@ -2603,7 +3331,7 @@ loadSessionData(): void {
     }
   }
 
-  // ==================== Commission Methods (Existing) ====================
+  // ==================== Commission Methods ====================
   async payCommission(commissionId: string): Promise<void> {
     const result = await Swal.fire({
       title: 'دفع العمولة',
@@ -2953,8 +3681,20 @@ loadSessionData(): void {
       Swal.fire('تنبيه', 'لا توجد بيانات كافية لإنشاء الفاتورة، يرجى فتح تفاصيل العمولة أولا', 'warning');
       return;
     }
+
     const commission = details.commission;
     const students = details.students || [];
+
+    const totalSessions = details.summary?.totalSessions || details.liveClasses?.length || 0;
+
+    let statusText = '';
+    if (commission.status === 'paid') {
+      statusText = 'مدفوعة';
+    } else if (commission.status === 'cancelled') {
+      statusText = 'ملغاة';
+    } else {
+      statusText = 'معلقة';
+    }
 
     this.invoiceData = {
       invoiceNumber: `INV-${(commission._id || '').toString().slice(-6).toUpperCase() || Date.now()}`,
@@ -2963,16 +3703,24 @@ loadSessionData(): void {
       teacher: commission.teacher,
       class: commission.class,
       month: commission.month,
-      students: students.map((s: any) => ({
-        name: s.name || s.student?.name || '-',
-        sessions: s.attendance?.summary?.present ?? s.presentCount ?? '-',
-        teacherShare: s.teacherShare || 0
-      })),
+      totalSessions: totalSessions,
+      students: students.map((s: any) => {
+        const presentCount = s.attendanceCount || s.attendance?.summary?.present || 0;
+        const attendanceRate = totalSessions > 0 ? Math.round((presentCount / totalSessions) * 100) : 0;
+        return {
+          name: s.name || s.student?.name || '-',
+          sessions: `${presentCount}/${totalSessions}`,
+          attendanceRate: attendanceRate,
+          teacherShare: s.teacherShare || 0
+        };
+      }),
       totalAmount: commission.totalAmount || 0,
       totalPaid: commission.totalPaid || 0,
       remainingAmount: commission.remainingAmount || 0,
-      status: commission.status
+      status: commission.status,
+      statusText: statusText
     };
+
     this.showInvoiceModal = true;
   }
 
@@ -2982,91 +3730,85 @@ loadSessionData(): void {
   }
 
   printInvoice(): void {
-    window.print();
+    setTimeout(() => {
+      window.print();
+    }, 300);
   }
 
   // ==================== TAB 3: Payment Methods ====================
-// comprehensive-accounting.component.ts
-
-async loadPayments(): Promise<void> {
-  try {
-    // ✅ Get schoolId from the school object
-    const schoolId = this.schoolId; // or this.schoolInfo?._id
-    
-    if (!schoolId) {
-      console.warn('⚠️ No schoolId available for payments');
-      this.payments = [];
-      return;
-    }
-
-    // ✅ Build URL with schoolId
-    let url = `${this.apiUrl}/payments?schoolId=${schoolId}`;
-    
-    // ✅ Use monthCode (not month) - matches your backend
-    if (this.paymentMonth) url += `&monthCode=${this.paymentMonth}`;
-    if (this.paymentStatus !== 'all') url += `&status=${this.paymentStatus}`;
-    if (this.paymentSearch) url += `&search=${encodeURIComponent(this.paymentSearch)}`;
-    
-    console.log('📊 Fetching payments with URL:', url);
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 
-        'Authorization': `Bearer ${this.token}`, 
-        'Content-Type': 'application/json' 
+  async loadPayments(): Promise<void> {
+    try {
+      const schoolId = this.schoolId;
+      
+      if (!schoolId) {
+        console.warn('⚠️ No schoolId available for payments');
+        this.payments = [];
+        return;
       }
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
-      // ✅ Handle both array and object responses
-      this.payments = Array.isArray(data) ? data : (data.payments || data.data || []);
-      console.log(`✅ Loaded ${this.payments.length} payments for school ${schoolId}`);
-    } else {
-      console.error('❌ Error loading payments:', data);
+
+      let url = `${this.apiUrl}/payments?schoolId=${schoolId}`;
+      if (this.paymentMonth) url += `&monthCode=${this.paymentMonth}`;
+      if (this.paymentStatus !== 'all') url += `&status=${this.paymentStatus}`;
+      if (this.paymentSearch) url += `&search=${encodeURIComponent(this.paymentSearch)}`;
+      
+      console.log('📊 Fetching payments with URL:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 
+          'Authorization': `Bearer ${this.token}`, 
+          'Content-Type': 'application/json' 
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        this.payments = Array.isArray(data) ? data : (data.payments || data.data || []);
+        console.log(`✅ Loaded ${this.payments.length} payments for school ${schoolId}`);
+      } else {
+        console.error('❌ Error loading payments:', data);
+        this.payments = [];
+      }
+    } catch (error) {
+      console.error('❌ Error loading payments:', error);
       this.payments = [];
     }
-  } catch (error) {
-    console.error('❌ Error loading payments:', error);
-    this.payments = [];
   }
-}
 
-async loadStudentsAndClasses(): Promise<void> {
-  try {
-    // ✅ Use schoolId in API calls
-    const schoolId = this.schoolId;
-    
-    if (!schoolId) {
-      console.warn('⚠️ No schoolId available');
-      return;
-    }
+  async loadStudentsAndClasses(): Promise<void> {
+    try {
+      const schoolId = this.schoolId;
+      
+      if (!schoolId) {
+        console.warn('⚠️ No schoolId available');
+        return;
+      }
 
-    const [studentsRes, classesRes] = await Promise.all([
-      fetch(`${this.apiUrl}/students?schoolId=${schoolId}`, {
-        headers: { 'Authorization': `Bearer ${this.token}` }
-      }),
-      fetch(`${this.apiUrl}/classes?schoolId=${schoolId}`, {
-        headers: { 'Authorization': `Bearer ${this.token}` }
-      })
-    ]);
-    
-    if (studentsRes.ok) {
-      const data = await studentsRes.json();
-      this.studentsList = Array.isArray(data) ? data : (data.data || data.students || []);
+      const [studentsRes, classesRes] = await Promise.all([
+        fetch(`${this.apiUrl}/students?schoolId=${schoolId}`, {
+          headers: { 'Authorization': `Bearer ${this.token}` }
+        }),
+        fetch(`${this.apiUrl}/classes?schoolId=${schoolId}`, {
+          headers: { 'Authorization': `Bearer ${this.token}` }
+        })
+      ]);
+      
+      if (studentsRes.ok) {
+        const data = await studentsRes.json();
+        this.studentsList = Array.isArray(data) ? data : (data.data || data.students || []);
+      }
+      
+      if (classesRes.ok) {
+        const data = await classesRes.json();
+        this.classesList = Array.isArray(data) ? data : (data.data || data.classes || []);
+      }
+      
+      console.log(`✅ Loaded ${this.studentsList.length} students and ${this.classesList.length} classes`);
+    } catch (error) {
+      console.error('Error loading students and classes:', error);
     }
-    
-    if (classesRes.ok) {
-      const data = await classesRes.json();
-      this.classesList = Array.isArray(data) ? data : (data.data || data.classes || []);
-    }
-    
-    console.log(`✅ Loaded ${this.studentsList.length} students and ${this.classesList.length} classes`);
-  } catch (error) {
-    console.error('Error loading students and classes:', error);
   }
-}
 
   openPaymentModal(): void {
     this.newPayment = {
@@ -3084,56 +3826,55 @@ async loadStudentsAndClasses(): Promise<void> {
     this.showPaymentModal = false;
   }
 
-async submitPayment(): Promise<void> {
-  if (!this.newPayment.studentId || !this.newPayment.classId || !this.newPayment.amount) {
-    Swal.fire('تنبيه', 'يرجى ملء جميع الحقول المطلوبة', 'warning');
-    return;
-  }
-
-  this.isSubmittingPayment = true;
-  try {
-    // ✅ Ensure schoolId is included
-    const payload = {
-      schoolId: this.schoolId, // ✅ Add this
-      student: this.newPayment.studentId,
-      class: this.newPayment.classId,
-      amount: this.newPayment.amount,
-      month: this.newPayment.month,
-      monthCode: this.newPayment.month, // ✅ Also include monthCode
-      paymentMethod: this.newPayment.paymentMethod,
-      notes: this.newPayment.notes,
-      status: 'pending'
-    };
-
-    console.log('📤 Submitting payment payload:', payload);
-
-    const response = await fetch(`${this.apiUrl}/payments`, {
-      method: 'POST',
-      headers: { 
-        'Authorization': `Bearer ${this.token}`, 
-        'Content-Type': 'application/json' 
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok && data.success) {
-      this.playSuccessChime();
-      Swal.fire('نجاح', 'تم إضافة الدفعة بنجاح', 'success');
-      this.closePaymentModal();
-      this.loadPayments();
-      this.loadSummary();
-    } else {
-      throw new Error(data.error || 'فشل في إضافة الدفعة');
+  async submitPayment(): Promise<void> {
+    if (!this.newPayment.studentId || !this.newPayment.classId || !this.newPayment.amount) {
+      Swal.fire('تنبيه', 'يرجى ملء جميع الحقول المطلوبة', 'warning');
+      return;
     }
-  } catch (error: any) {
-    this.playErrorTone();
-    Swal.fire('خطأ', error.message, 'error');
-  } finally {
-    this.isSubmittingPayment = false;
+
+    this.isSubmittingPayment = true;
+    try {
+      const payload = {
+        schoolId: this.schoolId,
+        student: this.newPayment.studentId,
+        class: this.newPayment.classId,
+        amount: this.newPayment.amount,
+        month: this.newPayment.month,
+        monthCode: this.newPayment.month,
+        paymentMethod: this.newPayment.paymentMethod,
+        notes: this.newPayment.notes,
+        status: 'pending'
+      };
+
+      console.log('📤 Submitting payment payload:', payload);
+
+      const response = await fetch(`${this.apiUrl}/payments`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${this.token}`, 
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        this.playSuccessChime();
+        Swal.fire('نجاح', 'تم إضافة الدفعة بنجاح', 'success');
+        this.closePaymentModal();
+        this.loadPayments();
+        this.loadSummary();
+      } else {
+        throw new Error(data.error || 'فشل في إضافة الدفعة');
+      }
+    } catch (error: any) {
+      this.playErrorTone();
+      Swal.fire('خطأ', error.message, 'error');
+    } finally {
+      this.isSubmittingPayment = false;
+    }
   }
-}
 
   async payPayment(paymentId: string): Promise<void> {
     const result = await Swal.fire({

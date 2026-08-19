@@ -55,6 +55,9 @@ export interface ReceiptData {
   providedIn: 'root'
 })
 export class PrinterService {
+
+
+
   private device: any = null;
   private interfaceNumber: number = 0;
   private endpointNumber: number | null = null;
@@ -67,16 +70,28 @@ export class PrinterService {
   // عرض الورق الحراري 80 مم
   private readonly CANVAS_WIDTH = 576;
   school : any = localStorage.getItem('school') 
-  user : any = localStorage.getItem('user')
-  // بيانات المؤسسة
-  private readonly COMPANY_NAME = this.school.name;
-  private readonly DEVELOPER_NAME = 'Redox';
-  private readonly COMPANY_ADDRESS = this.school.address ;
-  private readonly COMPANY_PHONE = this.school.phone;
-  private readonly USER = this.user.fullName
-
-
   
+  // بيانات المؤسسة
+  private  COMPANY_NAME = localStorage.getItem('school.name') || 'مدرستي';
+  private readonly DEVELOPER_NAME = 'Redox';
+  private readonly COMPANY_ADDRESS = 'الجزائر، تقرت';
+  private readonly COMPANY_PHONE = '+213 673586274';
+
+  USER = this.initializePrintedBy();
+
+  private initializePrintedBy(): string {
+    let printedBy = 'غير معروف';
+    try {
+      const userDataStr = localStorage.getItem("user");
+      if (userDataStr) {
+        const userData = JSON.parse(userDataStr);
+        printedBy = userData?.fullName || 'غير معروف';
+      }
+    } catch (error) {
+      console.error('Error parsing user data from localStorage', error);
+    }
+    return printedBy;
+  }
 
   constructor(private ngZone: NgZone) {
     window.addEventListener('beforeunload', () => {
@@ -86,6 +101,8 @@ export class PrinterService {
     // استرجاع الإعدادات المحفوظة
     this.loadConnectionSettings();
   }
+
+
 
   // ==================== CONNECTION SETTINGS ====================
   
@@ -392,7 +409,7 @@ export class PrinterService {
         time: this.convertHindiToWesternNumbers(this.formatTimeEn(paymentData.paymentDate || Date.now())),
         studentName: studentName,
         studentId: this.convertHindiToWesternNumbers(studentId),
-        className: classData?.name || 'حصة',
+        className: classData?.name || paymentData.className || 'حصة',
         month: this.convertHindiToWesternNumbers(paymentData.month || this.formatMonthYearEn(Date.now())),
         amount: paymentData.amount || 0,
         paymentMethod: paymentData.paymentMethod || 'cash',
@@ -467,15 +484,30 @@ export class PrinterService {
     // --- Professional Compact Header ---
     ctx.textAlign = 'right';
     ctx.font = 'bold 26px "Cairo", sans-serif';
-    ctx.fillText(this.COMPANY_NAME, canvas.width - 20, yPos);
+    // Safely read school from localStorage (may be null)
+    const schoolRaw = localStorage.getItem('school');
+    let schoolName = '';
+    let schoolPhone = '';
+    let schoolAddress = '';
+    try {
+      if (schoolRaw) {
+        const schoolObj = JSON.parse(schoolRaw);
+        schoolName = schoolObj?.name || '';
+        schoolPhone = schoolObj?.phone || '';
+        schoolAddress = schoolObj?.address || '';
+      }
+    } catch (e) {
+      schoolName = schoolRaw || '';
+    }
+    ctx.fillText(schoolName, canvas.width - 20, yPos);
     yPos += 34;
 
     ctx.font = 'bold 16px "Cairo", sans-serif';
-    ctx.fillText(this.COMPANY_ADDRESS, canvas.width - 20, yPos);
+    ctx.fillText(schoolAddress, canvas.width - 20, yPos);
     
     ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(this.COMPANY_PHONE, 20, yPos);
+    ctx.fillText(schoolPhone, 20, yPos);
     yPos += 30;
     
     this.drawDashedLine(ctx, 15, yPos, canvas.width - 30);
@@ -649,7 +681,7 @@ export class PrinterService {
     // --- Footer ---
     ctx.textAlign = 'center';
     ctx.font = 'bold 15px "Cairo", sans-serif';
-    ctx.fillText('نظام إدارة التعليم - رواد المعرفة', canvas.width / 2, yPos);
+    ctx.fillText('نظام إدارة التعليم - Redox', canvas.width / 2, yPos);
     yPos += 22;
     
     ctx.font = 'bold 13px Arial, sans-serif';
@@ -692,18 +724,29 @@ async createBulkReceiptCanvas(data: BulkReceiptData): Promise<HTMLCanvasElement>
   
   let yPos = 15;
 
+  // --- Fix: Safely parse school data from localStorage ---
+  let school = { name: '', phone: '', address: '' };
+  try {
+    const schoolDataStr = localStorage.getItem("school");
+    if (schoolDataStr) {
+      school = JSON.parse(schoolDataStr);
+    }
+  } catch (error) {
+    console.error("Error parsing school data from localStorage", error);
+  }
+
   // --- Professional Compact Header ---
   ctx.textAlign = 'right';
   ctx.font = 'bold 26px "Cairo", sans-serif';
-  ctx.fillText(this.COMPANY_NAME, canvas.width - 20, yPos);
+  ctx.fillText(school.name || 'اسم المدرسة', canvas.width - 20, yPos);
   yPos += 34;
 
   ctx.font = 'bold 16px "Cairo", sans-serif';
-  ctx.fillText(this.COMPANY_ADDRESS, canvas.width - 20, yPos);
+  ctx.fillText(school.address || 'العنوان', canvas.width - 20, yPos);
   
   ctx.font = 'bold 16px Arial, sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText(this.COMPANY_PHONE, 20, yPos);
+  ctx.fillText(school.phone || 'رقم الهاتف', 20, yPos);
   yPos += 30;
   
   this.drawDashedLine(ctx, 15, yPos, canvas.width - 30);
@@ -715,13 +758,24 @@ async createBulkReceiptCanvas(data: BulkReceiptData): Promise<HTMLCanvasElement>
   yPos += 30;
 
   // --- Info ---
+  let printedBy = 'غير معروف';
+  try {
+    const userDataStr = localStorage.getItem("user");
+    if (userDataStr) {
+      const userData = JSON.parse(userDataStr);
+      printedBy = userData?.fullName || 'غير معروف';
+    }
+  } catch (error) {
+    console.error('Error parsing user data from localStorage', error);
+  }
+
   const infoItems = [
     { label: 'رقم الإيصال:', value: data.receiptNumber },
     { label: 'التاريخ:', value: data.date },
     { label: 'عدد الدفعات:', value: data.paymentCount.toString() },
     { label: 'إجمالي الطلاب:', value: data.studentCount.toString() },
     { label: 'طريقة الدفع:', value: this.translatePaymentMethod(data.paymentMethod) },
-    { label: 'طبع بواسطة:', value: this.USER }
+    { label: 'طبع بواسطة:', value: printedBy }
   ];
   
   infoItems.forEach(item => {
@@ -734,14 +788,18 @@ async createBulkReceiptCanvas(data: BulkReceiptData): Promise<HTMLCanvasElement>
   // --- Payments Table with Class Name ---
   yPos = this.drawSectionBanner(ctx, '📚 تفاصيل الدفعات', yPos);
   
-  // Table Header - مع إضافة عمود الحصة
+  // Table Header - Fix: Adjusted spacing to prevent overlapping
   ctx.font = 'bold 15px "Cairo", sans-serif';
+  
   ctx.textAlign = 'right';
-  ctx.fillText('الطالب', canvas.width - 20, yPos);
+  ctx.fillText('الطالب', canvas.width - 60, yPos);
+  
   ctx.textAlign = 'right';
-  ctx.fillText('الحصة', canvas.width - 20 - 140, yPos); // عمود الحصة
+  ctx.fillText('الحصة', canvas.width - 280, yPos); 
+  
   ctx.textAlign = 'center';
-  ctx.fillText('الشهر', canvas.width / 2, yPos);
+  ctx.fillText('الشهر', 100, yPos);
+  
   ctx.textAlign = 'left';
   ctx.fillText('المبلغ', 20, yPos);
   
@@ -755,17 +813,17 @@ async createBulkReceiptCanvas(data: BulkReceiptData): Promise<HTMLCanvasElement>
     
     // اسم الطالب
     ctx.textAlign = 'right';
-    const shortName = payment.studentName.length > 15 ? payment.studentName.substring(0, 13) + '..' : payment.studentName;
-    ctx.fillText(shortName, canvas.width - 20, yPos);
+    const shortName = payment.studentName.length > 50 ? payment.studentName.substring(0, 10) + '..' : payment.studentName;
+    ctx.fillText(shortName, canvas.width - 60, yPos);
     
-    // اسم الحصة (جديد)
+    // اسم الحصة
     ctx.textAlign = 'right';
-    const shortClass = payment.className.length > 15 ? payment.className.substring(0, 13) + '..' : payment.className;
-    ctx.fillText(shortClass, canvas.width - 20 - 140, yPos);
+    const shortClass = payment.className.length > 50 ? payment.className.substring(0, 8) + '..' : payment.className;
+    ctx.fillText(shortClass, canvas.width - 280, yPos);
     
     // الشهر
     ctx.textAlign = 'center';
-    ctx.fillText(payment.month || 'غير محدد', canvas.width / 2, yPos);
+    ctx.fillText(payment.month || '---', 100, yPos);
     
     // المبلغ
     ctx.font = 'bold 15px Arial, sans-serif';
@@ -809,7 +867,7 @@ async createBulkReceiptCanvas(data: BulkReceiptData): Promise<HTMLCanvasElement>
   // --- Footer ---
   ctx.textAlign = 'center';
   ctx.font = 'bold 15px "Cairo", sans-serif';
-  ctx.fillText('نظام إدارة التعليم - رواد المعرفة', canvas.width / 2, yPos);
+  ctx.fillText('نظام إدارة المتعليم ريدوكس', canvas.width / 2, yPos);
   yPos += 22;
   
   ctx.font = 'bold 13px Arial, sans-serif';

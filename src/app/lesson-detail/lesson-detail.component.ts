@@ -2374,7 +2374,7 @@ export class LessonDetailComponent implements OnInit {
         studentName: this.getStudentName(payment.student) || 'طالب',
         studentId: this.getStudentDetails(payment.student)?.studentId || '',
         className: this.lesson?.name || payment.className || 'حصة',
-        month: payment.month || '',
+        month: payment.monthCode || '',
         amount: payment.amount || 0,
         paymentMethod: payment.paymentMethod || 'cash',
         academicYear: this.lesson?.academicYear || '',

@@ -147,6 +147,15 @@ interface StudentWithAvatar extends Student {
 
       <!-- ========== FILTERS ========== -->
       <div class="filter-bar">
+          <div class="filter-group">
+    <label>💰 حالة الدفع</label>
+    <select [(ngModel)]="selectedPaymentStatus" (change)="filterStudents()" class="filter-select">
+      <option value="all">الكل</option>
+      <option value="paid">✅ مدفوع</option>
+      <option value="unpaid">⏳ غير مدفوع</option>
+    </select>
+  </div>
+
         <div class="filter-group">
           <label>📚 السنة الدراسية</label>
           <select [(ngModel)]="selectedAcademicYear" (change)="filterStudents()" class="filter-select">
@@ -1296,6 +1305,7 @@ export class StudentsManagementComponent implements OnInit, OnDestroy {
   
   isEditMode: boolean = false;
   selectedStudent: StudentWithAvatar | null = null;
+selectedPaymentStatus: string = 'all'; // 'all' | 'paid' | 'unpaid'
 
   // Student Form
   formData = {
@@ -2091,28 +2101,36 @@ cancelRegistrationPayment(student: StudentWithAvatar): void {
     return (student.name?.charAt(0) || '?').toUpperCase();
   }
 
-  filterStudents(): void {
-    this.filteredStudents = this.students.filter(student => {
-      const matchesSearch = !this.searchTerm || 
-        student.name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-        (student.studentId?.toLowerCase().includes(this.searchTerm.toLowerCase())) ||
-        (student.parentName?.toLowerCase().includes(this.searchTerm.toLowerCase())) ||
-        (student.username?.toLowerCase().includes(this.searchTerm.toLowerCase()));
-      
-      const matchesYear = this.selectedAcademicYear === 'all' || 
-        student.academicYear === this.selectedAcademicYear;
-      
-      return matchesSearch && matchesYear;
-    });
-  }
+filterStudents(): void {
+  this.filteredStudents = this.students.filter(student => {
+    const matchesSearch = !this.searchTerm || 
+      student.name?.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+      (student.studentId?.toLowerCase().includes(this.searchTerm.toLowerCase())) ||
+      (student.parentName?.toLowerCase().includes(this.searchTerm.toLowerCase())) ||
+      (student.username?.toLowerCase().includes(this.searchTerm.toLowerCase()));
+    
+    const matchesYear = this.selectedAcademicYear === 'all' || 
+      student.academicYear === this.selectedAcademicYear;
+    
+    // ✅ فلتر حالة الدفع
+    const matchesPayment = this.selectedPaymentStatus === 'all' ||
+      (this.selectedPaymentStatus === 'paid' && student.hasPaidRegistration === true) ||
+      (this.selectedPaymentStatus === 'unpaid' && student.hasPaidRegistration !== true);
+    
+    return matchesSearch && matchesYear && matchesPayment;
+  });
+}
 
   getDisplayedStudents(): StudentWithAvatar[] {
     return this.filteredStudents;
   }
 
   clearFilters(): void {
+    this.soundService.playRefresh();
     this.searchTerm = '';
     this.selectedAcademicYear = 'all';
+      this.selectedPaymentStatus = 'all'; // ✅ إضافة هذا السطر
+
     this.filterStudents();
   }
 

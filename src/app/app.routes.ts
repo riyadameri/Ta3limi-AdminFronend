@@ -16,10 +16,14 @@ import { LessonDetailComponent } from './lesson-detail/lesson-detail.component';
 import { StudentAttendanceComponent } from './student-attendance/student-attendance.component';
 import { MessagesDashboardEnhancedComponent } from './messages-dashboard/messages-dashboard.component';
 import { OnPaymentsComponentComponent } from './add-expense-component/add-expense-component.component';
+import { RedoxComponent } from './redox/redox.component';
 export const routes: Routes = [
   // المسار الافتراضي - إعادة توجيه إلى login
   { path: '', redirectTo: '/login', pathMatch: 'full' },
+  { path: '*', redirectTo: '/login', pathMatch: 'full' },
   
+    { path: 'redox', component: RedoxComponent },
+
   // صفحة تسجيل الدخول
   { path: 'login', component: LoginComponent },
   

@@ -3343,7 +3343,6 @@ loadStudentClasses(studentId: string): void {
     this.http.get<any>(url, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
         if (response.success && response.payments) {
-          this.soundService.playSuccess();
           this.paymentHistory = response.payments;
           this.classPaymentGroups = this.groupPaymentsByClass(response.payments);
         } else if (Array.isArray(response)) {
@@ -3395,7 +3394,6 @@ loadStudentClasses(studentId: string): void {
         this.cdr.detectChanges();
       },
       error: (error) => {
-        this.soundService.playError();
         console.error('Error loading monthly payments:', error);
         this.studentMonthlyPayments = [];
         this.cdr.detectChanges();
@@ -3410,7 +3408,6 @@ loadStudentClasses(studentId: string): void {
     this.http.get<any>(roundsUrl, { headers: this.getHeaders() }).subscribe({
       next: (response) => {
         if (response.success && response.rounds) {
-          this.soundService.playSuccess();
           this.studentRounds = response.rounds;
           this.updateRoundStatuses();
         } else if (Array.isArray(response)) {
@@ -3422,7 +3419,6 @@ loadStudentClasses(studentId: string): void {
         this.cdr.detectChanges();
       },
       error: (error) => {
-        this.soundService.playError();
         console.error('Error loading rounds:', error);
         this.studentRounds = [];
         this.cdr.detectChanges();
@@ -4361,7 +4357,6 @@ loadAvailableClasses(): void {
         this.loadStudentPaymentSystems(this.getStudentId());
       },
       error: (error) => {
-        this.soundService.playError();
         console.error('Error adding payment:', error);
         Swal.fire('خطأ', 'فشل في تسجيل الدفعة', 'error');
       }
@@ -4377,7 +4372,7 @@ loadAvailableClasses(): void {
     Swal.fire({ title: 'جاري تحديث الدفعة...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
     this.http.put<any>(`${this.apiUrl}/payments/${this.editingPayment._id}`, this.editingPayment, { headers: this.getHeaders() }).subscribe({
       next: () => {
-        this.soundService.playSuccess();  
+        this.soundService.playSuccess();
         Swal.fire({ icon: 'success', title: 'نجاح', text: 'تم تحديث الدفعة بنجاح', timer: 1500, showConfirmButton: false });
         this.closeEditPaymentModal();
         this.loadPaymentHistory(this.getStudentId());
@@ -4749,13 +4744,17 @@ S تفاصيل الدفع الجماعي</h6>
       ).toPromise();
 
       successfulPayments++;
-      paidPayments.push({ 
-        ...payment, 
-        paymentMethod, 
-        paymentDate: new Date(), 
-        invoiceNumber: response?.invoiceNumber || `INV-${Date.now().toString().slice(-8)}-${i}`,
-        notes: paymentData.notes 
-      });
+// ✅ التعديل: استخراج اسم الحصة بشكل صحيح
+const className = payment.class?.name || payment.className || 'عام';
+
+paidPayments.push({ 
+  ...payment, 
+  paymentMethod, 
+  paymentDate: new Date(), 
+  invoiceNumber: response?.invoiceNumber || `INV-${Date.now().toString().slice(-8)}-${i}`,
+  notes: paymentData.notes,
+  className: className
+});
       
       results.push({
         payment: payment.month,
@@ -5026,10 +5025,9 @@ S عدد الجلسات:</strong> ${round.sessionCount}</p>
   }
 
 async printPaymentReceipt(payment: Payment): Promise<void> {
-  
   this.soundService.playPayment();
-
   this.soundService.playClick();
+
   if (!this.printerService.checkConnectionStatus()) {
     const result = await Swal.fire({
       title: '⚠️ الطابعة غير متصلة',
@@ -5061,14 +5059,20 @@ async printPaymentReceipt(payment: Payment): Promise<void> {
     }
   }
 
+  // ✅ التعديل: استخراج اسم الحصة بشكل صحيح
+  const className = payment.class?.name || payment.className || 'عام';
+  const studentName = payment.student?.name || this.student?.name || '';
+  const studentId = payment.student?.studentId || this.student?.studentId || '';
+  const monthCode = payment.monthCode || payment.month;
+
   const receiptData: ReceiptData = {
     receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
     date: new Date().toLocaleDateString('ar-EG'),
     time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
-    studentName: payment.studentName || this.student?.name || '',
-    studentId: payment.studentId || this.student?.studentId || '',
-    className: payment.className || 'عام',
-    month: payment.month,
+    studentName: studentName,
+    studentId: studentId,
+    className: className,
+    month: monthCode,
     amount: payment.amount,
     paymentMethod: payment.paymentMethod || 'cash',
     academicYear: this.student?.academicYear,
@@ -5132,48 +5136,54 @@ async printPaymentReceipt(payment: Payment): Promise<void> {
   }
 }
 
-  private async printRegularReceipt(payment: Payment): Promise<void> {
-      this.soundService.playPayment();
+private async printRegularReceipt(payment: Payment): Promise<void> {
+  this.soundService.playPayment();
 
-    const receiptData = {
-      receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
-      date: new Date().toLocaleDateString('ar-EG'),
-      time: new Date().toLocaleTimeString('ar-EG'),
-      studentName: payment.studentName || this.student?.name || '',
-      studentId: payment.studentId || this.student?.studentId || '',
-      className: payment.className || 'عام',
-      month: payment.month,
-      amount: payment.amount,
-      paymentMethod: payment.paymentMethod || 'cash',
-      notes: payment.notes || 'دفعة فردية'
-    };
+  // ✅ التعديل: استخراج اسم الحصة بشكل صحيح
+  const className = payment.class?.name || payment.className || 'عام';
+  const studentName = payment.student?.name || this.student?.name || '';
+  const studentId = payment.student?.studentId || this.student?.studentId || '';
+  const monthCode = payment.monthCode || payment.month;
 
-    const htmlContent = this.generateSimpleReceiptHTML(receiptData);
-    
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (printWindow) {
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
-        this.soundService.playPayment();
+  const receiptData = {
+    receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
+    date: new Date().toLocaleDateString('ar-EG'),
+    time: new Date().toLocaleTimeString('ar-EG'),
+    studentName: studentName,
+    studentId: studentId,
+    className: className,
+    month: monthCode,
+    amount: payment.amount,
+    paymentMethod: payment.paymentMethod || 'cash',
+    notes: payment.notes || 'دفعة فردية'
+  };
 
-      Swal.fire({
-        icon: 'success',
-        title: '✅ تم الطباعة',
-        text: 'تم فتح نافذة الطباعة، يرجى اختيار الطابعة المناسبة',
-        timer: 2000,
-        showConfirmButton: false
-      });
-    } else {
-      Swal.fire({
-        icon: 'error',
-        title: '❌ خطأ',
-        text: 'لا يمكن فتح نافذة الطباعة. يرجى السماح بالنوافذ المنبثقة.',
-        confirmButtonText: 'حسناً'
-      });
-    }
+  const htmlContent = this.generateSimpleReceiptHTML(receiptData);
+  
+  const printWindow = window.open('', '_blank', 'width=400,height=600');
+  if (printWindow) {
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    this.soundService.playPayment();
+
+    Swal.fire({
+      icon: 'success',
+      title: '✅ تم الطباعة',
+      text: 'تم فتح نافذة الطباعة، يرجى اختيار الطابعة المناسبة',
+      timer: 2000,
+      showConfirmButton: false
+    });
+  } else {
+    Swal.fire({
+      icon: 'error',
+      title: '❌ خطأ',
+      text: 'لا يمكن فتح نافذة الطباعة. يرجى السماح بالنوافذ المنبثقة.',
+      confirmButtonText: 'حسناً'
+    });
   }
+}
 
 // في student-details.component.ts - تحديث دالة generateSimpleReceiptHTML
 
@@ -5319,18 +5329,18 @@ private generateSimpleReceiptHTML(data: any): string {
       const payment = payments[i];
       try {
         const receiptData: ReceiptData = {
-          receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}-${i}`,
-          date: new Date().toLocaleDateString('S'),
-          time: new Date().toLocaleTimeString('S', { hour: '2-digit', minute: '2-digit' }),
-          studentName: payment.studentName || this.student?.name || '',
-          studentId: payment.studentId || this.student?.studentId || '',
-          className: payment.className || 'عام',
-          month: payment.month,
-          amount: payment.amount,
-          paymentMethod: payment.paymentMethod || 'cash',
-          academicYear: this.student?.academicYear,
-          parentPhone: this.student?.parentPhone,
-          notes: `دفعة جماعية - ${payment.notes || ''}`
+        receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}-${i}`,
+        date: new Date().toLocaleDateString('ar-EG'),
+        time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+        studentName: payment.studentName || this.student?.name || '',
+        studentId: payment.studentId || this.student?.studentId || '',
+        className: payment.className || 'عام',
+        month: payment.monthCode || payment.month || '',  // ✅ استخدام monthCode
+        amount: payment.amount,
+        paymentMethod: payment.paymentMethod || 'cash',
+        academicYear: this.student?.academicYear,
+        parentPhone: this.student?.parentPhone,
+        notes: `دفعة جماعية - ${payment.notes || ''}`
         };
         await this.printerService.printProfessionalReceipt(receiptData);
         printedCount++;
@@ -5369,16 +5379,16 @@ private async printSingleReceiptForMultiplePayments(payments: Payment[], payment
       paymentCount: payments.length,
       studentCount: new Set(payments.map(p => p.studentName || this.student?.name || '')).size,
       paymentMethod: paymentMethod,
-      payments: payments.map(p => ({
-        studentName: p.studentName || this.student?.name || 'طالب',
-        studentId: p.studentId || this.student?.studentId || '',
-        className: p.className || p.class?.name || 'غير محدد',
-        month: p.month,
-        amount: p.amount,
-        notes: p.notes
-      })),
-      notes: notes || `دفع جماعي لـ ${payments.length} دفعة`
+payments: payments.map(p => ({
+  studentName: p.studentName || this.student?.name || 'طالب',
+  studentId: p.studentId || this.student?.studentId || '',
+  className: p.className || p.class?.name || 'غير محدد', // ✅ الأولوية لـ className ثم class.name
+  month: p.monthCode || p.month || '',
+  amount: p.amount,
+  notes: p.notes
+})),      notes: notes || `دفع جماعي لـ ${payments.length} دفعة`
     };
+
     
     this.soundService.playPayment();
     console.log('📤 بيانات الإيصال الموحد:', bulkReceiptData);

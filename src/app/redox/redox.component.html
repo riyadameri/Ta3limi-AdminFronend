@@ -1,0 +1,710 @@
+<!-- ============================================= -->
+<!-- الهيدر الرئيسي -->
+<!-- ============================================= -->
+
+<header class="hero-section" id="home">
+  <div class="hero-overlay"></div>
+  <div class="particles">
+    <span *ngFor="let p of [].constructor(30)"></span>
+  </div>
+  <div class="container">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <i class="fas fa-rocket"></i>
+        النظام الذكي لإدارة المدارس
+      </div>
+      <h1>
+        منصة <span>Redox</span> المتكاملة
+        <br>
+        <span class="highlight">لإدارة المدارس والطلاب</span>
+      </h1>
+      <p class="hero-description">
+        نظام متكامل لإدارة المدارس يشمل إدارة الطلاب والمعلمين والحصص والمدفوعات والحضور والغياب
+        مع نظام اشتراكات مرن وتقارير شاملة ومتابعة يومية عبر الهاتف.
+      </p>
+      <div class="hero-buttons">
+        <button class="btn-primary" (click)="scrollToSection('plans')">
+          <i class="fas fa-crown"></i>
+          ابدأ الآن
+        </button>
+        <button class="btn-secondary" (click)="scrollToSection('features')">
+          <i class="fas fa-info-circle"></i>
+          تعرف على المزيد
+        </button>
+        <button class="btn-secondary" (click)="scrollToSection('student-dashboard')">
+          <i class="fas fa-user-graduate"></i>
+          فضاء الطالب
+        </button>
+        <button class="btn-secondary" (click)="scrollToSection('teacher-dashboard')">
+          <i class="fas fa-chalkboard-teacher"></i>
+          فضاء المعلم
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================= -->
+<!-- قسم الإحصائيات -->
+<!-- ============================================= -->
+
+<section class="stats-section">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat-card" *ngFor="let stat of stats">
+        <div class="stat-icon" [style.background]="stat.color + '22'">
+          <i class="fas" [class]="stat.icon" [style.color]="stat.color"></i>
+        </div>
+        <div class="stat-number">{{ stat.number }}</div>
+        <div class="stat-label">{{ stat.label }}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================= -->
+<!-- قسم الميزات الرئيسية -->
+<!-- ============================================= -->
+
+<section class="features-section" id="features">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-badge">✨ الميزات</span>
+      <h2>ماذا يقدم لك نظام <span>Redox</span>؟</h2>
+      <p>نظام متكامل يوفر جميع الأدوات التي تحتاجها لإدارة مدرستك بكفاءة</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card" *ngFor="let feature of features">
+        <div class="feature-icon" [style.background-color]="feature.color + '22'">
+          <i class="fas" [class]="feature.icon" [style.color]="feature.color"></i>
+        </div>
+        <h3>{{ feature.title }}</h3>
+        <p>{{ feature.description }}</p>
+        <div class="feature-details">
+          <div class="feature-detail" *ngFor="let detail of feature.details">
+            <i class="fas fa-check-circle" [style.color]="feature.color"></i>
+            <span>{{ detail }}</span>
+          </div>
+        </div>
+        <div class="feature-line" [style.background-color]="feature.color"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================= -->
+<!-- قسم فضاء الطالب -->
+<!-- ============================================= -->
+
+<section class="student-section" id="student-dashboard">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-badge">👨‍🎓 فضاء الطالب</span>
+      <h2>واجهة <span>الطالب</span> الشخصية</h2>
+      <p>تابع دراستك ومدفوعاتك وغياباتك من خلال واجهة متكاملة</p>
+    </div>
+
+    <div class="student-dashboard">
+      <!-- معلومات الطالب -->
+      <div class="student-header">
+        <div class="student-avatar">
+          <span>{{ studentData.name.charAt(0) }}</span>
+        </div>
+        <div class="student-info">
+          <h3>{{ studentData.name }}</h3>
+          <div class="student-meta">
+            <span><i class="fas fa-id-card"></i> {{ studentData.id }}</span>
+            <span><i class="fas fa-graduation-cap"></i> {{ studentData.year }}</span>
+            <span class="status-badge active"><i class="fas fa-circle"></i> نشط</span>
+          </div>
+        </div>
+        <div class="student-notifications-badge">
+          <i class="fas fa-bell"></i>
+          <span class="badge">{{ unreadNotifications }}</span>
+        </div>
+      </div>
+
+      <!-- تبويبات الطالب -->
+      <div class="student-tabs">
+        <button class="tab-btn" [class.active]="activeStudentTab === 'profile'" (click)="setActiveStudentTab('profile')">
+          <i class="fas fa-user"></i> ملفي الشخصي
+        </button>
+        <button class="tab-btn" [class.active]="activeStudentTab === 'classes'" (click)="setActiveStudentTab('classes')">
+          <i class="fas fa-book"></i> حصصي
+        </button>
+        <button class="tab-btn" [class.active]="activeStudentTab === 'payments'" (click)="setActiveStudentTab('payments')">
+          <i class="fas fa-money-bill-wave"></i> مدفوعاتي
+        </button>
+        <button class="tab-btn" [class.active]="activeStudentTab === 'attendance'" (click)="setActiveStudentTab('attendance')">
+          <i class="fas fa-clipboard-list"></i> غياباتي
+        </button>
+        <button class="tab-btn" [class.active]="activeStudentTab === 'schedule'" (click)="setActiveStudentTab('schedule')">
+          <i class="fas fa-calendar-alt"></i> جدول الدراسة
+        </button>
+        <button class="tab-btn" [class.active]="activeStudentTab === 'notifications'" (click)="setActiveStudentTab('notifications')">
+          <i class="fas fa-bell"></i> الإشعارات
+        </button>
+      </div>
+
+      <!-- محتوى تبويبات الطالب -->
+      <div class="student-content">
+        <!-- الملف الشخصي -->
+        <div *ngIf="activeStudentTab === 'profile'" class="tab-content">
+          <div class="profile-grid">
+            <div class="profile-card">
+              <h4><i class="fas fa-user"></i> المعلومات الشخصية</h4>
+              <div class="info-row"><span>الاسم الكامل</span><span>{{ studentData.name }}</span></div>
+              <div class="info-row"><span>رقم الطالب</span><span>{{ studentData.id }}</span></div>
+              <div class="info-row"><span>السنة الدراسية</span><span>{{ studentData.year }}</span></div>
+              <div class="info-row"><span>عدد الحصص</span><span>{{ studentData.classes.length }}</span></div>
+              <div class="info-row"><span>المدفوعات</span><span>{{ totalPaidPayments }} / {{ totalPayments }}</span></div>
+              <div class="info-row"><span>الغيابات</span><span>{{ totalAbsentAbsences }}</span></div>
+            </div>
+            <div class="profile-card">
+              <h4><i class="fas fa-chart-line"></i> ملخص الأداء</h4>
+              <div class="performance-stats">
+                <div class="perf-item">
+                  <span>نسبة الحضور</span>
+                  <div class="progress-bar">
+                    <div class="progress" [style.width.%]="totalAbsences > 0 ? ((totalPresentAbsences / totalAbsences) * 100) : 100"></div>
+                  </div>
+                  <span class="perf-value">{{ totalAbsences > 0 ? Math.round((totalPresentAbsences / totalAbsences) * 100) : 100 }}%</span>
+                </div>
+                <div class="perf-item">
+                  <span>نسبة الدفع</span>
+                  <div class="progress-bar">
+                    <div class="progress" [style.width.%]="totalPayments > 0 ? ((totalPaidPayments / totalPayments) * 100) : 0"></div>
+                  </div>
+                  <span class="perf-value">{{ totalPayments > 0 ? Math.round((totalPaidPayments / totalPayments) * 100) : 0 }}%</span>
+                </div>
+                <div class="perf-item">
+                  <span>عدد الحصص</span>
+                  <div class="progress-bar">
+                    <div class="progress" style="width: 100%"></div>
+                  </div>
+                  <span class="perf-value">{{ studentData.classes.length }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- الحصص -->
+        <div *ngIf="activeStudentTab === 'classes'" class="tab-content">
+          <div class="classes-grid">
+            <div class="class-item" *ngFor="let cls of studentData.classes">
+              <div class="class-icon" [style.background]="getClassColor(cls.subject)">
+                <i class="fas fa-book"></i>
+              </div>
+              <div class="class-info">
+                <h4>{{ cls.name }}</h4>
+                <span class="class-subject">{{ cls.subject }}</span>
+                <span class="class-teacher"><i class="fas fa-chalkboard-teacher"></i> {{ cls.teacher }}</span>
+                <span class="class-time"><i class="fas fa-clock"></i> {{ cls.time }}</span>
+                <span class="class-days"><i class="fas fa-calendar-day"></i> {{ cls.days.join(' - ') }}</span>
+              </div>
+              <div class="class-price">{{ cls.price }} د.ج</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- المدفوعات -->
+        <div *ngIf="activeStudentTab === 'payments'" class="tab-content">
+          <div class="payment-stats">
+            <div class="payment-stat">
+              <span class="stat-number">{{ totalPaidPayments }}</span>
+              <span class="stat-label">مدفوع</span>
+            </div>
+            <div class="payment-stat">
+              <span class="stat-number">{{ totalPendingPayments }}</span>
+              <span class="stat-label">معلق</span>
+            </div>
+            <div class="payment-stat">
+              <span class="stat-number">{{ totalLatePayments }}</span>
+              <span class="stat-label">متأخر</span>
+            </div>
+            <div class="payment-stat">
+              <span class="stat-number">{{ totalPaymentsAmount }} د.ج</span>
+              <span class="stat-label">الإجمالي</span>
+            </div>
+          </div>
+          <div class="payment-item" *ngFor="let payment of studentData.payments">
+            <div class="payment-info">
+              <span class="payment-month">{{ payment.month }}</span>
+              <span class="payment-amount" [class]="payment.status">{{ payment.amount }} د.ج</span>
+              <span class="payment-status" [class]="payment.status">{{ getPaymentStatusText(payment.status) }}</span>
+            </div>
+            <div class="payment-date">
+              <span *ngIf="payment.date">{{ payment.date }}</span>
+              <span *ngIf="!payment.date" class="pending-text">غير مدفوع</span>
+              <span *ngIf="payment.invoice" class="invoice-link"><i class="fas fa-file-invoice"></i> {{ payment.invoice }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- الغيابات -->
+        <div *ngIf="activeStudentTab === 'attendance'" class="tab-content">
+          <div class="attendance-stats">
+            <div class="attendance-stat present">
+              <span>{{ totalPresentAbsences }}</span>
+              <label>حاضر</label>
+            </div>
+            <div class="attendance-stat absent">
+              <span>{{ totalAbsentAbsences }}</span>
+              <label>غائب</label>
+            </div>
+            <div class="attendance-stat late">
+              <span>{{ totalLateAbsences }}</span>
+              <label>متأخر</label>
+            </div>
+          </div>
+          <div class="absence-item" *ngFor="let absence of studentData.absences">
+            <div class="absence-info">
+              <span class="absence-date">{{ absence.date }}</span>
+              <span class="absence-class">{{ absence.class }}</span>
+            </div>
+            <div class="absence-status" [class]="absence.status">
+              {{ getAbsenceStatusText(absence.status) }}
+              <span *ngIf="absence.notified" class="notified"><i class="fas fa-check-circle"></i> تم الإشعار</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- جدول الدراسة -->
+        <div *ngIf="activeStudentTab === 'schedule'" class="tab-content">
+          <div class="schedule-table">
+            <div class="schedule-header">
+              <span>اليوم</span>
+              <span>الوقت</span>
+              <span>المادة</span>
+              <span>القاعة</span>
+            </div>
+            <div class="schedule-row" *ngFor="let s of studentData.schedule">
+              <span class="schedule-day">{{ s.day }}</span>
+              <span class="schedule-time">{{ s.time }}</span>
+              <span class="schedule-subject">{{ s.subject }}</span>
+              <span class="schedule-classroom">{{ s.classroom }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- الإشعارات -->
+        <div *ngIf="activeStudentTab === 'notifications'" class="tab-content">
+          <div class="notification-item" *ngFor="let notif of studentData.notifications" [class.unread]="!notif.read">
+            <div class="notification-icon" [class]="notif.type">
+              <i class="fas" [class]="getNotificationIcon(notif.type)"></i>
+            </div>
+            <div class="notification-content">
+              <p>{{ notif.message }}</p>
+              <span class="notification-date">{{ notif.date }}</span>
+            </div>
+            <span class="notification-status" *ngIf="!notif.read">جديد</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================= -->
+<!-- قسم فضاء المعلم -->
+<!-- ============================================= -->
+
+<section class="teacher-section" id="teacher-dashboard">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-badge">👨‍🏫 فضاء المعلم</span>
+      <h2>واجهة <span>المعلم</span> الشخصية</h2>
+      <p>تابع عمولاتك وطلابك وحصصك من خلال واجهة متكاملة</p>
+    </div>
+
+    <div class="teacher-dashboard">
+      <!-- معلومات المعلم -->
+      <div class="teacher-header">
+        <div class="teacher-avatar">
+          <span>{{ teacherData.name.charAt(0) }}</span>
+        </div>
+        <div class="teacher-info">
+          <h3>{{ teacherData.name }}</h3>
+          <div class="teacher-meta">
+            <span><i class="fas fa-id-card"></i> {{ teacherData.id }}</span>
+            <span><i class="fas fa-book-open"></i> {{ teacherData.subjects.join(' - ') }}</span>
+            <span class="status-badge active"><i class="fas fa-circle"></i> نشط</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- إحصائيات المعلم -->
+      <div class="teacher-stats">
+        <div class="teacher-stat">
+          <span class="stat-number">{{ teacherData.totalCommissions }} د.ج</span>
+          <span class="stat-label">إجمالي العمولات</span>
+        </div>
+        <div class="teacher-stat">
+          <span class="stat-number" style="color: #00b894;">{{ teacherData.paidCommissions }} د.ج</span>
+          <span class="stat-label">المدفوع</span>
+        </div>
+        <div class="teacher-stat">
+          <span class="stat-number" style="color: #fdcb6e;">{{ teacherData.pendingCommissions }} د.ج</span>
+          <span class="stat-label">المتبقي</span>
+        </div>
+      </div>
+
+      <!-- تبويبات المعلم -->
+      <div class="teacher-tabs">
+        <button class="tab-btn" [class.active]="activeTeacherTab === 'commissions'" (click)="setActiveTeacherTab('commissions')">
+          <i class="fas fa-money-bill-wave"></i> عمولاتي
+        </button>
+        <button class="tab-btn" [class.active]="activeTeacherTab === 'students'" (click)="setActiveTeacherTab('students')">
+          <i class="fas fa-users"></i> طلابي
+        </button>
+        <button class="tab-btn" [class.active]="activeTeacherTab === 'classes'" (click)="setActiveTeacherTab('classes')">
+          <i class="fas fa-book"></i> حصصي
+        </button>
+      </div>
+
+      <!-- محتوى تبويبات المعلم -->
+      <div class="teacher-content">
+        <!-- العمولات -->
+        <div *ngIf="activeTeacherTab === 'commissions'" class="tab-content">
+          <div class="commission-item" *ngFor="let comm of teacherData.commissions">
+            <div class="commission-info">
+              <span class="commission-month">{{ comm.month }}</span>
+              <span class="commission-amount">{{ comm.amount }} د.ج</span>
+              <span class="commission-status" [class]="comm.status">{{ comm.status === 'paid' ? '✅ مدفوع' : '⏳ معلق' }}</span>
+            </div>
+            <div class="commission-date">
+              <span *ngIf="comm.date">{{ comm.date }}</span>
+              <span *ngIf="!comm.date" class="pending-text">غير مدفوع</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- الطلاب -->
+        <div *ngIf="activeTeacherTab === 'students'" class="tab-content">
+          <div class="student-item" *ngFor="let student of teacherData.students">
+            <span class="student-name">{{ student.name }}</span>
+            <span class="student-status" [class]="student.status">{{ student.status === 'present' ? '✅ حاضر' : student.status === 'absent' ? '❌ غائب' : '⏰ متأخر' }}</span>
+            <span class="student-payment" [class]="student.payment">{{ student.payment === 'paid' ? '✅ مدفوع' : '⏳ معلق' }}</span>
+          </div>
+        </div>
+
+        <!-- الحصص -->
+        <div *ngIf="activeTeacherTab === 'classes'" class="tab-content">
+          <div class="class-item" *ngFor="let cls of teacherData.classes">
+            <div class="class-info">
+              <h4>{{ cls.name }}</h4>
+              <span>عدد الطلاب: {{ cls.students }}</span>
+              <span>سعر الحصة: {{ cls.price }} د.ج</span>
+            </div>
+            <div class="class-total">إجمالي العمولة: {{ cls.total }} د.ج</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================= -->
+<!-- قسم طلبات الشراء -->
+<!-- ============================================= -->
+
+<section class="orders-section" id="orders">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-badge">🛒 طلبات الشراء</span>
+      <h2>اطلب <span>البطاقات والطابعات</span></h2>
+      <p>قم بشراء بطاقات RFID والطابعات بأسعار تنافسية</p>
+    </div>
+
+    <div class="orders-grid">
+      <!-- نموذج الطلب -->
+      <div class="order-form">
+        <h3><i class="fas fa-shopping-cart"></i> طلب جديد</h3>
+        <div class="form-group">
+          <label>🏫 اسم المدرسة</label>
+          <input type="text" [(ngModel)]="orderSchoolName" placeholder="أدخل اسم المدرسة">
+        </div>
+        <div class="form-group">
+          <label>📞 رقم الهاتف</label>
+          <input type="tel" [(ngModel)]="orderPhone" placeholder="أدخل رقم الهاتف">
+        </div>
+        <div class="form-group">
+          <label>✉️ البريد الإلكتروني</label>
+          <input type="email" [(ngModel)]="orderEmail" placeholder="أدخل البريد الإلكتروني (اختياري)">
+        </div>
+        
+        <div class="order-products">
+          <h4>اختر المنتجات</h4>
+          <div class="product-item" (click)="addOrderItem('بطاقات RFID', 100)">
+            <div class="product-info">
+              <i class="fas fa-id-card"></i>
+              <span>بطاقات RFID</span>
+              <span class="product-price">100 د.ج/بطاقة</span>
+            </div>
+            <button class="btn-add">+ إضافة</button>
+          </div>
+          <div class="product-item" (click)="addOrderItem('طابعة البطاقات', 20000)">
+            <div class="product-info">
+              <i class="fas fa-print"></i>
+              <span>طابعة البطاقات</span>
+              <span class="product-price">20,000 د.ج/جهاز</span>
+            </div>
+            <button class="btn-add">+ إضافة</button>
+          </div>
+          <div class="product-item" (click)="addOrderItem('حزمة كاملة (طابعة + 100 بطاقة)', 30000)">
+            <div class="product-info">
+              <i class="fas fa-gift"></i>
+              <span>حزمة كاملة</span>
+              <span class="product-price">30,000 د.ج</span>
+            </div>
+            <button class="btn-add">+ إضافة</button>
+          </div>
+        </div>
+
+        <div class="order-items" *ngIf="orderItems.length > 0">
+          <h4>المنتجات المختارة</h4>
+          <div class="order-item" *ngFor="let item of orderItems; let i = index">
+            <span>{{ item.product }}</span>
+            <span>{{ item.quantity }} × {{ item.unitPrice }} د.ج</span>
+            <span class="item-total">{{ item.total }} د.ج</span>
+            <button class="btn-remove" (click)="removeOrderItem(i)">✕</button>
+          </div>
+          <div class="order-total">
+            <span>الإجمالي:</span>
+            <span class="total-amount">{{ getOrderTotal() }} د.ج</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>📝 ملاحظات إضافية</label>
+          <textarea [(ngModel)]="orderNotes" placeholder="أي ملاحظات إضافية..."></textarea>
+        </div>
+
+        <button class="btn-submit" (click)="submitOrder()" [disabled]="orderItems.length === 0 || !orderSchoolName || !orderPhone">
+          <i class="fas fa-paper-plane"></i> إرسال الطلب
+        </button>
+
+        <div class="order-success" *ngIf="orderSuccess">
+          <i class="fas fa-check-circle"></i>
+          <span>تم إرسال طلبك بنجاح! سيتم التواصل معكم خلال 24 ساعة</span>
+        </div>
+      </div>
+
+      <!-- قائمة الطلبات -->
+      <div class="orders-list">
+        <h3><i class="fas fa-list"></i> طلباتي السابقة</h3>
+        <div class="order-card" *ngFor="let order of orders">
+          <div class="order-header">
+            <span class="order-id">{{ order.id }}</span>
+            <span class="order-status" [class]="order.status">{{ getStatusText(order.status) }}</span>
+          </div>
+          <div class="order-school">
+            <i class="fas fa-school"></i>
+            {{ order.schoolName }}
+          </div>
+          <div class="order-items-list">
+            <span *ngFor="let item of order.items">
+              {{ item.product }} ({{ item.quantity }})
+            </span>
+          </div>
+          <div class="order-footer">
+            <span class="order-date">{{ order.date }}</span>
+            <span class="order-total">{{ order.totalAmount }} د.ج</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================= -->
+<!-- قسم خطط الاشتراك -->
+<!-- ============================================= -->
+
+<section class="plans-section" id="plans">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-badge">📊 الخطط</span>
+      <h2>اختر الخطة المناسبة <span>لمدرستك</span></h2>
+      <p>خطط مرنة تناسب جميع احتياجات المدارس بأسعار تنافسية</p>
+    </div>
+
+    <div class="plans-grid">
+      <div class="plan-card" *ngFor="let plan of plans" [class.popular]="plan.isPopular">
+        <div class="plan-badge" *ngIf="plan.badge">
+          <i class="fas fa-star"></i>
+          {{ plan.badge }}
+        </div>
+        <div class="plan-icon" [style.background-color]="plan.color + '22'">
+          <i class="fas" [class]="plan.icon" [style.color]="plan.color"></i>
+        </div>
+        <h3>{{ plan.name }}</h3>
+        <div class="plan-price">
+          <span class="price">{{ plan.price }}</span>
+          <span class="period">/ سنة</span>
+        </div>
+        <div class="plan-limits">
+          <div class="limit-item">
+            <i class="fas fa-user-graduate"></i>
+            <span>{{ plan.students }} طالب</span>
+          </div>
+          <div class="limit-item">
+            <i class="fas fa-chalkboard-teacher"></i>
+            <span>{{ plan.teachers }} معلم</span>
+          </div>
+          <div class="limit-item">
+            <i class="fas fa-book-open"></i>
+            <span>{{ plan.classes }} حصة</span>
+          </div>
+        </div>
+        <ul class="plan-features">
+          <li *ngFor="let feature of plan.features">
+            <i class="fas fa-check-circle" [style.color]="plan.color"></i>
+            {{ feature }}
+          </li>
+        </ul>
+        <button class="btn-plan" [style.background-color]="plan.color">
+          <i class="fas fa-arrow-left"></i>
+          اختر الخطة
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================= -->
+<!-- قسم المميزات الإضافية -->
+<!-- ============================================= -->
+
+<section class="benefits-section">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-badge">💎 المميزات</span>
+      <h2>لماذا تختار <span>Redox</span>؟</h2>
+      <p>مميزات تجعل نظامنا الخيار الأمثل لإدارة مدرستك</p>
+    </div>
+
+    <div class="benefits-grid">
+      <div class="benefit-card" *ngFor="let benefit of benefits">
+        <div class="benefit-icon">
+          <i class="fas" [class]="benefit.icon"></i>
+        </div>
+        <h4>{{ benefit.title }}</h4>
+        <p>{{ benefit.description }}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================= -->
+<!-- قسم الأسئلة الشائعة -->
+<!-- ============================================= -->
+
+<section class="faq-section" id="faq">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-badge">❓ الأسئلة</span>
+      <h2>الأسئلة <span>الشائعة</span></h2>
+      <p>إجابات على أكثر الأسئلة تكراراً حول النظام</p>
+    </div>
+
+    <div class="faq-grid">
+      <div class="faq-item" *ngFor="let faq of faqs; let i = index">
+        <div class="faq-question" (click)="faq.open = !faq.open">
+          <span>{{ faq.question }}</span>
+          <i class="fas" [class]="faq.open ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+        </div>
+        <div class="faq-answer" [class.open]="faq.open">
+          <p>{{ faq.answer }}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================= -->
+<!-- قسم الدعوة للتسجيل -->
+<!-- ============================================= -->
+
+<section class="cta-section">
+  <div class="container">
+    <div class="cta-content">
+      <h2>جاهز لبدء رحلتك مع <span>Redox</span>؟</h2>
+      <p>انضم إلى أكثر من 50 مدرسة يستخدمون نظامنا لإدارة مؤسساتهم التعليمية</p>
+      <div class="cta-buttons">
+        <button class="btn-cta-primary" (click)="scrollToSection('plans')">
+          <i class="fas fa-rocket"></i>
+          ابدأ الآن مجاناً
+        </button>
+        <button class="btn-cta-secondary" (click)="scrollToSection('orders')">
+          <i class="fas fa-shopping-cart"></i>
+          اطلب البطاقات والطابعات
+        </button>
+        <button class="btn-cta-secondary" (click)="scrollToSection('features')">
+          <i class="fas fa-info-circle"></i>
+          تعرف على المزيد
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================= -->
+<!-- التذييل -->
+<!-- ============================================= -->
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-content">
+      <div class="footer-brand">
+        <div class="footer-logo">
+          <i class="fas fa-graduation-cap"></i>
+          <span>Redox</span>
+        </div>
+        <p>منصة ذكية لإدارة المدارس والطلاب، تجمع بين التكنولوجيا الحديثة والسهولة في الاستخدام.</p>
+        <div class="footer-social">
+          <a href="#"><i class="fab fa-facebook"></i></a>
+          <a href="#"><i class="fab fa-twitter"></i></a>
+          <a href="#"><i class="fab fa-linkedin"></i></a>
+          <a href="#"><i class="fab fa-youtube"></i></a>
+          <a href="#"><i class="fab fa-instagram"></i></a>
+        </div>
+      </div>
+      <div class="footer-links">
+        <div class="footer-column">
+          <h4>النظام</h4>
+          <a href="#" (click)="scrollToSection('features'); $event.preventDefault()">الميزات</a>
+          <a href="#" (click)="scrollToSection('plans'); $event.preventDefault()">الخطط</a>
+          <a href="#" (click)="scrollToSection('student-dashboard'); $event.preventDefault()">فضاء الطالب</a>
+          <a href="#" (click)="scrollToSection('teacher-dashboard'); $event.preventDefault()">فضاء المعلم</a>
+        </div>
+        <div class="footer-column">
+          <h4>المنتجات</h4>
+          <a href="#" (click)="scrollToSection('orders'); $event.preventDefault()">بطاقات RFID</a>
+          <a href="#" (click)="scrollToSection('orders'); $event.preventDefault()">طابعات البطاقات</a>
+          <a href="#" (click)="scrollToSection('orders'); $event.preventDefault()">حزمة كاملة</a>
+        </div>
+        <div class="footer-column">
+          <h4>قانوني</h4>
+          <a href="#">سياسة الخصوصية</a>
+          <a href="#">شروط الخدمة</a>
+          <a href="#">اتفاقية الترخيص</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; {{ currentYear }} <strong>Redox</strong>. جميع الحقوق محفوظة.</p>
+      <p class="footer-version">الإصدار 2.0.0</p>
+    </div>
+  </div>
+</footer>
+
+<!-- ============================================= -->
+<!-- زر العودة للأعلى -->
+<!-- ============================================= -->
+
+<button class="back-to-top" id="backToTop" (click)="scrollToTop()">
+  <i class="fas fa-chevron-up"></i>
+</button>

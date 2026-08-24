@@ -402,7 +402,7 @@ interface TeacherPaymentDetails {
         <div class="brand-mark"><svg class="icon"><use href="#icon-ledger"></use></svg></div>
         <div class="brand-text">
           <span class="brand-title">{{ schoolName || 'لوحة المحاسبة' }}</span>
-          <span class="brand-sub">Redox Accounting MR-AC 1</span>
+          <span class="brand-sub">Redox Accounting System</span>
         </div>
       </div>
     </div>
@@ -1209,16 +1209,16 @@ interface TeacherPaymentDetails {
           <div class="invoice-header-row">
             <div class="school-brand">
               <div class="school-brand-icon">
-                  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="3" y="5" width="26" height="22" rx="4" stroke="currentColor" stroke-width="1.6"/>
-                    <path d="M10 12L16 7L22 12V21H10V12Z" stroke="currentColor" stroke-width="1.4"/>
-                    <circle cx="16" cy="17" r="2" stroke="currentColor" stroke-width="1.2"/>
-                    <path d="M13 21L16 24L19 21" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-                  </svg>
+                <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="3" y="5" width="26" height="22" rx="4" stroke="currentColor" stroke-width="1.6"/>
+                  <path d="M10 12L16 7L22 12V21H10V12Z" stroke="currentColor" stroke-width="1.4"/>
+                  <circle cx="16" cy="17" r="2" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M13 21L16 24L19 21" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
               </div>
               <div class="school-brand-text">
                 <h2>{{ inv.school?.name || 'المؤسسة التعليمية' }}</h2>
-                <span class="school-brand-sub">Redox Accounting MR-AC 1</span>
+                <span class="school-brand-sub">النظام المحاسبي المتكامل</span>
               </div>
             </div>
             <div class="invoice-id">

@@ -3658,7 +3658,7 @@ loadStudentClasses(studentId: string): void {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `غيابات_${this.student?.name}_${new Date().toLocaleDateString('ar-EG')}.csv`);
+    link.setAttribute('download', `غيابات_${this.student?.name}_${new Date().toLocaleDateString('EG-US')}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -4733,7 +4733,7 @@ S تفاصيل الدفع الجماعي</h6>
       const paymentData = {
         paymentMethod: paymentMethod,
         paymentDate: new Date().toISOString(),
-        notes: paymentNotes || `دفع جماعي - ${new Date().toLocaleDateString('ar-EG')}`,
+        notes: paymentNotes || `دفع جماعي - ${new Date().toLocaleDateString('EG-US')}`,
         schoolId: schoolId
       };
 
@@ -4943,14 +4943,14 @@ S عدد الجلسات: ${round.sessionCount}</p></div>`,
   viewRoundDetails(round: RoundPayment): void {
     let sessionsHTML = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>#</th><th>التاريخ</th><th>السعر</th><th>الحالة</th></tr></thead><tbody>';
     (round.sessions || []).forEach(session => {
-      sessionsHTML += `<tr><td>${session.sessionNumber}</td><td>${new Date(session.date).toLocaleDateString('ar-EG')}</td><td>${session.price} د.ج</td>
+      sessionsHTML += `<tr><td>${session.sessionNumber}</td><td>${new Date(session.date).toLocaleDateString('EG-US')}</td><td>${session.price} د.ج</td>
         <td><span class="badge ${session.status === 'completed' ? 'bg-success' : 'bg-warning'}">${session.status === 'completed' ? 'مكتملة' : 'معلقة'}</span></td></tr>`;
     });
     sessionsHTML += '</tbody></table></div>';
     Swal.fire({ title: `تفاصيل الجولة ${round.roundNumber}`, html: `<div class="text-start"><p><strong>🔢 رقم الجولة:</strong> ${round.roundNumber}</p><p><strong><i class='fas fa-chalkboard-teacher' style='color:blue'></i>
 S عدد الجلسات:</strong> ${round.sessionCount}</p>
-      <p><strong><i class='far fa-credit-card' style='color:blue'></i> المجموع الكلي:</strong> ${round.totalAmount.toLocaleString()} د.ج</p><p><strong>📅 تاريخ البدء:</strong> ${new Date(round.startDate).toLocaleDateString('ar-EG')}</p>
-      <p><strong>📅 تاريخ الانتهاء:</strong> ${new Date(round.endDate).toLocaleDateString('ar-EG')}</p><p><strong><i class='fas fa-chalkboard-teacher' style='color:blue'></i>
+      <p><strong><i class='far fa-credit-card' style='color:blue'></i> المجموع الكلي:</strong> ${round.totalAmount.toLocaleString()} د.ج</p><p><strong>📅 تاريخ البدء:</strong> ${new Date(round.startDate).toLocaleDateString('EG-US')}</p>
+      <p><strong>📅 تاريخ الانتهاء:</strong> ${new Date(round.endDate).toLocaleDateString('EG-US')}</p><p><strong><i class='fas fa-chalkboard-teacher' style='color:blue'></i>
  الحالة:</strong> <span class="${round.statusClass}">${round.statusText}</span></p><hr><h6>تفاصيل الجلسات:</h6>${sessionsHTML}</div>`,
       icon: 'info', confirmButtonText: 'حسناً' });
   }
@@ -5059,20 +5059,23 @@ async printPaymentReceipt(payment: Payment): Promise<void> {
     }
   }
 
-  // ✅ التعديل: استخراج اسم الحصة بشكل صحيح
+  // ✅ استخراج اسم الحصة بشكل صحيح
   const className = payment.class?.name || payment.className || 'عام';
   const studentName = payment.student?.name || this.student?.name || '';
   const studentId = payment.student?.studentId || this.student?.studentId || '';
-  const monthCode = payment.monthCode || payment.month;
+  
+  // ✅ الحصول على _id الحقيقي للطالب
+  const studentObjectId = payment.student?._id || this.student?._id || this.student?.id || '';
 
   const receiptData: ReceiptData = {
     receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
     date: new Date().toLocaleDateString('ar-EG'),
-    time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+    time: new Date().toLocaleTimeString('en-US', { hour12: false }),
     studentName: studentName,
     studentId: studentId,
+    studentObjectId: studentObjectId, // ✅ إرسال _id للـ QR Code
     className: className,
-    month: monthCode,
+    month: payment.monthCode || payment.month || '',
     amount: payment.amount,
     paymentMethod: payment.paymentMethod || 'cash',
     academicYear: this.student?.academicYear,
@@ -5139,20 +5142,20 @@ async printPaymentReceipt(payment: Payment): Promise<void> {
 private async printRegularReceipt(payment: Payment): Promise<void> {
   this.soundService.playPayment();
 
-  // ✅ التعديل: استخراج اسم الحصة بشكل صحيح
   const className = payment.class?.name || payment.className || 'عام';
   const studentName = payment.student?.name || this.student?.name || '';
   const studentId = payment.student?.studentId || this.student?.studentId || '';
-  const monthCode = payment.monthCode || payment.month;
+  // ✅ الحصول على _id الحقيقي للطالب
+  const studentObjectId = payment.student?._id || this.student?._id || this.student?.id || '';
 
   const receiptData = {
     receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
     date: new Date().toLocaleDateString('ar-EG'),
-    time: new Date().toLocaleTimeString('ar-EG'),
+    time: new Date().toLocaleTimeString('en-US', { hour12: false }),
     studentName: studentName,
-    studentId: studentId,
+    studentId: studentObjectId, // ✅ استخدام _id بدلاً من studentId
     className: className,
-    month: monthCode,
+    month: payment.monthCode || payment.month || '',
     amount: payment.amount,
     paymentMethod: payment.paymentMethod || 'cash',
     notes: payment.notes || 'دفعة فردية'
@@ -5314,46 +5317,50 @@ private generateSimpleReceiptHTML(data: any): string {
   `;
 }
 
-  private async printMultipleReceipts(payments: Payment[]): Promise<void> {
-    this.soundService.playPrint();
-    if (!payments?.length) {
-      Swal.fire({ icon: 'warning', title: 'لا توجد إيصالات للطباعة', confirmButtonText: 'حسناً' });
-      return;
-    }
-    
-    Swal.fire({ title: 'جاري الطباعة...', html: `<div class="text-center"><div class="spinner-border text-primary mb-3"></div><p>جاري طباعة ${payments.length} إيصال...</p>
-      <div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%" id="print-progress">0%</div></div></div>`, showConfirmButton: false });
-    
-    let printedCount = 0;
-    for (let i = 0; i < payments.length; i++) {
-      const payment = payments[i];
-      try {
-        const receiptData: ReceiptData = {
+private async printMultipleReceipts(payments: Payment[]): Promise<void> {
+  this.soundService.playPrint();
+  if (!payments?.length) {
+    Swal.fire({ icon: 'warning', title: 'لا توجد إيصالات للطباعة', confirmButtonText: 'حسناً' });
+    return;
+  }
+  
+  Swal.fire({ title: 'جاري الطباعة...', html: `<div class="text-center"><div class="spinner-border text-primary mb-3"></div><p>جاري طباعة ${payments.length} إيصال...</p>
+    <div class="progress"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%" id="print-progress">0%</div></div></div>`, showConfirmButton: false });
+  
+  let printedCount = 0;
+  for (let i = 0; i < payments.length; i++) {
+    const payment = payments[i];
+    try {
+      // ✅ الحصول على _id الحقيقي للطالب
+      const studentObjectId = payment.student?._id || this.student?._id || this.student?.id || '';
+      
+      const receiptData: ReceiptData = {
         receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}-${i}`,
         date: new Date().toLocaleDateString('ar-EG'),
-        time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+        time: new Date().toLocaleTimeString('en-US', { hour12: false }),
         studentName: payment.studentName || this.student?.name || '',
         studentId: payment.studentId || this.student?.studentId || '',
+        studentObjectId: studentObjectId, // ✅ إرسال _id للـ QR Code
         className: payment.className || 'عام',
-        month: payment.monthCode || payment.month || '',  // ✅ استخدام monthCode
+        month: payment.monthCode || payment.month || '',
         amount: payment.amount,
         paymentMethod: payment.paymentMethod || 'cash',
         academicYear: this.student?.academicYear,
         parentPhone: this.student?.parentPhone,
         notes: `دفعة جماعية - ${payment.notes || ''}`
-        };
-        await this.printerService.printProfessionalReceipt(receiptData);
-        printedCount++;
-        const progress = Math.round(((i + 1) / payments.length) * 100);
-        const progressBar = document.getElementById('print-progress');
-        if (progressBar) { progressBar.style.width = `${progress}%`; progressBar.textContent = `${progress}%`; }
-        await this.delay(500);
-      } catch (error) { console.error(`فشل طباعة إيصال ${i + 1}:`, error); }
-    }
-    
-    Swal.close();
-    Swal.fire({ title: 'نتائج الطباعة', html: `<div class="alert alert-success"><h6>✅ تمت الطباعة بنجاح</h6><p><strong>المطبوع:</strong> ${printedCount}</p><p><strong>الإجمالي:</strong> ${payments.length}</p></div>`, icon: 'success', confirmButtonText: 'حسناً' });
+      };
+      await this.printerService.printProfessionalReceipt(receiptData);
+      printedCount++;
+      const progress = Math.round(((i + 1) / payments.length) * 100);
+      const progressBar = document.getElementById('print-progress');
+      if (progressBar) { progressBar.style.width = `${progress}%`; progressBar.textContent = `${progress}%`; }
+      await this.delay(500);
+    } catch (error) { console.error(`فشل طباعة إيصال ${i + 1}:`, error); }
   }
+  
+  Swal.close();
+  Swal.fire({ title: 'نتائج الطباعة', html: `<div class="alert alert-success"><h6>✅ تمت الطباعة بنجاح</h6><p><strong>المطبوع:</strong> ${printedCount}</p><p><strong>الإجمالي:</strong> ${payments.length}</p></div>`, icon: 'success', confirmButtonText: 'حسناً' });
+}
 
 // في student-details.component.ts - تحديث دالة printSingleReceiptForMultiplePayments
 
@@ -5374,19 +5381,21 @@ private async printSingleReceiptForMultiplePayments(payments: Payment[], payment
     const bulkReceiptData: BulkReceiptData = {
       receiptNumber: `BLK-${Date.now().toString().slice(-8)}`,
       date: new Date().toLocaleDateString('ar-EG'),
-      time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }),
+      time: new Date().toLocaleTimeString('en-US', { hour12: false }),
       totalAmount: totalAmount,
       paymentCount: payments.length,
       studentCount: new Set(payments.map(p => p.studentName || this.student?.name || '')).size,
       paymentMethod: paymentMethod,
-payments: payments.map(p => ({
-  studentName: p.studentName || this.student?.name || 'طالب',
-  studentId: p.studentId || this.student?.studentId || '',
-  className: p.className || p.class?.name || 'غير محدد', // ✅ الأولوية لـ className ثم class.name
-  month: p.monthCode || p.month || '',
-  amount: p.amount,
-  notes: p.notes
-})),      notes: notes || `دفع جماعي لـ ${payments.length} دفعة`
+      payments: payments.map(p => ({
+        studentName: p.studentName || this.student?.name || 'طالب',
+        // ✅ استخدام _id الحقيقي للطالب
+        studentId: p.student?._id || this.student?._id || this.student?.id || p.studentId || '',
+        className: p.className || p.class?.name || 'غير محدد',
+        month: p.monthCode || p.month || '',
+        amount: p.amount,
+        notes: p.notes
+      })),
+      notes: notes || `دفع جماعي لـ ${payments.length} دفعة`
     };
 
     
@@ -5480,7 +5489,7 @@ payments: payments.map(p => ({
     <div class="section"><h2>📚 الحصص المسجلة</h2><table><thead><tr><th>اسم الحصة</th><th>المادة</th><th>المعلم</th><th>السعر الشهري</th></tr></thead><tbody>
     ${data.classes.map((cls: any) => `<tr><td>${cls.name}</td><td>${cls.subject}</td><td>${cls.teacher?.name || 'غير محدد'}</td><td>${cls.price ? cls.price.toLocaleString() + ' د.ج' : 'غير محدد'}</td></tr>`).join('')}
     </tbody></table></div><div class="section"><h2><i class='far fa-credit-card' style='color:blue'></i> سجل المدفوعات</h2><table><thead><tr><th>التاريخ</th><th>المبلغ</th><th>الشهر</th><th>طريقة الدفع</th><th>الحالة</th></tr></thead><tbody>
-    ${data.payments.map((payment: any) => `<tr><td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ar-EG') : 'لم يتم الدفع'}</td>
+    ${data.payments.map((payment: any) => `<tr><td>${payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('EG-US') : 'لم يتم الدفع'}</td>
        <td>${payment.amount.toLocaleString()} د.ج</td><td>${payment.monthCode}</td><td>${this.getPaymentMethodLabel(payment.paymentMethod)}</td>
        <td>${this.getPaymentStatusText(payment)}</td></tr>`).join('')}</tbody></table><p class="total"><i class='far fa-credit-card' style='color:blue'></i> الإجمالي المدفوع: ${data.totalPaid.toLocaleString()} د.ج</p></div>
     <div class="footer"><p>تم إنشاء التقرير تلقائياً من نظام إدارة المدرسة</p><p>© ${new Date().getFullYear()} جميع الحقوق محفوظة</p></div></div></body></html>`;

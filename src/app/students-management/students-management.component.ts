@@ -1736,170 +1736,175 @@ selectedPaymentStatus: string = 'all'; // 'all' | 'paid' | 'unpaid'
   // ✅ Process Payment - مع طباعة الإيصال
   // ==============================================
 
-  async processPayment(): Promise<void> {
-    if (!this.checkPermission('canManagePayments', 'إدارة المدفوعات')) {
-      return;
-    }
-
-    if (!this.selectedStudent) return;
-    
-    const studentId = this.selectedStudent._id || this.selectedStudent.id;
-    if (!studentId) {
-      Swal.fire('خطأ', 'لا يمكن تحديد الطالب', 'error');
-      return;
-    }
-
-    this.isLoading = true;
-    
-    const schoolId = this.getSchoolId();
-    const url = `${this.apiUrl}/students/${studentId}/pay-registration?schoolId=${schoolId}`;
-    
-    const payload = {
-      amount: this.paymentData.amount,
-      paymentMethod: this.paymentData.method,
-      paymentDate: new Date().toISOString(),
-      notes: this.paymentData.notes,
-      schoolId: schoolId
-    };
-    
-    try {
-      const response: any = await this.handleRequest(url, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      
-      console.log('✅ Payment successful:', response);
-      this.soundService.playPayment();
-      // ✅ عرض بيانات الاعتماد في رسالة النجاح
-      const username = response.credentials?.username || this.selectedStudent?.username || 'غير متاح';
-      const password = response.credentials?.password || 'يرجى التواصل مع الإدارة';
-      const platformUrl = response.credentials?.platformUrl || `https://alrouad.com/studentsPlatform/${studentId}`;
-      const qrCodeUrl = response.credentials?.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(platformUrl)}`;
-      
-      // عرض رسالة النجاح مع بيانات الاعتماد
-      await Swal.fire({
-        title: '✅ تم الدفع بنجاح',
-        html: `
-          <div style="text-align: right; direction: rtl;">
-            <p style="color: #00C9A7; font-size: 18px; font-weight: 700;">✅ تم دفع رسوم التسجيل</p>
-            <p style="margin: 10px 0; color: #636E72;">
-              <strong>👤 الطالب:</strong> ${this.selectedStudent?.name}
-            </p>
-            <p style="margin: 5px 0; color: #636E72;">
-              <strong>📌 رقم الفاتورة:</strong> ${response.receiptNumber || 'N/A'}
-            </p>
-            <p style="margin: 5px 0; color: #636E72;">
-              <strong>💰 المبلغ:</strong> ${this.paymentData.amount} دج
-            </p>
-            
-            <hr style="margin: 15px 0; border: 1px dashed #DFE6E9;">
-            
-            <div style="background: #F8F9FA; padding: 12px; border-radius: 8px; margin: 10px 0;">
-              <h4 style="margin: 0 0 10px 0; color: #2D3436;">🔑 بيانات تسجيل الدخول</h4>
-              <p style="margin: 5px 0; font-size: 14px;">
-                <strong>👤 اسم المستخدم:</strong> 
-                <span style="color: #6C63FF; font-weight: 700; background: #EDE7FF; padding: 2px 8px; border-radius: 4px;">${username}</span>
-              </p>
-              <p style="margin: 5px 0; font-size: 14px;">
-                <strong>🔑 كلمة المرور:</strong> 
-                <span style="color: #FF6B6B; font-weight: 700; background: #FFE8E8; padding: 2px 8px; border-radius: 4px;">${password}</span>
-              </p>
-            </div>
-            
-            <div style="margin: 10px 0; text-align: center;">
-              <p style="font-size: 12px; color: #636E72;">🌐 رابط المنصة:</p>
-              <p style="font-size: 14px; color: #6C63FF; word-break: break-all;">
-                <a href="${platformUrl}" target="_blank" style="color: #6C63FF; text-decoration: underline;">
-                  ${platformUrl}
-                </a>
-              </p>
-            </div>
-            
-            <div style="margin: 10px 0; text-align: center;">
-              <img src="${qrCodeUrl}" style="width: 120px; height: 120px; border: 2px solid #DFE6E9; border-radius: 8px; padding: 5px;" />
-            </div>
-            
-            <div style="margin-top: 10px; padding: 8px; background: #FFFBEB; border-radius: 6px; border: 1px solid #FDE68A;">
-              <p style="font-size: 12px; color: #92400E; margin: 0;">
-                ⚠️ يرجى حفظ بيانات تسجيل الدخول في مكان آمن
-              </p>
-            </div>
-          </div>
-        `,
-        icon: 'success',
-        confirmButtonColor: '#6C63FF',
-        confirmButtonText: '🖨️ طباعة الإيصال',
-        showCancelButton: true,
-        cancelButtonText: 'إغلاق',
-        cancelButtonColor: '#636E72',
-        width: 550
-      }).then(async (result) => {
-        if (result.isConfirmed) {
-          // ✅ طباعة الإيصال مع بيانات الاعتماد
-          await this.printReceiptWithCredentials({
-            ...response,
-            username: username,
-            password: password,
-            platformUrl: platformUrl,
-            qrCodeUrl: qrCodeUrl
-          });
-        }
-      });
-      
-      this.closePaymentModal();
-      this.loadStudents();
-    } catch (error: any) {
-      console.error('❌ Payment error:', error);
-      Swal.fire('خطأ', error.message || 'فشل معالجة الدفع', 'error');
-      this.isLoading = false;
-    }
+async processPayment(): Promise<void> {
+  if (!this.checkPermission('canManagePayments', 'إدارة المدفوعات')) {
+    return;
   }
+
+  if (!this.selectedStudent) return;
+  
+  // ✅ الحصول على _id الحقيقي للطالب
+  const studentId = this.selectedStudent._id || this.selectedStudent.id;
+  if (!studentId) {
+    Swal.fire('خطأ', 'لا يمكن تحديد الطالب', 'error');
+    return;
+  }
+
+  this.isLoading = true;
+  
+  const schoolId = this.getSchoolId();
+  const url = `${this.apiUrl}/students/${studentId}/pay-registration?schoolId=${schoolId}`;
+  
+  const payload = {
+    amount: this.paymentData.amount,
+    paymentMethod: this.paymentData.method,
+    paymentDate: new Date().toISOString(),
+    notes: this.paymentData.notes,
+    schoolId: schoolId
+  };
+  
+  try {
+    const response: any = await this.handleRequest(url, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    
+    console.log('✅ Payment successful:', response);
+    this.soundService.playPayment();
+    
+    const username = response.credentials?.username || this.selectedStudent?.username || 'غير متاح';
+    const password = response.credentials?.password || 'يرجى التواصل مع الإدارة';
+    const platformUrl = response.credentials?.platformUrl || `https://alrouad.com/studentsPlatform/${studentId}`;
+    const qrCodeUrl = response.credentials?.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(platformUrl)}`;
+    
+    // عرض رسالة النجاح مع بيانات الاعتماد
+    await Swal.fire({
+      title: '✅ تم الدفع بنجاح',
+      html: `
+        <div style="text-align: right; direction: rtl;">
+          <p style="color: #00C9A7; font-size: 18px; font-weight: 700;">✅ تم دفع رسوم التسجيل</p>
+          <p style="margin: 10px 0; color: #636E72;">
+            <strong>الطالب:</strong> ${this.selectedStudent?.name}
+          </p>
+          <p style="margin: 5px 0; color: #636E72;">
+            <strong>رقم الفاتورة:</strong> ${response.receiptNumber || 'N/A'}
+          </p>
+          <p style="margin: 5px 0; color: #636E72;">
+            <strong>المبلغ:</strong> ${this.paymentData.amount} دج
+          </p>
+          
+          <hr style="margin: 15px 0; border: 1px dashed #DFE6E9;">
+          
+          <div style="background: #F8F9FA; padding: 12px; border-radius: 8px; margin: 10px 0;">
+            <h4 style="margin: 0 0 10px 0; color: #2D3436;">بيانات تسجيل الدخول</h4>
+            <p style="margin: 5px 0; font-size: 14px;">
+              <strong>اسم المستخدم:</strong> 
+              <span style="color: #6C63FF; font-weight: 700; background: #EDE7FF; padding: 2px 8px; border-radius: 4px;">${username}</span>
+            </p>
+            <p style="margin: 5px 0; font-size: 14px;">
+              <strong>كلمة المرور:</strong> 
+              <span style="color: #FF6B6B; font-weight: 700; background: #FFE8E8; padding: 2px 8px; border-radius: 4px;">${password}</span>
+            </p>
+          </div>
+          
+          <div style="margin: 10px 0; text-align: center;">
+            <p style="font-size: 12px; color: #636E72;">رابط المنصة:</p>
+            <p style="font-size: 14px; color: #6C63FF; word-break: break-all;">
+              <a href="${platformUrl}" target="_blank" style="color: #6C63FF; text-decoration: underline;">
+                ${platformUrl}
+              </a>
+            </p>
+          </div>
+          
+          <div style="margin: 10px 0; text-align: center;">
+            <img src="${qrCodeUrl}" style="width: 120px; height: 120px; border: 2px solid #DFE6E9; border-radius: 8px; padding: 5px;" />
+          </div>
+          
+          <div style="margin-top: 10px; padding: 8px; background: #FFFBEB; border-radius: 6px; border: 1px solid #FDE68A;">
+            <p style="font-size: 12px; color: #92400E; margin: 0;">
+              ⚠️ يرجى حفظ بيانات تسجيل الدخول في مكان آمن
+            </p>
+          </div>
+        </div>
+      `,
+      icon: 'success',
+      confirmButtonColor: '#6C63FF',
+      confirmButtonText: 'طباعة الإيصال',
+      showCancelButton: true,
+      cancelButtonText: 'إغلاق',
+      cancelButtonColor: '#636E72',
+      width: 550
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        // ✅ طباعة الإيصال مع بيانات الاعتماد و _id
+        await this.printReceiptWithCredentials({
+          ...response,
+          studentObjectId: studentId,
+          username: username,
+          password: password,
+          platformUrl: platformUrl,
+          qrCodeUrl: qrCodeUrl
+        });
+      }
+    });
+    
+    this.closePaymentModal();
+    this.loadStudents();
+  } catch (error: any) {
+    console.error('❌ Payment error:', error);
+    Swal.fire('خطأ', error.message || 'فشل معالجة الدفع', 'error');
+    this.isLoading = false;
+  }
+}
 
   // ==============================================
   // ✅ دالة طباعة الإيصال مع بيانات الاعتماد
   // ==============================================
 
-  private async printReceiptWithCredentials(paymentResponse: any): Promise<void> {
-    try {
-      if (!this.printerService.checkConnectionStatus()) {
-        const connected = await this.printerService.connectToThermalPrinter();
-        if (!connected) {
-          console.warn('⚠️ Cannot print: printer not connected');
-          return;
-        }
+private async printReceiptWithCredentials(paymentResponse: any): Promise<void> {
+  try {
+    if (!this.printerService.checkConnectionStatus()) {
+      const connected = await this.printerService.connectToThermalPrinter();
+      if (!connected) {
+        console.warn('⚠️ Cannot print: printer not connected');
+        return;
       }
-
-      const receiptData: ReceiptData = {
-        receiptNumber: paymentResponse.receiptNumber || `R${Date.now()}`,
-        date: new Date().toLocaleDateString('ar-EG'),
-        time: new Date().toLocaleTimeString('ar-EG'),
-        studentName: this.selectedStudent?.name || 'Unknown',
-        studentId: this.selectedStudent?.studentId || 'N/A',
-        className: this.getAcademicYearName(this.selectedStudent?.academicYear),
-        month: new Date().toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }),
-        amount: this.paymentData.amount,
-        paymentMethod: this.paymentData.method,
-        academicYear: this.selectedStudent?.academicYear,
-        parentPhone: this.selectedStudent?.parentPhone,
-        notes: this.paymentData.notes || 'رسوم تسجيل',
-        // ✅ بيانات الاعتماد للطباعة
-        username: paymentResponse.username,
-        password: paymentResponse.password,
-        platformUrl: paymentResponse.platformUrl,
-        qrCodeUrl: paymentResponse.qrCodeUrl
-      };
-
-      const printed = await this.printerService.printProfessionalReceipt(receiptData);
-      
-      if (printed) {
-        console.log('✅ Receipt printed successfully');
-      } else {
-        console.warn('⚠️ Receipt printing failed');
-      }
-    } catch (error) {
-      console.error('❌ Error printing receipt:', error);
     }
+
+    // ✅ التأكد من وجود studentObjectId
+    const studentObjectId = paymentResponse.studentObjectId || this.selectedStudent?._id || this.selectedStudent?.id || '';
+
+    const receiptData: ReceiptData = {
+      receiptNumber: paymentResponse.receiptNumber || `R${Date.now()}`,
+      date: new Date().toLocaleDateString('ar-EG'),
+      time: new Date().toLocaleTimeString('en-US', { hour12: false }),
+      studentName: this.selectedStudent?.name || 'Unknown',
+      studentId: this.selectedStudent?.studentId || 'N/A',
+      studentObjectId: studentObjectId,
+      className: this.getAcademicYearName(this.selectedStudent?.academicYear),
+      month: new Date().toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }),
+      amount: this.paymentData.amount,
+      paymentMethod: this.paymentData.method,
+      academicYear: this.selectedStudent?.academicYear,
+      parentPhone: this.selectedStudent?.parentPhone,
+      notes: this.paymentData.notes || 'رسوم تسجيل',
+      username: paymentResponse.username,
+      password: paymentResponse.password,
+      platformUrl: paymentResponse.platformUrl,
+      qrCodeUrl: paymentResponse.qrCodeUrl
+    };
+
+    const printed = await this.printerService.printProfessionalReceipt(receiptData);
+    
+    if (printed) {
+      console.log('✅ Receipt printed successfully with _id:', studentObjectId);
+    } else {
+      console.warn('⚠️ Receipt printing failed');
+    }
+  } catch (error) {
+    console.error('❌ Error printing receipt:', error);
   }
+}
 
   // ==============================================
   // ✅ Bulk Import

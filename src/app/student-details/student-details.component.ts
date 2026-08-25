@@ -3086,6 +3086,22 @@ export class StudentDetailsComponent implements OnInit {
   baudRates: number[] = [9600, 19200, 38400, 57600, 115200];
   isConnectingPrinter: boolean = false;
   
+// ==================== Modal: Student Share Adjustment (تم التحديث) ====================
+showStudentShareModal: boolean = false;
+selectedCommissionStudent: any = null;
+
+// وضع التعديل: 'auto' (تلقائي بعدد الحصص) أو 'manual' (يدوي)
+studentShareMode: 'auto' | 'manual' = 'auto';
+
+// بيانات التعديل التلقائي
+studentAutoSessions: number = 4; // عدد الحصص التي حضرها
+studentSessionPrice: number = 200; // سعر الحصة الافتراضي
+
+// بيانات التعديل اليدوي (كما كانت)
+studentShareAmount: number = 0;
+studentShareReason: string = '';
+
+
   // Static Data
   months = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
   monthNamesArabic = [

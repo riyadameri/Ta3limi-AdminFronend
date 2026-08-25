@@ -238,6 +238,8 @@ interface AvailableCommission {
     amount: number;
     teacherShare: number;
     status: string;
+    attendedSessions?: number;
+    attendanceCount?: number;
   }[];
   totalAmount: number;
   price: number;
@@ -1059,6 +1061,7 @@ interface TeacherPaymentDetails {
                 <th>الطالب</th>
                 <th>المبلغ الأساسي</th>
                 <th>حصة الأستاذ</th>
+                <th>الحصص المحضورة</th>
                 <th>إجراءات</th>
               </tr>
             </thead>
@@ -1067,9 +1070,21 @@ interface TeacherPaymentDetails {
                 <td data-label="الطالب">{{ st.name || st.student?.name }}</td>
                 <td data-label="المبلغ الأساسي">{{ (st.amount ?? st.totalAmount ?? 0) | number:'1.0-0' }}</td>
                 <td data-label="حصة الأستاذ">{{ st.teacherShare | number:'1.0-0' }}</td>
+                <td data-label="الحصص المحضورة">
+                  <span class="sessions-badge">
+                    {{ st.attendedSessions || st.attendanceCount || 0 }} / {{ commissionDetails?.summary?.totalSessions || 4 }}
+                  </span>
+                </td>
                 <td data-label="إجراءات" class="table-actions">
-                  <button class="btn btn-xs btn-outline" (click)="openStudentShareModal(st)"><svg class="icon"><use href="#icon-pencil"></use></svg> تعديل يدوي</button>
-                  <button class="btn btn-xs btn-outline" (click)="openStudentAttendanceFromCommission(st)"><svg class="icon"><use href="#icon-calendar"></use></svg> الحضور</button>
+                  <button class="btn btn-xs btn-accent" (click)="openSessionsAdjustmentModal(st)" title="تعديل عدد الحصص المحضورة">
+                    <svg class="icon"><use href="#icon-calendar"></use></svg> الحصص
+                  </button>
+                  <button class="btn btn-xs btn-outline" (click)="openStudentShareModal(st)">
+                    <svg class="icon"><use href="#icon-pencil"></use></svg> تعديل يدوي
+                  </button>
+                  <button class="btn btn-xs btn-outline" (click)="openStudentAttendanceFromCommission(st)">
+                    <svg class="icon"><use href="#icon-eye"></use></svg> الحضور
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -1116,6 +1131,52 @@ interface TeacherPaymentDetails {
       <div class="modal-actions">
         <button class="btn btn-primary" (click)="submitStudentShare()">حفظ</button>
         <button class="btn btn-outline" (click)="closeStudentShareModal()">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- مودال تعديل الحصص المحضورة (جديد) -->
+  <div class="modal-overlay" *ngIf="showSessionsAdjustmentModal" (click)="closeSessionsAdjustmentModal()">
+    <div class="modal-box" (click)="$event.stopPropagation()">
+      <h3 class="modal-title">تعديل عدد الحصص المحضورة</h3>
+      <p class="modal-hint">
+        قم بتحديد عدد الحصص التي حضرها الطالب. سيتم حساب حصة الأستاذ تلقائياً بناءً على سعر الحصة ونسبة الأستاذ.
+      </p>
+      
+      <label class="field-label">الطالب</label>
+      <input type="text" class="input-field" [value]="selectedCommissionStudent?.name || selectedCommissionStudent?.student?.name" disabled />
+      
+      <label class="field-label">عدد الحصص المحضورة</label>
+      <div class="sessions-adjustment-controls">
+        <button class="btn btn-sm btn-outline" (click)="decrementSessions()" [disabled]="studentAttendedSessions <= 0">-</button>
+        <span class="sessions-count">{{ studentAttendedSessions }}</span>
+        <button class="btn btn-sm btn-outline" (click)="incrementSessions()" [disabled]="studentAttendedSessions >= totalSessionsInMonth">+</button>
+        <span class="sessions-total">/ {{ totalSessionsInMonth }}</span>
+      </div>
+      
+      <div class="sessions-info-box">
+        <div class="info-row">
+          <span>سعر الحصة:</span>
+          <span>{{ getSessionPrice() | number:'1.0-0' }}</span>
+        </div>
+        <div class="info-row">
+          <span>المبلغ المستحق:</span>
+          <span>{{ getCalculatedStudentAmount() | number:'1.0-0' }}</span>
+        </div>
+        <div class="info-row highlight">
+          <span>حصة الأستاذ الجديدة:</span>
+          <span>{{ getCalculatedTeacherShare() | number:'1.0-0' }}</span>
+        </div>
+      </div>
+      
+      <label class="field-label">سبب التعديل (اختياري)</label>
+      <input type="text" class="input-field" [(ngModel)]="studentShareReason" placeholder="مثال: تعديل بناءً على سجل الحضور" />
+      
+      <div class="modal-actions">
+        <button class="btn btn-primary" (click)="submitSessionsAdjustment()" [disabled]="isSubmittingSessionsAdjustment">
+          {{ isSubmittingSessionsAdjustment ? 'جارٍ الحفظ...' : 'حفظ التعديل' }}
+        </button>
+        <button class="btn btn-outline" (click)="closeSessionsAdjustmentModal()">إلغاء</button>
       </div>
     </div>
   </div>
@@ -1917,6 +1978,70 @@ interface TeacherPaymentDetails {
     .attendance-status-buttons { display: flex; gap: 5px; }
 
     /* ================================================================ */
+    /* ===== أنماط تعديل الحصص ===== */
+    /* ================================================================ */
+
+    .sessions-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--brass-tint);
+      color: var(--brass-deep);
+    }
+
+    .sessions-adjustment-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+    }
+
+    .sessions-count {
+      font-size: 24px;
+      font-weight: 800;
+      font-family: 'Cairo', sans-serif;
+      min-width: 40px;
+      text-align: center;
+      color: var(--ink);
+    }
+
+    .sessions-total {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .sessions-info-box {
+      background: var(--surface-alt);
+      border-radius: 10px;
+      padding: 14px;
+      margin: 10px 0;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .info-row.highlight {
+      font-weight: 800;
+      color: var(--ink);
+      border-top: 1px solid var(--border);
+      margin-top: 4px;
+      padding-top: 8px;
+      font-size: 15px;
+    }
+
+    .info-row.highlight span:last-child {
+      color: var(--brass-deep);
+    }
+
+    /* ================================================================ */
     /* ===== المودالات ===== */
     /* ================================================================ */
 
@@ -2305,10 +2430,6 @@ interface TeacherPaymentDetails {
     /* ===== أنماط الطباعة - إخفاء الأزرار والحواف ===== */
     /* ================================================================ */
 
-    /* ================================================================ */
-    /* ===== إصلاح الفاتورة المطبوعة - إخفاء الأزرار نهائياً ===== */
-    /* ================================================================ */
-
     @media print {
       body * {
         visibility: hidden !important;
@@ -2539,7 +2660,6 @@ interface TeacherPaymentDetails {
       .attendance-grid { grid-template-columns: 1fr; }
       .modal-box { padding: 20px; border-radius: 16px; }
 
-      /* استجابة الهيدر المحترف */
       .invoice-header {
         padding: 14px 14px 12px;
       }
@@ -2774,6 +2894,12 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
   selectedCommissionStudent: any = null;
   studentShareAmount: number = 0;
   studentShareReason: string = '';
+
+  // ==================== Modal: Sessions Adjustment (جديد) ====================
+  showSessionsAdjustmentModal: boolean = false;
+  studentAttendedSessions: number = 0;
+  totalSessionsInMonth: number = 4;
+  isSubmittingSessionsAdjustment: boolean = false;
 
   // ==================== Modal: Bulk Percentage ====================
   showBulkPercentageModal: boolean = false;
@@ -3462,6 +3588,8 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
       const data = await response.json();
       if (response.ok && data.success) {
         this.commissionDetails = data.data;
+        // تحديث totalSessionsInMonth من البيانات المحملة
+        this.totalSessionsInMonth = this.commissionDetails?.summary?.totalSessions || 4;
         this.showCommissionDetailsModal = true;
       } else {
         Swal.fire('خطأ', data.error || 'فشل في تحميل تفاصيل العمولة', 'error');
@@ -3609,6 +3737,110 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
     }
   }
 
+  // ==================== Sessions Adjustment Methods (جديد) ====================
+  openSessionsAdjustmentModal(student: any): void {
+    this.selectedCommissionStudent = student;
+    this.studentAttendedSessions = student.attendedSessions || student.attendanceCount || 0;
+    this.totalSessionsInMonth = this.commissionDetails?.summary?.totalSessions || 4;
+    this.studentShareAmount = student.teacherShare || 0;
+    this.studentShareReason = '';
+    this.showSessionsAdjustmentModal = true;
+  }
+
+  closeSessionsAdjustmentModal(): void {
+    this.showSessionsAdjustmentModal = false;
+    this.selectedCommissionStudent = null;
+  }
+
+  incrementSessions(): void {
+    if (this.studentAttendedSessions < this.totalSessionsInMonth) {
+      this.studentAttendedSessions++;
+      this.studentShareAmount = this.getCalculatedTeacherShare();
+    }
+  }
+
+  decrementSessions(): void {
+    if (this.studentAttendedSessions > 0) {
+      this.studentAttendedSessions--;
+      this.studentShareAmount = this.getCalculatedTeacherShare();
+    }
+  }
+
+  getSessionPrice(): number {
+    const commission = this.commissionDetails?.commission;
+    if (!commission) return 0;
+    const classPrice = commission.class?.price || 0;
+    const totalSessions = this.totalSessionsInMonth || 4;
+    return Math.round(classPrice / totalSessions);
+  }
+
+  getCalculatedStudentAmount(): number {
+    const sessionPrice = this.getSessionPrice();
+    return sessionPrice * this.studentAttendedSessions;
+  }
+
+  getCalculatedTeacherShare(): number {
+    const commission = this.commissionDetails?.commission;
+    if (!commission) return 0;
+    const teacherPercentage = commission.teacher?.salaryPercentage || 70;
+    const studentAmount = this.getCalculatedStudentAmount();
+    return Math.round((studentAmount * teacherPercentage) / 100);
+  }
+
+  async submitSessionsAdjustment(): Promise<void> {
+    if (!this.selectedCommissionStudent || this.studentAttendedSessions < 0) {
+      Swal.fire('تنبيه', 'يرجى إدخال عدد حصص صحيح', 'warning');
+      return;
+    }
+
+    if (this.studentAttendedSessions > this.totalSessionsInMonth) {
+      Swal.fire('تنبيه', `عدد الحصص لا يمكن أن يتجاوز ${this.totalSessionsInMonth}`, 'warning');
+      return;
+    }
+
+    this.isSubmittingSessionsAdjustment = true;
+    try {
+      const commissionId = this.commissionDetails?.commission?._id;
+      if (!commissionId) {
+        throw new Error('معرف العمولة غير موجود');
+      }
+
+      const teacherShare = this.getCalculatedTeacherShare();
+
+      const response = await fetch(
+        `${this.apiUrl}/accounting/teacher-commissions/${commissionId}/student-share`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${this.token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            studentId: this.selectedCommissionStudent._id,
+            teacherShare: teacherShare,
+            attendedSessions: this.studentAttendedSessions,
+            reason: this.studentShareReason || `تعديل عدد الحصص المحضورة إلى ${this.studentAttendedSessions} حصة`
+          })
+        }
+      );
+      const data = await response.json();
+      if (response.ok && data.success) {
+        this.playSuccessChime();
+        Swal.fire('نجاح', `تم تحديث عدد الحصص إلى ${this.studentAttendedSessions} حصة وحساب حصة الأستاذ تلقائياً`, 'success');
+        this.closeSessionsAdjustmentModal();
+        await this.viewCommissionDetails(commissionId);
+        this.loadCommissionsEnhanced();
+      } else {
+        throw new Error(data.error || 'فشل في تحديث الحصص');
+      }
+    } catch (error: any) {
+      this.playErrorTone();
+      Swal.fire('خطأ', error.message, 'error');
+    } finally {
+      this.isSubmittingSessionsAdjustment = false;
+    }
+  }
+
   // ==================== Student Attendance from Commission Methods ====================
   openStudentAttendanceFromCommission(student: any): void {
     this.selectedCommissionStudent = student;
@@ -3684,8 +3916,7 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
 
     const commission = details.commission;
     const students = details.students || [];
-
-    const totalSessions = details.summary?.totalSessions || details.liveClasses?.length || 0;
+    const totalSessions = details.summary?.totalSessions || details.liveClasses?.length || 4;
 
     let statusText = '';
     if (commission.status === 'paid') {
@@ -3705,11 +3936,11 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
       month: commission.month,
       totalSessions: totalSessions,
       students: students.map((s: any) => {
-        const presentCount = s.attendanceCount || s.attendance?.summary?.present || 0;
-        const attendanceRate = totalSessions > 0 ? Math.round((presentCount / totalSessions) * 100) : 0;
+        const attendedSessions = s.attendedSessions || s.attendanceCount || 0;
+        const attendanceRate = totalSessions > 0 ? Math.round((attendedSessions / totalSessions) * 100) : 0;
         return {
           name: s.name || s.student?.name || '-',
-          sessions: `${presentCount}/${totalSessions}`,
+          sessions: `${attendedSessions}/${totalSessions}`,
           attendanceRate: attendanceRate,
           teacherShare: s.teacherShare || 0
         };

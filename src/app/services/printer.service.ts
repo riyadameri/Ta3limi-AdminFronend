@@ -65,10 +65,26 @@ export class PrinterService {
   private comPort: string = 'COM1';
   private baudRate: number = 9600;
   private comConnection: any = null;
-  
+
   private readonly CANVAS_WIDTH = 576;
   private readonly DEVELOPER_NAME = 'Redox';
   private readonly PLATFORM_URL = 'https://alrouad.com/studentsPlatform';
+
+  // ==================== DESIGN SYSTEM ====================
+  // Centralized palette + typography scale so the receipt reads as one
+  // cohesive, professional document instead of a patchwork of styles.
+  private readonly COLORS = {
+    ink: '#0B1120',        // near-black navy — primary text / dark fills
+    inkSoft: '#3A4256',    // secondary text
+    muted: '#6B7280',      // tertiary / helper text
+    hairline: '#C7CBD4',   // borders & rules
+    panel: '#F3F5F8',      // light panel background
+    accent: '#0F172A',     // dark accent bands
+    success: '#0F6B34',    // total / confirmation green
+    white: '#FFFFFF'
+  };
+
+  private readonly FONT = 'Tahoma, "Segoe UI", Arial, sans-serif';
 
   USER = this.initializePrintedBy();
 
@@ -94,7 +110,7 @@ export class PrinterService {
   }
 
   // ==================== CONNECTION SETTINGS ====================
-  
+
   saveConnectionSettings(settings?: ConnectionSettings): void {
     try {
       const data: ConnectionSettings = settings || {
@@ -139,32 +155,32 @@ export class PrinterService {
   }
 
   // ==================== USB CONNECTION ====================
-  
+
   async connectDirectXprinter(): Promise<boolean> {
     try {
       this.connectionType = 'usb';
-      
+
       if (!('usb' in navigator)) {
         throw new Error('WebUSB غير مدعوم في هذا المتصفح. يرجى استخدام Chrome أو Edge.');
       }
 
       const device = await navigator.usb.requestDevice({ filters: [] });
-      
+
       if (!device) {
         throw new Error('لم يتم اختيار أي جهاز');
       }
-      
+
       this.device = device;
-      
+
       await device.open();
-      
+
       if (device.configuration === null) {
         await device.selectConfiguration(1);
       }
-      
+
       let interfaceNumber: number | undefined;
       let endpointNumber: number | undefined;
-      
+
       for (const iface of device.configuration.interfaces) {
         const alternate = iface.alternate;
         if (alternate.interfaceClass === 7 || alternate.interfaceClass === 255) {
@@ -177,7 +193,7 @@ export class PrinterService {
           }
         }
       }
-      
+
       if (interfaceNumber === undefined || endpointNumber === undefined) {
         for (const iface of device.configuration.interfaces) {
           const alternate = iface.alternate;
@@ -191,30 +207,30 @@ export class PrinterService {
           if (interfaceNumber !== undefined && endpointNumber !== undefined) break;
         }
       }
-      
+
       if (interfaceNumber === undefined || endpointNumber === undefined) {
         throw new Error('لم يتم العثور على واجهة طابعة متوافقة في هذا الجهاز.');
       }
-      
+
       this.interfaceNumber = interfaceNumber;
       this.endpointNumber = endpointNumber;
-      
+
       await device.claimInterface(interfaceNumber);
-      
+
       this.isConnected = true;
-      
+
       try {
         await this.writeToPrinter(new Uint8Array([0x1B, 0x40]));
       } catch (writeError) {
         this.isConnected = false;
         throw writeError;
       }
-      
+
       this.saveConnectionSettings();
-      
+
       this.showSuccessToast('تم الاتصال بالطابعة بنجاح');
       return true;
-      
+
     } catch (err: any) {
       console.error('خطأ في الاتصال بالطابعة:', err);
       this.isConnected = false;
@@ -236,14 +252,14 @@ export class PrinterService {
       this.connectionType = 'com';
       this.comPort = portName;
       this.baudRate = baudRate;
-      
+
       if (!('serial' in navigator)) {
         throw new Error('Web Serial API غير مدعوم في هذا المتصفح.');
       }
 
       let port;
       const availablePorts = await navigator.serial.getPorts();
-      
+
       if (availablePorts.length > 0) {
         port = availablePorts[0];
       } else {
@@ -261,7 +277,7 @@ export class PrinterService {
       this.comConnection = port;
       this.isConnected = true;
       this.saveConnectionSettings();
-      
+
       this.showSuccessToast(`تم الاتصال بالطابعة عبر ${portName} بنجاح`);
       return true;
 
@@ -275,7 +291,7 @@ export class PrinterService {
   }
 
   // ==================== CONNECTION METHODS ====================
-  
+
   async connectPrinterDirect(connectionType: 'usb' | 'com' = 'usb', comPort?: string, baudRate?: number): Promise<boolean> {
     try {
       try {
@@ -283,13 +299,13 @@ export class PrinterService {
       } catch (e) {
         console.warn('خطأ في فصل الاتصال السابق (يتم تجاهله):', e);
       }
-      
+
       this.device = null;
       this.comConnection = null;
       this.isConnected = false;
       this.interfaceNumber = 0;
       this.endpointNumber = null;
-      
+
       if (connectionType === 'usb') {
         this.connectionType = 'usb';
         return await this.connectDirectXprinter();
@@ -318,18 +334,18 @@ export class PrinterService {
       if (this.endpointNumber === null) {
         throw new Error('نقطة النهاية غير محددة');
       }
-      
+
       if (!this.device.opened) {
         throw new Error('الجهاز غير مفتوح');
       }
-      
+
       await this.device.transferOut(this.endpointNumber, data);
-      
+
     } else if (this.connectionType === 'com' && this.comConnection) {
       if (!this.comConnection.readable || !this.comConnection.writable) {
         throw new Error('المنفذ التسلسلي غير متاح');
       }
-      
+
       const writer = this.comConnection.writable.getWriter();
       try {
         await writer.write(data);
@@ -353,7 +369,7 @@ export class PrinterService {
         }
         this.comConnection = null;
       }
-      
+
       if (this.connectionType === 'usb' && this.device) {
         try {
           if (this.device.opened) {
@@ -375,13 +391,13 @@ export class PrinterService {
         }
         this.device = null;
       }
-      
+
       this.isConnected = false;
       this.interfaceNumber = 0;
       this.endpointNumber = null;
-      
+
       console.log('تم فصل الطابعة بنجاح');
-      
+
     } catch (err) {
       console.error('خطأ في فصل الطابعة:', err);
       this.isConnected = false;
@@ -409,10 +425,10 @@ export class PrinterService {
 
     try {
       this.showLoading('جاري تحضير الفاتورة للطباعة...');
-      
+
       const canvas = await this.createProfessionalReceiptCanvas(data);
       const rasterData = this.generateRasterCommand(canvas);
-      
+
       const initCmd = new Uint8Array([0x1B, 0x40]);
       const alignCenterCmd = new Uint8Array([0x1B, 0x61, 0x01]);
       const feedLines = new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A, 0x0A]);
@@ -421,7 +437,7 @@ export class PrinterService {
       const printData = new Uint8Array(
         initCmd.length + alignCenterCmd.length + rasterData.length + feedLines.length + cutCmd.length
       );
-      
+
       let offset = 0;
       printData.set(initCmd, offset); offset += initCmd.length;
       printData.set(alignCenterCmd, offset); offset += alignCenterCmd.length;
@@ -449,15 +465,15 @@ export class PrinterService {
       }
       if (!connected) return false;
     }
-    
+
     if (!data || !data.payments || data.payments.length === 0) return false;
 
     try {
       this.showLoading('جاري تحضير الإيصال الجماعي...');
-      
+
       const canvas = await this.createProfessionalBulkReceiptCanvas(data);
       const rasterData = this.generateRasterCommand(canvas);
-      
+
       const initCmd = new Uint8Array([0x1B, 0x40]);
       const alignCenterCmd = new Uint8Array([0x1B, 0x61, 0x01]);
       const feedLines = new Uint8Array([0x0A, 0x0A, 0x0A, 0x0A, 0x0A]);
@@ -466,7 +482,7 @@ export class PrinterService {
       const printData = new Uint8Array(
         initCmd.length + alignCenterCmd.length + rasterData.length + feedLines.length + cutCmd.length
       );
-      
+
       let offset = 0;
       printData.set(initCmd, offset); offset += initCmd.length;
       printData.set(alignCenterCmd, offset); offset += alignCenterCmd.length;
@@ -485,23 +501,31 @@ export class PrinterService {
   }
 
   // ==================== PROFESSIONAL RECEIPT CANVAS ====================
+  // Redesigned for maximum on-paper clarity: bigger type scale, generous
+  // whitespace, a clean masthead, a bold "amount due" panel, and a framed
+  // QR block. Layout is still driven by a running yPos so the final
+  // canvas is trimmed exactly to content height.
 
   async createProfessionalReceiptCanvas(data: ReceiptData): Promise<HTMLCanvasElement> {
     const canvas = document.createElement('canvas');
     canvas.width = this.CANVAS_WIDTH;
-    canvas.height = 1300;
+    canvas.height = 1600;
     const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-    
-    // White background
-    ctx.fillStyle = '#FFFFFF';
+
+    ctx.fillStyle = this.COLORS.white;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = this.COLORS.ink;
     ctx.direction = 'rtl';
     ctx.textBaseline = 'top';
 
-    let yPos = 10;
+    const W = this.CANVAS_WIDTH;
+    const MARGIN = 16;
+    let yPos = 16;
 
-    // ==================== HEADER ====================
+    // ==================== MASTHEAD (double frame) ====================
+    this.drawBorder(ctx, 6, 6, W - 12, 0, this.COLORS.ink, 2);       // outer frame (height set dynamically below)
+    yPos += 16;
+
     const schoolRaw = localStorage.getItem('school');
     let schoolName = 'مدرستي', schoolPhone = '', schoolAddress = '';
     try {
@@ -515,299 +539,195 @@ export class PrinterService {
       schoolName = schoolRaw || 'مدرستي';
     }
 
-    // Top border with slight padding
-    this.drawBorder(ctx, 8, 6, this.CANVAS_WIDTH - 16, 8, '#1a1a2e', 1.5);
-    yPos += 12;
-
-    // School name
     ctx.textAlign = 'center';
-    ctx.font = 'bold 26px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillText(schoolName, canvas.width / 2, yPos);
-    yPos += 34;
+    this.setFont(ctx, 30, 800);
+    ctx.fillStyle = this.COLORS.ink;
+    ctx.fillText(schoolName, W / 2, yPos);
+    yPos += 40;
 
-    // Address
     if (schoolAddress) {
-      ctx.font = '13px "Tahoma", "Arial", sans-serif';
-      ctx.fillStyle = '#4a4a6a';
-      ctx.fillText(schoolAddress, canvas.width / 2, yPos);
-      yPos += 20;
+      this.setFont(ctx, 15, 400);
+      ctx.fillStyle = this.COLORS.inkSoft;
+      ctx.fillText(schoolAddress, W / 2, yPos);
+      yPos += 22;
     }
 
-    // Phone
     if (schoolPhone) {
-      ctx.font = '13px "Tahoma", "Arial", sans-serif';
-      ctx.fillStyle = '#4a4a6a';
-      ctx.fillText(`هاتف: ${schoolPhone}`, canvas.width / 2, yPos);
-      yPos += 24;
+      this.setFont(ctx, 15, 600);
+      ctx.fillStyle = this.COLORS.inkSoft;
+      ctx.fillText(`هاتف: ${schoolPhone}`, W / 2, yPos);
+      yPos += 26;
     }
 
-    // Decorative line
-    this.drawDashedLine(ctx, 15, yPos, this.CANVAS_WIDTH - 30);
-    yPos += 14;
+    yPos += 4;
+    this.drawDashedLine(ctx, MARGIN, yPos, W - MARGIN * 2);
+    yPos += 18;
 
-    // ==================== TITLE ====================
+    // ==================== DOCUMENT TITLE ====================
     ctx.textAlign = 'center';
-    ctx.font = 'bold 18px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillText('إيصال الدفع', canvas.width / 2, yPos);
-    yPos += 28;
+    this.setFont(ctx, 24, 800);
+    ctx.fillStyle = this.COLORS.ink;
+    ctx.fillText('إيصــــال الدفع', W / 2, yPos);
+    yPos += 30;
 
-    // ==================== INFO BOX ====================
-    const infoBoxY = yPos;
-    ctx.fillStyle = '#f5f7fa';
-    this.drawRoundRect(ctx, 10, infoBoxY, this.CANVAS_WIDTH - 20, 90, 6);
-    ctx.fill();
-    ctx.strokeStyle = '#d0d2d6';
-    ctx.lineWidth = 0.5;
-    this.drawRoundRect(ctx, 10, infoBoxY, this.CANVAS_WIDTH - 20, 90, 6);
-    ctx.stroke();
-    
-    ctx.font = '12px "Tahoma", "Arial", sans-serif';
-    ctx.textAlign = 'right';
-    let infoY = infoBoxY + 6;
-    
-    const infoItems = [
-      { label: 'رقم الإيصال:', value: data.receiptNumber || '---' },
-      { label: 'التاريخ:', value: data.date || new Date().toLocaleDateString('ar-EG') },
-      { label: 'الوقت:', value: data.time || new Date().toLocaleTimeString('en-US', { hour12: false }) },
-      { label: 'طريقة الدفع:', value: this.translatePaymentMethod(data.paymentMethod) }
+    // short accent underline beneath the title
+    const accentW = 90;
+    ctx.fillStyle = this.COLORS.ink;
+    ctx.fillRect((W - accentW) / 2, yPos, accentW, 4);
+    yPos += 22;
+
+    // ==================== INFO PANEL ====================
+    const infoRows = [
+      { label: 'رقم الإيصال', value: data.receiptNumber || '---' },
+      { label: 'التاريخ', value: data.date || new Date().toLocaleDateString('ar-EG') },
+      { label: 'الوقت', value: data.time || new Date().toLocaleTimeString('en-US', { hour12: false }) },
+      { label: 'طريقة الدفع', value: this.translatePaymentMethod(data.paymentMethod) }
     ];
-    
-    infoItems.forEach(item => {
-      ctx.fillStyle = '#4a4a6a';
-      ctx.font = 'bold 12px "Tahoma", "Arial", sans-serif';
-      ctx.fillText(item.label, this.CANVAS_WIDTH - 20, infoY);
-      ctx.fillStyle = '#1a1a2e';
-      ctx.font = '12px "Tahoma", "Arial", sans-serif';
-      ctx.fillText(item.value, this.CANVAS_WIDTH - 155, infoY);
-      infoY += 20;
-    });
-    
-    yPos = infoBoxY + 100;
+    yPos = this.drawInfoPanel(ctx, infoRows, MARGIN, yPos, W - MARGIN * 2, 30);
+    yPos += 22;
 
     // ==================== STUDENT INFO ====================
-    this.drawSection(ctx, 'معلومات الطالب', yPos);
-    yPos += 28;
+    yPos = this.drawSection(ctx, 'معلومات الطالب', yPos);
+    yPos += 12;
 
     const studentInfo = [
-      { label: 'الاسم:', value: data.studentName },
-      { label: 'الرقم:', value: data.studentId },
-      { label: 'المستوى:', value: data.academicYear },
-      { label: 'الحصة:', value: data.className }
-    ];
-    
-    ctx.textAlign = 'right';
-    studentInfo.forEach(item => {
-      if (item.value) {
-        ctx.fillStyle = '#4a4a6a';
-        ctx.font = 'bold 12px "Tahoma", "Arial", sans-serif';
-        ctx.fillText(item.label, this.CANVAS_WIDTH - 20, yPos);
-        ctx.fillStyle = '#1a1a2e';
-        ctx.font = '12px "Tahoma", "Arial", sans-serif';
-        ctx.fillText(item.value, this.CANVAS_WIDTH - 130, yPos);
-        yPos += 20;
-      }
-    });
-    yPos += 6;
+      { label: 'الاسم', value: data.studentName },
+      { label: 'الرقم', value: data.studentId },
+      { label: 'المستوى', value: data.academicYear },
+      { label: 'الحصة', value: data.className }
+    ].filter(i => !!i.value);
 
-    // ==================== PAYMENT DETAILS ====================
-    this.drawSection(ctx, 'تفاصيل الدفع', yPos);
-    yPos += 28;
+    yPos = this.drawKeyValueList(ctx, studentInfo, MARGIN, yPos, W - MARGIN * 2, 15, 26);
+    yPos += 16;
 
-    // Table
-    const tableX = 10;
-    const tableWidth = this.CANVAS_WIDTH - 20;
-    const tableY = yPos;
-    
-    // Table header
-    ctx.fillStyle = '#1a1a2e';
-    this.drawRoundRect(ctx, tableX, tableY, tableWidth, 24, 4);
-    ctx.fill();
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 11px "Tahoma", "Arial", sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText('البيان', tableX + tableWidth - 12, tableY + 5);
-    ctx.textAlign = 'center';
-    ctx.fillText('العدد', tableX + tableWidth / 2, tableY + 5);
-    ctx.textAlign = 'left';
-    ctx.fillText('المبلغ', tableX + 12, tableY + 5);
-    
-    yPos += 28;
-    
-    // Table row
-    ctx.fillStyle = '#f8f9fa';
-    this.drawRoundRect(ctx, tableX, yPos, tableWidth, 24, 4);
-    ctx.fill();
-    ctx.fillStyle = '#1a1a2e';
-    ctx.font = '12px "Tahoma", "Arial", sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(data.className || 'رسوم', tableX + tableWidth - 12, yPos + 5);
-    ctx.textAlign = 'center';
-    ctx.fillText('1', tableX + tableWidth / 2, yPos + 5);
-    ctx.textAlign = 'left';
-    ctx.fillText(this.formatAmount(data.amount) + ' د.ج', tableX + 12, yPos + 5);
-    
-    yPos += 28;
-    
-    if (data.month) {
-      ctx.textAlign = 'right';
-      ctx.font = '12px "Tahoma", "Arial", sans-serif';
-      ctx.fillStyle = '#1a1a2e';
-      ctx.fillText(`الشهر: ${data.month}`, this.CANVAS_WIDTH - 20, yPos);
-      yPos += 20;
-    }
-    
-    yPos += 6;
-
-    // ==================== TOTAL ====================
-    this.drawLine(ctx, 10, yPos, this.CANVAS_WIDTH - 20, 1);
+    // ==================== PAYMENT DETAILS TABLE ====================
+    yPos = this.drawSection(ctx, 'تفاصيل الدفع', yPos);
     yPos += 12;
-    
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 18px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillText('الإجمالي:', this.CANVAS_WIDTH - 20, yPos);
-    ctx.textAlign = 'left';
-    ctx.font = 'bold 18px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#1a7a3a';
-    ctx.fillText(this.formatAmount(data.amount) + ' DZD', 12, yPos);
-    yPos += 32;
+
+    const tableX = MARGIN;
+    const tableWidth = W - MARGIN * 2;
+    const rowH = 32;
+
+    yPos = this.drawTableHeader(ctx, ['البيان', 'العدد', 'المبلغ'], tableX, yPos, tableWidth, rowH);
+
+    yPos = this.drawTableRow(
+      ctx,
+      [data.className || 'رسوم', '1', this.formatAmount(data.amount) + ' د.ج'],
+      tableX, yPos, tableWidth, rowH, 0
+    );
+
+    if (data.month) {
+      this.setFont(ctx, 14, 500);
+      ctx.fillStyle = this.COLORS.inkSoft;
+      ctx.textAlign = 'right';
+      ctx.fillText(`الشهر: ${data.month}`, W - MARGIN, yPos + 8);
+      yPos += 30;
+    }
+
+    yPos += 8;
+
+    // ==================== TOTAL — HIGHLIGHTED PANEL ====================
+    yPos = this.drawTotalPanel(ctx, 'الإجمالي المستحق', this.formatAmount(data.amount) + ' DZD', MARGIN, yPos, W - MARGIN * 2);
+    yPos += 22;
 
     // ==================== NOTES ====================
     if (data.notes && data.notes.trim()) {
+      this.setFont(ctx, 14, 700);
+      ctx.fillStyle = this.COLORS.inkSoft;
       ctx.textAlign = 'right';
-      ctx.font = 'bold 12px "Tahoma", "Arial", sans-serif';
-      ctx.fillStyle = '#4a4a6a';
-      ctx.fillText('ملاحظات:', this.CANVAS_WIDTH - 20, yPos);
-      yPos += 18;
-      ctx.font = '11px "Tahoma", "Arial", sans-serif';
-      ctx.fillStyle = '#4a4a6a';
-      const lines = this.splitTextIntoLines(ctx, data.notes, this.CANVAS_WIDTH - 40, 11);
+      ctx.fillText('ملاحظات:', W - MARGIN, yPos);
+      yPos += 22;
+      this.setFont(ctx, 13, 400);
+      ctx.fillStyle = this.COLORS.inkSoft;
+      const lines = this.splitTextIntoLines(ctx, data.notes, W - MARGIN * 2, 13);
       lines.forEach(line => {
-        ctx.fillText(line.trim(), this.CANVAS_WIDTH - 20, yPos);
-        yPos += 16;
+        ctx.fillText(line.trim(), W - MARGIN, yPos);
+        yPos += 19;
       });
-      yPos += 6;
+      yPos += 10;
     }
 
     // ==================== CREDENTIALS (if available) ====================
     if (data.username && data.password) {
-      this.drawSection(ctx, 'بيانات تسجيل الدخول', yPos);
-      yPos += 28;
+      yPos = this.drawSection(ctx, 'بيانات تسجيل الدخول', yPos);
+      yPos += 12;
 
       const credBoxY = yPos;
-      ctx.fillStyle = '#f0f4f8';
-      this.drawRoundRect(ctx, 10, credBoxY, this.CANVAS_WIDTH - 20, 44, 6);
+      const credBoxH = 66;
+      ctx.fillStyle = this.COLORS.panel;
+      this.drawRoundRect(ctx, MARGIN, credBoxY, W - MARGIN * 2, credBoxH, 8);
       ctx.fill();
-      
-      ctx.textAlign = 'right';
-      ctx.font = '12px "Tahoma", "Arial", sans-serif';
-      ctx.fillStyle = '#1a1a2e';
-      ctx.fillText(`اسم المستخدم: ${data.username}`, this.CANVAS_WIDTH - 20, credBoxY + 6);
-      ctx.fillText(`كلمة المرور: ${data.password}`, this.CANVAS_WIDTH - 20, credBoxY + 26);
-      
-      yPos += 52;
+      ctx.strokeStyle = this.COLORS.hairline;
+      ctx.lineWidth = 1;
+      this.drawRoundRect(ctx, MARGIN, credBoxY, W - MARGIN * 2, credBoxH, 8);
+      ctx.stroke();
 
-      // Platform URL
+      ctx.textAlign = 'right';
+      this.setFont(ctx, 15, 600);
+      ctx.fillStyle = this.COLORS.ink;
+      ctx.fillText(`اسم المستخدم: ${data.username}`, W - MARGIN - 14, credBoxY + 12);
+      ctx.fillText(`كلمة المرور: ${data.password}`, W - MARGIN - 14, credBoxY + 38);
+
+      yPos += credBoxH + 14;
+
       if (data.platformUrl) {
         ctx.textAlign = 'center';
-        ctx.font = '11px "Tahoma", "Arial", sans-serif';
-        ctx.fillStyle = '#4a4a6a';
-        ctx.fillText(`المنصة: ${data.platformUrl}`, canvas.width / 2, yPos);
-        yPos += 20;
+        this.setFont(ctx, 13, 500);
+        ctx.fillStyle = this.COLORS.inkSoft;
+        ctx.fillText(`المنصة: ${data.platformUrl}`, W / 2, yPos);
+        yPos += 24;
       }
     }
 
-    // ==================== QR CODE - حجم أكبر ====================
-    const qrSize = 130; // ✅ حجم أكبر
-    const qrX = (this.CANVAS_WIDTH - qrSize) / 2;
-    const qrY = yPos;
-    
-    try {
-      // ✅ استخدام _id الحقيقي للطالب
-      const studentIdForQR = data.studentObjectId || data.studentId || '';
-      const qrData = `${this.PLATFORM_URL}/${studentIdForQR}`;
-      const qrCanvas = document.createElement('canvas');
-      await QRCode.toCanvas(qrCanvas, qrData, {
-        width: qrSize,
-        margin: 2,
-        color: {
-          dark: '#1a1a2e',
-          light: '#FFFFFF'
-        }
-      });
-      ctx.drawImage(qrCanvas, qrX, qrY);
-      yPos += qrSize + 10;
-      
-      ctx.textAlign = 'center';
-      ctx.font = '11px "Tahoma", "Arial", sans-serif';
-      ctx.fillStyle = '#6a6a8a';
-      ctx.fillText('امسح الكود للدخول للمنصة', canvas.width / 2, yPos);
-      yPos += 22;
-    } catch (error) {
-      console.error('Error generating QR Code:', error);
-      yPos += 10;
-    }
+    // ==================== QR CODE — FRAMED ====================
+    yPos = await this.drawQrBlock(
+      ctx,
+      `${this.PLATFORM_URL}/${data.studentObjectId || data.studentId || ''}`,
+      W,
+      yPos,
+      'امسح الكود للدخول إلى المنصة'
+    );
 
     // ==================== FOOTER ====================
-    this.drawLine(ctx, 10, yPos, this.CANVAS_WIDTH - 20, 1.5);
-    yPos += 12;
+    yPos = this.drawFooter(ctx, W, yPos);
 
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 16px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#1a7a3a';
-    ctx.fillText('شكراً لثقتكم بنا', canvas.width / 2, yPos);
-    yPos += 26;
-    
-    ctx.font = '12px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#6a6a8a';
-    ctx.fillText('نظام إدارة التعليم - Redox', canvas.width / 2, yPos);
-    yPos += 18;
-    
-    ctx.font = '10px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#8a8aaa';
-    ctx.fillText(`طباعة بواسطة: ${this.USER}`, canvas.width / 2, yPos);
-    yPos += 16;
-    
-    ctx.font = '9px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#aaaaaa';
-    ctx.fillText('إيصال رسمي - يرجى الاحتفاظ به', canvas.width / 2, yPos);
-    yPos += 18;
+    // Close the outer masthead frame now that total height is known
+    this.drawBorder(ctx, 6, 6, W - 12, yPos - 2, this.COLORS.ink, 2);
 
-    // Bottom border
-    this.drawBorder(ctx, 8, yPos, this.CANVAS_WIDTH - 16, 6, '#1a1a2e', 1);
-    yPos += 10;
-
-    // ==================== FINAL CANVAS ====================
+    // ==================== FINAL TRIM ====================
     const finalCanvas = document.createElement('canvas');
-    finalCanvas.width = this.CANVAS_WIDTH;
-    finalCanvas.height = yPos + 6;
+    finalCanvas.width = W;
+    finalCanvas.height = yPos + 10;
     const finalCtx = finalCanvas.getContext('2d', { willReadFrequently: true })!;
-    finalCtx.fillStyle = '#FFFFFF';
+    finalCtx.fillStyle = this.COLORS.white;
     finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
     finalCtx.drawImage(canvas, 0, 0);
-    
+
     return finalCanvas;
   }
 
-  // ==================== BULK RECEIPT CANVAS ====================
+  // ==================== PROFESSIONAL BULK RECEIPT CANVAS ====================
 
   async createProfessionalBulkReceiptCanvas(data: BulkReceiptData): Promise<HTMLCanvasElement> {
     const canvas = document.createElement('canvas');
     canvas.width = this.CANVAS_WIDTH;
-    canvas.height = 1500;
+    canvas.height = 1900;
     const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-    
-    ctx.fillStyle = '#FFFFFF';
+
+    ctx.fillStyle = this.COLORS.white;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = this.COLORS.ink;
     ctx.direction = 'rtl';
     ctx.textBaseline = 'top';
 
-    let yPos = 10;
+    const W = this.CANVAS_WIDTH;
+    const MARGIN = 16;
+    let yPos = 16;
 
-    // ==================== HEADER ====================
+    // ==================== MASTHEAD ====================
+    this.drawBorder(ctx, 6, 6, W - 12, 0, this.COLORS.ink, 2);
+    yPos += 16;
+
     const schoolRaw = localStorage.getItem('school');
     let schoolName = 'مدرستي', schoolPhone = '', schoolAddress = '';
     try {
@@ -821,200 +741,336 @@ export class PrinterService {
       schoolName = schoolRaw || 'مدرستي';
     }
 
-    this.drawBorder(ctx, 8, 6, this.CANVAS_WIDTH - 16, 6, '#1a1a2e', 1.5);
-    yPos += 10;
-
     ctx.textAlign = 'center';
-    ctx.font = 'bold 26px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillText(schoolName, canvas.width / 2, yPos);
-    yPos += 34;
+    this.setFont(ctx, 30, 800);
+    ctx.fillStyle = this.COLORS.ink;
+    ctx.fillText(schoolName, W / 2, yPos);
+    yPos += 40;
 
     if (schoolAddress) {
-      ctx.font = '13px "Tahoma", "Arial", sans-serif';
-      ctx.fillStyle = '#4a4a6a';
-      ctx.fillText(schoolAddress, canvas.width / 2, yPos);
-      yPos += 20;
+      this.setFont(ctx, 15, 400);
+      ctx.fillStyle = this.COLORS.inkSoft;
+      ctx.fillText(schoolAddress, W / 2, yPos);
+      yPos += 22;
     }
 
     if (schoolPhone) {
-      ctx.font = '13px "Tahoma", "Arial", sans-serif';
-      ctx.fillStyle = '#4a4a6a';
-      ctx.fillText(`هاتف: ${schoolPhone}`, canvas.width / 2, yPos);
-      yPos += 24;
+      this.setFont(ctx, 15, 600);
+      ctx.fillStyle = this.COLORS.inkSoft;
+      ctx.fillText(`هاتف: ${schoolPhone}`, W / 2, yPos);
+      yPos += 26;
     }
 
-    this.drawDashedLine(ctx, 15, yPos, this.CANVAS_WIDTH - 30);
-    yPos += 14;
+    yPos += 4;
+    this.drawDashedLine(ctx, MARGIN, yPos, W - MARGIN * 2);
+    yPos += 18;
 
     ctx.textAlign = 'center';
-    ctx.font = 'bold 18px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillText('إيصال دفع جماعي', canvas.width / 2, yPos);
-    yPos += 28;
+    this.setFont(ctx, 24, 800);
+    ctx.fillStyle = this.COLORS.ink;
+    ctx.fillText('إيصال دفع جماعي', W / 2, yPos);
+    yPos += 30;
 
-    // ==================== INFO ====================
-    const infoBoxY = yPos;
-    ctx.fillStyle = '#f5f7fa';
-    this.drawRoundRect(ctx, 10, infoBoxY, this.CANVAS_WIDTH - 20, 88, 6);
-    ctx.fill();
-    
-    const infoItems = [
-      { label: 'رقم الإيصال:', value: data.receiptNumber },
-      { label: 'التاريخ:', value: data.date },
-      { label: 'عدد الدفعات:', value: data.paymentCount.toString() },
-      { label: 'عدد الطلاب:', value: data.studentCount.toString() },
-      { label: 'طريقة الدفع:', value: this.translatePaymentMethod(data.paymentMethod) }
+    const accentW = 90;
+    ctx.fillStyle = this.COLORS.ink;
+    ctx.fillRect((W - accentW) / 2, yPos, accentW, 4);
+    yPos += 22;
+
+    // ==================== INFO PANEL ====================
+    const infoRows = [
+      { label: 'رقم الإيصال', value: data.receiptNumber },
+      { label: 'التاريخ', value: data.date },
+      { label: 'عدد الدفعات', value: data.paymentCount.toString() },
+      { label: 'عدد الطلاب', value: data.studentCount.toString() },
+      { label: 'طريقة الدفع', value: this.translatePaymentMethod(data.paymentMethod) }
     ];
-    
-    ctx.textAlign = 'right';
-    let infoY = infoBoxY + 6;
-    infoItems.forEach(item => {
-      ctx.fillStyle = '#4a4a6a';
-      ctx.font = 'bold 11px "Tahoma", "Arial", sans-serif';
-      ctx.fillText(item.label, this.CANVAS_WIDTH - 20, infoY);
-      ctx.fillStyle = '#1a1a2e';
-      ctx.font = '11px "Tahoma", "Arial", sans-serif';
-      ctx.fillText(item.value, this.CANVAS_WIDTH - 145, infoY);
-      infoY += 16;
-    });
-    
-    yPos = infoBoxY + 98;
+    yPos = this.drawInfoPanel(ctx, infoRows, MARGIN, yPos, W - MARGIN * 2, 28);
+    yPos += 22;
 
-    // ==================== PAYMENTS LIST ====================
-    this.drawSection(ctx, 'تفاصيل الدفعات', yPos);
-    yPos += 28;
-
-    const tableX = 10;
-    const tableWidth = this.CANVAS_WIDTH - 20;
-    const tableY = yPos;
-    
-    ctx.fillStyle = '#1a1a2e';
-    this.drawRoundRect(ctx, tableX, tableY, tableWidth, 22, 4);
-    ctx.fill();
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 10px "Tahoma", "Arial", sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText('الطالب', tableX + tableWidth - 40, tableY + 5);
-    ctx.textAlign = 'center';
-    ctx.fillText('الشهر', tableX + tableWidth / 2, tableY + 5);
-    ctx.textAlign = 'left';
-    ctx.fillText('المبلغ', tableX + 12, tableY + 5);
-    
-    yPos += 26;
-
-    let rowCount = 0;
-    data.payments.forEach((payment) => {
-      const bgColor = rowCount % 2 === 0 ? '#f8f9fa' : '#ffffff';
-      ctx.fillStyle = bgColor;
-      this.drawRoundRect(ctx, tableX, yPos, tableWidth, 22, 4);
-      ctx.fill();
-      
-      ctx.fillStyle = '#1a1a2e';
-      ctx.font = '11px "Tahoma", "Arial", sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(payment.studentName, tableX + tableWidth - 40, yPos + 5);
-      ctx.textAlign = 'center';
-      ctx.fillText(payment.month || '---', tableX + tableWidth / 2, yPos + 5);
-      ctx.textAlign = 'left';
-      ctx.fillText(this.formatAmount(payment.amount) + ' د.ج', tableX + 12, yPos + 5);
-      
-      yPos += 24;
-      rowCount++;
-    });
-
-    yPos += 6;
-
-    // ==================== TOTAL ====================
-    this.drawLine(ctx, 10, yPos, this.CANVAS_WIDTH - 20, 1);
-    yPos += 12;
-    
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 18px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillText('الإجمالي:', this.CANVAS_WIDTH - 20, yPos);
-    ctx.textAlign = 'left';
-    ctx.font = 'bold 18px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#1a7a3a';
-    ctx.fillText(this.formatAmount(data.totalAmount) + ' DZD', 12, yPos);
-    yPos += 32;
-
-    // ==================== QR CODE - حجم أكبر ====================
-    const qrSize = 130; // ✅ حجم أكبر
-    const qrX = (this.CANVAS_WIDTH - qrSize) / 2;
-    const qrY = yPos;
-    
-    try {
-      // ✅ استخدام _id للطالب الأول
-      const firstStudentId = data.payments[0]?.studentId || '';
-      const qrData = `${this.PLATFORM_URL}/${firstStudentId}`;
-      const qrCanvas = document.createElement('canvas');
-      await QRCode.toCanvas(qrCanvas, qrData, {
-        width: qrSize,
-        margin: 2,
-        color: {
-          dark: '#1a1a2e',
-          light: '#FFFFFF'
-        }
-      });
-      ctx.drawImage(qrCanvas, qrX, qrY);
-      yPos += qrSize + 10;
-      
-      ctx.textAlign = 'center';
-      ctx.font = '11px "Tahoma", "Arial", sans-serif';
-      ctx.fillStyle = '#6a6a8a';
-      ctx.fillText('امسح الكود للدخول للمنصة', canvas.width / 2, yPos);
-      yPos += 22;
-    } catch (error) {
-      console.error('Error generating QR Code:', error);
-      yPos += 10;
-    }
-
-    // ==================== FOOTER ====================
-    this.drawLine(ctx, 10, yPos, this.CANVAS_WIDTH - 20, 1.5);
+    // ==================== PAYMENTS TABLE ====================
+    yPos = this.drawSection(ctx, 'تفاصيل الدفعات', yPos);
     yPos += 12;
 
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 16px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#1a7a3a';
-    ctx.fillText('شكراً لثقتكم بنا', canvas.width / 2, yPos);
-    yPos += 26;
-    
-    ctx.font = '12px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#6a6a8a';
-    ctx.fillText('نظام إدارة التعليم - Redox', canvas.width / 2, yPos);
-    yPos += 18;
-    
-    ctx.font = '10px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#8a8aaa';
-    ctx.fillText(`طباعة بواسطة: ${this.USER}`, canvas.width / 2, yPos);
-    yPos += 16;
-    
-    ctx.font = '9px "Tahoma", "Arial", sans-serif';
-    ctx.fillStyle = '#aaaaaa';
-    ctx.fillText('إيصال رسمي - يرجى الاحتفاظ به', canvas.width / 2, yPos);
-    yPos += 18;
+    const tableX = MARGIN;
+    const tableWidth = W - MARGIN * 2;
+    const rowH = 30;
 
-    this.drawBorder(ctx, 8, yPos, this.CANVAS_WIDTH - 16, 6, '#1a1a2e', 1);
+    yPos = this.drawTableHeader(ctx, ['الطالب', 'الحصة', 'الشهر', 'المبلغ'], tableX, yPos, tableWidth, rowH);
+
+    data.payments.forEach((payment, idx) => {
+      yPos = this.drawTableRow(
+        ctx,
+        [
+          payment.studentName || 'طالب',
+          payment.className || 'غير محدد',
+          payment.month || '---',
+          this.formatAmount(payment.amount) + ' د.ج'
+        ],
+        tableX, yPos, tableWidth, rowH, idx
+      );
+    });
+
     yPos += 10;
 
+    // ==================== TOTAL ====================
+    yPos = this.drawTotalPanel(ctx, 'الإجمالي المستحق', this.formatAmount(data.totalAmount) + ' DZD', MARGIN, yPos, W - MARGIN * 2);
+    yPos += 22;
+
+    // ==================== QR CODE ====================
+    const firstStudentId = data.payments[0]?.studentId || '';
+    yPos = await this.drawQrBlock(
+      ctx,
+      `${this.PLATFORM_URL}/${firstStudentId}`,
+      W,
+      yPos,
+      'امسح الكود للدخول إلى المنصة'
+    );
+
+    // ==================== FOOTER ====================
+    yPos = this.drawFooter(ctx, W, yPos);
+
+    this.drawBorder(ctx, 6, 6, W - 12, yPos - 2, this.COLORS.ink, 2);
+
     const finalCanvas = document.createElement('canvas');
-    finalCanvas.width = this.CANVAS_WIDTH;
-    finalCanvas.height = yPos + 6;
+    finalCanvas.width = W;
+    finalCanvas.height = yPos + 10;
     const finalCtx = finalCanvas.getContext('2d', { willReadFrequently: true })!;
-    finalCtx.fillStyle = '#FFFFFF';
+    finalCtx.fillStyle = this.COLORS.white;
     finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
     finalCtx.drawImage(canvas, 0, 0);
-    
+
     return finalCanvas;
   }
 
-  // ==================== DRAWING HELPERS ====================
+  // ==================== HIGH-LEVEL LAYOUT BLOCKS ====================
+
+  /** Sets a consistent, bold, highly legible font at the given size/weight. */
+  private setFont(ctx: CanvasRenderingContext2D, sizePx: number, weight: number): void {
+    const w = weight >= 700 ? 'bold' : weight >= 600 ? '600' : 'normal';
+    ctx.font = `${w} ${sizePx}px ${this.FONT}`;
+  }
+
+  /** Panel of label/value rows on a soft background — used for receipt meta info. */
+  private drawInfoPanel(
+    ctx: CanvasRenderingContext2D,
+    rows: { label: string; value: string }[],
+    x: number, y: number, width: number, rowHeight: number
+  ): number {
+    const height = rows.length * rowHeight + 16;
+    ctx.fillStyle = this.COLORS.panel;
+    this.drawRoundRect(ctx, x, y, width, height, 10);
+    ctx.fill();
+    ctx.strokeStyle = this.COLORS.hairline;
+    ctx.lineWidth = 1;
+    this.drawRoundRect(ctx, x, y, width, height, 10);
+    ctx.stroke();
+
+    let rowY = y + 10;
+    rows.forEach(item => {
+      ctx.textAlign = 'right';
+      this.setFont(ctx, 14, 700);
+      ctx.fillStyle = this.COLORS.inkSoft;
+      ctx.fillText(item.label, x + width - 16, rowY);
+
+      ctx.textAlign = 'left';
+      this.setFont(ctx, 14, 600);
+      ctx.fillStyle = this.COLORS.ink;
+      ctx.fillText(item.value, x + 16, rowY);
+
+      rowY += rowHeight;
+    });
+
+    return y + height;
+  }
+
+  /** Simple stacked label/value list (no background) — used for student info. */
+  private drawKeyValueList(
+    ctx: CanvasRenderingContext2D,
+    rows: { label: string; value?: string }[],
+    x: number, y: number, width: number, fontSize: number, rowHeight: number
+  ): number {
+    let rowY = y;
+    ctx.textAlign = 'right';
+    rows.forEach(item => {
+      if (!item.value) return;
+      this.setFont(ctx, fontSize, 700);
+      ctx.fillStyle = this.COLORS.inkSoft;
+      ctx.fillText(item.label + '  ', x + width, rowY);
+      const labelWidth = ctx.measureText(item.label + '  ').width;
+
+      this.setFont(ctx, fontSize, 500);
+      ctx.fillStyle = this.COLORS.ink;
+      ctx.fillText(item.value, x + width - labelWidth, rowY);
+
+      rowY += rowHeight;
+    });
+    return rowY;
+  }
+
+  /** Dark, bold section divider bar — reads clearly even at a glance. */
+  private drawSection(ctx: CanvasRenderingContext2D, text: string, y: number): number {
+    const width = this.CANVAS_WIDTH - 32;
+    const boxHeight = 30;
+    ctx.fillStyle = this.COLORS.ink;
+    this.drawRoundRect(ctx, 16, y, width, boxHeight, 6);
+    ctx.fill();
+    ctx.fillStyle = this.COLORS.white;
+    ctx.textAlign = 'center';
+    this.setFont(ctx, 15, 700);
+    ctx.fillText(text, this.CANVAS_WIDTH / 2, y + 7);
+    return y + boxHeight;
+  }
+
+  /** Dark table header row with evenly spaced, right-to-left columns. */
+  private drawTableHeader(
+    ctx: CanvasRenderingContext2D,
+    columns: string[], x: number, y: number, width: number, rowHeight: number
+  ): number {
+    ctx.fillStyle = this.COLORS.ink;
+    this.drawRoundRect(ctx, x, y, width, rowHeight, 6);
+    ctx.fill();
+    ctx.fillStyle = this.COLORS.white;
+    this.setFont(ctx, 13, 700);
+    this.drawColumns(ctx, columns, x, y + rowHeight / 2 - 8, width);
+    return y + rowHeight + 4;
+  }
+
+  /** Zebra-striped data row aligned to the same column grid as the header. */
+  private drawTableRow(
+    ctx: CanvasRenderingContext2D,
+    columns: string[], x: number, y: number, width: number, rowHeight: number, index: number
+  ): number {
+    ctx.fillStyle = index % 2 === 0 ? this.COLORS.panel : this.COLORS.white;
+    this.drawRoundRect(ctx, x, y, width, rowHeight, 6);
+    ctx.fill();
+    ctx.fillStyle = this.COLORS.ink;
+    this.setFont(ctx, 13, 500);
+    this.drawColumns(ctx, columns, x, y + rowHeight / 2 - 8, width);
+    return y + rowHeight + 4;
+  }
+
+  /**
+   * Lays out 3 or 4 columns evenly across the table width, right-aligned
+   * first column (the "label" column, read first in RTL) and remaining
+   * columns centered/left as appropriate.
+   */
+  private drawColumns(ctx: CanvasRenderingContext2D, columns: string[], x: number, textY: number, width: number): void {
+    const n = columns.length;
+    if (n === 3) {
+      ctx.textAlign = 'right';
+      ctx.fillText(columns[0], x + width - 14, textY);
+      ctx.textAlign = 'center';
+      ctx.fillText(columns[1], x + width / 2, textY);
+      ctx.textAlign = 'left';
+      ctx.fillText(columns[2], x + 14, textY);
+    } else {
+      // 4 columns: name | class | month | amount
+      const colWidth = width / n;
+      ctx.textAlign = 'right';
+      ctx.fillText(columns[0], x + width - 14, textY);
+      ctx.textAlign = 'center';
+      ctx.fillText(columns[1], x + width - colWidth * 1.5, textY);
+      ctx.fillText(columns[2], x + width - colWidth * 2.5, textY);
+      ctx.textAlign = 'left';
+      ctx.fillText(columns[3], x + 14, textY);
+    }
+  }
+
+  /** Bold, high-contrast "amount due" panel — the visual focal point of the receipt. */
+  private drawTotalPanel(
+    ctx: CanvasRenderingContext2D,
+    label: string, value: string, x: number, y: number, width: number
+  ): number {
+    const height = 56;
+    ctx.fillStyle = this.COLORS.ink;
+    this.drawRoundRect(ctx, x, y, width, height, 10);
+    ctx.fill();
+
+    ctx.textAlign = 'right';
+    this.setFont(ctx, 16, 700);
+    ctx.fillStyle = this.COLORS.white;
+    ctx.fillText(label, x + width - 18, y + 18);
+
+    ctx.textAlign = 'left';
+    this.setFont(ctx, 22, 800);
+    ctx.fillStyle = this.COLORS.white;
+    ctx.fillText(value, x + 18, y + 14);
+
+    return y + height;
+  }
+
+  /** Framed, centered QR code with a caption underneath. */
+  private async drawQrBlock(
+    ctx: CanvasRenderingContext2D, qrData: string, canvasWidth: number, y: number, caption: string
+  ): Promise<number> {
+    const qrSize = 150;
+    const framePadding = 14;
+    const frameSize = qrSize + framePadding * 2;
+    const frameX = (canvasWidth - frameSize) / 2;
+
+    try {
+      ctx.strokeStyle = this.COLORS.hairline;
+      ctx.lineWidth = 1.5;
+      this.drawRoundRect(ctx, frameX, y, frameSize, frameSize, 12);
+      ctx.stroke();
+
+      const qrCanvas = document.createElement('canvas');
+      await QRCode.toCanvas(qrCanvas, qrData, {
+        width: qrSize,
+        margin: 1,
+        color: { dark: this.COLORS.ink, light: this.COLORS.white }
+      });
+
+      ctx.drawImage(qrCanvas, frameX + framePadding, y + framePadding, qrSize, qrSize);
+
+      const newY = y + frameSize + 14;
+      ctx.textAlign = 'center';
+      this.setFont(ctx, 13, 600);
+      ctx.fillStyle = this.COLORS.inkSoft;
+      ctx.fillText(caption, canvasWidth / 2, newY);
+      return newY + 26;
+    } catch (error) {
+      console.error('Error generating QR Code:', error);
+      return y + 10;
+    }
+  }
+
+  /** Consistent footer: divider, thank-you line, system credit, printed-by, and legal note. */
+  private drawFooter(ctx: CanvasRenderingContext2D, canvasWidth: number, y: number): number {
+    let yPos = y;
+    this.drawLine(ctx, 16, yPos, canvasWidth - 32, 2);
+    yPos += 18;
+
+    ctx.textAlign = 'center';
+    this.setFont(ctx, 19, 800);
+    ctx.fillStyle = this.COLORS.success;
+    ctx.fillText('شكراً لثقتكم بنا', canvasWidth / 2, yPos);
+    yPos += 30;
+
+    this.setFont(ctx, 14, 500);
+    ctx.fillStyle = this.COLORS.inkSoft;
+    ctx.fillText('نظام إدارة التعليم — Redox', canvasWidth / 2, yPos);
+    yPos += 22;
+
+    this.setFont(ctx, 12, 500);
+    ctx.fillStyle = this.COLORS.muted;
+    ctx.fillText(`طباعة بواسطة: ${this.USER}`, canvasWidth / 2, yPos);
+    yPos += 20;
+
+    this.setFont(ctx, 11, 500);
+    ctx.fillStyle = this.COLORS.muted;
+    ctx.fillText('إيصال رسمي — يرجى الاحتفاظ به', canvasWidth / 2, yPos);
+    yPos += 22;
+
+    return yPos;
+  }
+
+  // ==================== DRAWING PRIMITIVES ====================
 
   private drawBorder(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, color: string, weight: number): void {
     ctx.strokeStyle = color;
     ctx.lineWidth = weight;
-    this.drawRoundRect(ctx, x, y, width, height, 3);
+    this.drawRoundRect(ctx, x, y, width, height, 4);
     ctx.stroke();
   }
 
@@ -1033,34 +1089,23 @@ export class PrinterService {
   }
 
   private drawLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, weight: number = 1): void {
-    ctx.strokeStyle = '#d0d2d6';
+    ctx.strokeStyle = this.COLORS.hairline;
     ctx.lineWidth = weight;
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + width, y);
     ctx.stroke();
   }
-  
+
   private drawDashedLine(ctx: CanvasRenderingContext2D, x: number, y: number, width: number): void {
-    ctx.strokeStyle = '#d0d2d6';
-    ctx.lineWidth = 0.5;
-    ctx.setLineDash([3, 4]);
+    ctx.strokeStyle = this.COLORS.hairline;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 5]);
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.lineTo(x + width, y);
     ctx.stroke();
     ctx.setLineDash([]);
-  }
-
-  private drawSection(ctx: CanvasRenderingContext2D, text: string, y: number): void {
-    const boxHeight = 22;
-    ctx.fillStyle = '#1a1a2e';
-    this.drawRoundRect(ctx, 10, y, this.CANVAS_WIDTH - 20, boxHeight, 4);
-    ctx.fill();
-    ctx.fillStyle = '#FFFFFF';
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 12px "Tahoma", "Arial", sans-serif';
-    ctx.fillText(text, this.CANVAS_WIDTH / 2, y + 4);
   }
 
   // ==================== RASTER CONVERSION ====================
@@ -1069,12 +1114,12 @@ export class PrinterService {
     const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const pixels = imageData.data;
-    
+
     const bytesWidth = Math.ceil(canvas.width / 8);
     const height = canvas.height;
-    
+
     const buffer = new Uint8Array(8 + (bytesWidth * height));
-    
+
     buffer[0] = 0x1D;
     buffer[1] = 0x76;
     buffer[2] = 0x30;
@@ -1083,9 +1128,9 @@ export class PrinterService {
     buffer[5] = (bytesWidth >> 8) & 0xFF;
     buffer[6] = height & 0xFF;
     buffer[7] = (height >> 8) & 0xFF;
-    
+
     let offset = 8;
-    
+
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < bytesWidth; x++) {
         let byte = 0;
@@ -1097,7 +1142,7 @@ export class PrinterService {
             const g = pixels[i + 1];
             const b_color = pixels[i + 2];
             const alpha = pixels[i + 3];
-            
+
             const brightness = (r * 0.299 + g * 0.587 + b_color * 0.114);
             if (brightness < 200 && alpha > 128) {
               byte |= (1 << (7 - b));
@@ -1125,7 +1170,7 @@ export class PrinterService {
   }
 
   private splitTextIntoLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, fontSize: number): string[] {
-    ctx.font = `${fontSize}px "Tahoma", "Arial", sans-serif`;
+    this.setFont(ctx, fontSize, 400);
     const words = text.split(' ');
     let line = '';
     const lines: string[] = [];
@@ -1150,12 +1195,12 @@ export class PrinterService {
       if (!('serial' in navigator)) {
         return ['COM1', 'COM2', 'COM3', 'COM4', 'COM5'];
       }
-      
+
       const ports = await navigator.serial.getPorts();
       if (ports.length === 0) {
         return ['COM1', 'COM2', 'COM3', 'COM4', 'COM5'];
       }
-      
+
       const portNames: string[] = [];
       for (let i = 0; i < ports.length; i++) {
         try {
@@ -1165,7 +1210,7 @@ export class PrinterService {
           portNames.push(`COM${i + 1}`);
         }
       }
-      
+
       return portNames.length > 0 ? portNames : ['COM1', 'COM2', 'COM3', 'COM4', 'COM5'];
     } catch (error) {
       return ['COM1', 'COM2', 'COM3', 'COM4', 'COM5'];

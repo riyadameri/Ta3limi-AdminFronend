@@ -4769,8 +4769,9 @@ paidPayments.push({
   paymentDate: new Date(), 
   invoiceNumber: response?.invoiceNumber || `INV-${Date.now().toString().slice(-8)}-${i}`,
   notes: paymentData.notes,
-  className: className
+  className: className  // ✅ تأكد من إضافة className هنا
 });
+
       
       results.push({
         payment: payment.month,
@@ -5085,7 +5086,7 @@ async printPaymentReceipt(payment: Payment): Promise<void> {
 
   const receiptData: ReceiptData = {
     receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
-    date: new Date().toLocaleDateString('ar-EG'),
+    date: new Date().toLocaleDateString('en-US'),
     time: new Date().toLocaleTimeString('en-US', { hour12: false }),
     studentName: studentName,
     studentId: studentId,
@@ -5166,7 +5167,7 @@ private async printRegularReceipt(payment: Payment): Promise<void> {
 
   const receiptData = {
     receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}`,
-    date: new Date().toLocaleDateString('ar-EG'),
+    date: new Date().toLocaleDateString('en-US'),
     time: new Date().toLocaleTimeString('en-US', { hour12: false }),
     studentName: studentName,
     studentId: studentObjectId, // ✅ استخدام _id بدلاً من studentId
@@ -5352,7 +5353,7 @@ private async printMultipleReceipts(payments: Payment[]): Promise<void> {
       
       const receiptData: ReceiptData = {
         receiptNumber: payment.invoiceNumber || `RC-${Date.now().toString().slice(-8)}-${i}`,
-        date: new Date().toLocaleDateString('ar-EG'),
+        date: new Date().toLocaleDateString('en-US'),
         time: new Date().toLocaleTimeString('en-US', { hour12: false }),
         studentName: payment.studentName || this.student?.name || '',
         studentId: payment.studentId || this.student?.studentId || '',
@@ -5382,7 +5383,7 @@ private async printMultipleReceipts(payments: Payment[]): Promise<void> {
 
 private async printSingleReceiptForMultiplePayments(payments: Payment[], paymentMethod: string, notes?: string): Promise<void> {
   if (!payments?.length) return;
-    this.soundService.playPayment();
+  this.soundService.playPayment();
 
   try {
     Swal.fire({ 
@@ -5392,11 +5393,12 @@ private async printSingleReceiptForMultiplePayments(payments: Payment[], payment
     });
     
     const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
-      this.soundService.playPayment();
+    this.soundService.playPayment();
     this.soundService.playPrint();
+    
     const bulkReceiptData: BulkReceiptData = {
       receiptNumber: `BLK-${Date.now().toString().slice(-8)}`,
-      date: new Date().toLocaleDateString('ar-EG'),
+      date: new Date().toLocaleDateString('en-US'),
       time: new Date().toLocaleTimeString('en-US', { hour12: false }),
       totalAmount: totalAmount,
       paymentCount: payments.length,
@@ -5404,9 +5406,8 @@ private async printSingleReceiptForMultiplePayments(payments: Payment[], payment
       paymentMethod: paymentMethod,
       payments: payments.map(p => ({
         studentName: p.studentName || this.student?.name || 'طالب',
-        // ✅ استخدام _id الحقيقي للطالب
         studentId: p.student?._id || this.student?._id || this.student?.id || p.studentId || '',
-        className: p.className || p.class?.name || 'غير محدد',
+        className: p.className || p.class?.name || 'غير محدد', // ✅ التأكد من وجود اسم الحصة
         month: p.monthCode || p.month || '',
         amount: p.amount,
         notes: p.notes
@@ -5414,8 +5415,6 @@ private async printSingleReceiptForMultiplePayments(payments: Payment[], payment
       notes: notes || `دفع جماعي لـ ${payments.length} دفعة`
     };
 
-    
-    this.soundService.playPayment();
     console.log('📤 بيانات الإيصال الموحد:', bulkReceiptData);
     
     Swal.close();

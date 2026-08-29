@@ -2546,7 +2546,7 @@ export class LessonDetailComponent implements OnInit {
             </div>
             <div class="info-row">
               <span class="info-label">التاريخ:</span>
-              <span class="info-value">${new Date(payment.paymentDate || Date.now()).toLocaleDateString('ar-EG')}</span>
+              <span class="info-value">${new Date(payment.paymentDate || Date.now()).toLocaleDateString('en-US')}</span>
             </div>
             <div class="info-row">
               <span class="info-label">الطالب:</span>
@@ -2739,7 +2739,7 @@ export class LessonDetailComponent implements OnInit {
 
   formatDate(date?: string | Date): string {
     if (!date) return '---';
-    return new Date(date).toLocaleDateString('ar-EG');
+    return new Date(date).toLocaleDateString('en-US');
   }
 
   getCurrentMonth(): string {
@@ -2763,14 +2763,14 @@ export class LessonDetailComponent implements OnInit {
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
       const value = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-      const label = date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' });
+      const label = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
       months.push({ value, label });
     }
     
     for (let i = 1; i <= 3; i++) {
       const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
       const value = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-      const label = date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' });
+      const label = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
       months.push({ value, label });
     }
     

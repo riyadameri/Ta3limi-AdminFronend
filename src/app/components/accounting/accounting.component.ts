@@ -1,6 +1,6 @@
 // comprehensive-accounting.component.ts
 // ================================================================
-// ===== الفاتورة الاحترافية - الهيدر المحترف بالكامل =====
+// ===== النسخة المُحسّنة - مع جميع الميزات المطلوبة =====
 // ================================================================
 
 import { Component, OnInit, AfterViewInit, ViewChild, ElementRef, OnDestroy } from '@angular/core';
@@ -316,6 +316,63 @@ interface TeacherPaymentDetails {
   totalRecords: number;
 }
 
+// ==================== واجهات جديدة ====================
+
+interface ClassRevenueData {
+  class: {
+    _id: string;
+    name: string;
+    subject: string;
+    price: number;
+  };
+  month: string;
+  totalStudents: number;
+  payments: {
+    total: number;
+    paid: number;
+    pending: number;
+  };
+  amounts: {
+    total: number;
+    paid: number;
+    pending: number;
+  };
+  completionRate: number;
+  students: {
+    _id: string;
+    name: string;
+    studentId: string;
+    amount: number;
+    status: string;
+    paymentDate: string;
+  }[];
+}
+
+interface MonthlyNetProfitData {
+  month: string;
+  income: {
+    classPayments: { total: number; count: number };
+    registrationFees: { total: number; count: number };
+    totalIncome: number;
+  };
+  commissions: {
+    total: number;
+    count: number;
+    allPaid: boolean;
+    unpaid: { _id: string; teacher: string; amount: number; status: string }[];
+  };
+  netProfit: number | null;
+  profitCalculated: boolean;
+  profitMessage: string;
+  paymentSummary: {
+    paid: { count: number; total: number };
+    pending: { count: number; total: number };
+    late: { count: number; total: number };
+  };
+  registrationIncome: number;
+}
+
+// ==================== Component ====================
 @Component({
   selector: 'app-comprehensive-accounting',
   standalone: true,
@@ -348,12 +405,13 @@ interface TeacherPaymentDetails {
     <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3.2 2"/></symbol>
     <symbol id="icon-x-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
     <symbol id="icon-pencil" viewBox="0 0 24 24"><path d="M4 20l.9-3.8L15.6 5.6a1.8 1.8 0 0 1 2.6 0l1.2 1.2a1.8 1.8 0 0 1 0 2.6L8.8 20.1 4 20Z"/><path d="M14 7.5l2.5 2.5"/></symbol>
-    <symbol id="icon-calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3.5V7M16 3.5V7"/></symbol>
+    <symbol id="icon-calendar" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="15" rx="2"/><path d="M4 10h18M8 3.5V7M16 3.5V7"/></symbol>
     <symbol id="icon-printer" viewBox="0 0 24 24"><rect x="5" y="8" width="14" height="8" rx="1.5"/><path d="M7 8V4.5h10V8"/><path d="M7 16v3.5h10V16"/></symbol>
     <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.5-4.5"/></symbol>
     <symbol id="icon-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3 8.5-7 9-4-.5-7-4-7-9V6l7-3Z"/><path d="M9 12l2 2 4-4.5"/></symbol>
     <symbol id="icon-cap" viewBox="0 0 24 24"><path d="M12 5 2.5 9.5 12 14l9.5-4.5L12 5Z"/><path d="M6.5 11.5V16c0 1.3 2.5 2.5 5.5 2.5s5.5-1.2 5.5-2.5v-4.5"/><path d="M21 10v5.5"/></symbol>
+    <symbol id="icon-file-invoice" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9h8M8 13h6M8 17h4"/></symbol>
   </defs>
 </svg>
 
@@ -448,7 +506,6 @@ interface TeacherPaymentDetails {
           <input type="month" class="input-field" [(ngModel)]="selectedMonth" (change)="onMonthChange()" />
         </div>
 
-        <!-- بطاقات الإحصائيات الرئيسية -->
         <div class="cards-grid" *ngIf="summary">
           <div class="stat-card stat-income">
             <span class="stat-icon"><svg class="icon"><use href="#icon-trend-up"></use></svg></span>
@@ -585,6 +642,11 @@ interface TeacherPaymentDetails {
             </button>
             <button class="btn btn-accent" (click)="autoCalculateDues()" [disabled]="isAutoCalculating">
               <svg class="icon"><use href="#icon-bolt"></use></svg> حساب تلقائي
+            </button>
+            <!-- زر تحديث العمولات -->
+            <button class="btn btn-accent" (click)="refreshCommissions()" [disabled]="isRefreshingCommissions">
+              <svg class="icon"><use href="#icon-bolt"></use></svg>
+              {{ isRefreshingCommissions ? 'جارٍ التحديث...' : 'تحديث العمولات' }}
             </button>
           </div>
         </div>
@@ -899,11 +961,203 @@ interface TeacherPaymentDetails {
         <p class="empty-hint" *ngIf="!teacherPaymentDetails && !isLoadingTeacherDetails">اختر أستاذا لعرض تفاصيله</p>
       </section>
 
+      <!-- ===== تبويب 8: إيرادات الحصص ===== -->
+      <section *ngIf="activeTab === 'class-revenue'" class="tab-panel">
+        <div class="panel-toolbar wrap">
+          <h2 class="panel-title">إيرادات الحصص</h2>
+          <div class="toolbar-actions">
+            <select class="input-field" [(ngModel)]="selectedRevenueClassId">
+              <option value="">اختر الحصة</option>
+              <option *ngFor="let c of classesList" [value]="c._id">{{ c.name }}</option>
+            </select>
+            <input type="month" class="input-field" [(ngModel)]="selectedRevenueMonth" />
+            <button class="btn btn-primary" (click)="loadClassRevenue()" [disabled]="isLoadingRevenue">
+              <svg class="icon"><use href="#icon-search"></use></svg>
+              {{ isLoadingRevenue ? 'جارٍ التحميل...' : 'عرض' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- إحصائيات الإيرادات -->
+        <ng-container *ngIf="classRevenueData">
+          <div class="cards-grid four">
+            <div class="stat-card stat-income">
+              <span class="stat-icon"><svg class="icon"><use href="#icon-coins"></use></svg></span>
+              <div class="stat-body">
+                <span class="stat-label">إجمالي الإيرادات</span>
+                <span class="stat-value">{{ classRevenueData.amounts.total | number:'1.0-0' }}</span>
+              </div>
+            </div>
+            <div class="stat-card stat-income">
+              <span class="stat-icon"><svg class="icon"><use href="#icon-check-circle"></use></svg></span>
+              <div class="stat-body">
+                <span class="stat-label">المدفوع</span>
+                <span class="stat-value">{{ classRevenueData.amounts.paid | number:'1.0-0' }}</span>
+              </div>
+            </div>
+            <div class="stat-card stat-expense">
+              <span class="stat-icon"><svg class="icon"><use href="#icon-clock"></use></svg></span>
+              <div class="stat-body">
+                <span class="stat-label">المعلق</span>
+                <span class="stat-value">{{ classRevenueData.amounts.pending | number:'1.0-0' }}</span>
+              </div>
+            </div>
+            <div class="stat-card stat-margin">
+              <span class="stat-icon"><svg class="icon"><use href="#icon-target"></use></svg></span>
+              <div class="stat-body">
+                <span class="stat-label">نسبة الإنجاز</span>
+                <span class="stat-value">{{ classRevenueData.completionRate }}%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- شريط التقدم -->
+          <div class="progress-section">
+            <div class="progress-label">
+              <span>نسبة التحصيل</span>
+              <span>{{ classRevenueData.completionRate }}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" [style.width]="classRevenueData.completionRate + '%'"></div>
+            </div>
+          </div>
+
+          <!-- جدول الطلاب -->
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>الطالب</th>
+                  <th>المبلغ</th>
+                  <th>الحالة</th>
+                  <th>تاريخ الدفع</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let s of classRevenueData.students; let i = index">
+                  <td data-label="#">{{ i + 1 }}</td>
+                  <td data-label="الطالب">{{ s.name }}</td>
+                  <td data-label="المبلغ">{{ s.amount | number:'1.0-0' }}</td>
+                  <td data-label="الحالة">
+                    <span class="badge" [ngClass]="'badge-' + s.status">{{ s.status }}</span>
+                  </td>
+                  <td data-label="تاريخ الدفع">{{ s.paymentDate ? (s.paymentDate | date:'yyyy-MM-dd') : 'لم يدفع' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </ng-container>
+        <p class="empty-hint" *ngIf="!classRevenueData && !isLoadingRevenue">اختر حصة وشهراً ثم اضغط عرض</p>
+      </section>
+
+      <!-- ===== تبويب 9: صافي الربح الشهري ===== -->
+      <section *ngIf="activeTab === 'monthly-profit'" class="tab-panel">
+        <div class="panel-toolbar wrap">
+          <h2 class="panel-title">صافي الربح الشهري</h2>
+          <div class="toolbar-actions">
+            <input type="month" class="input-field" [(ngModel)]="selectedProfitMonth" />
+            <button class="btn btn-primary" (click)="loadMonthlyNetProfitWithCommissions()" [disabled]="isLoadingMonthlyProfit">
+              <svg class="icon"><use href="#icon-chart-bar"></use></svg>
+              {{ isLoadingMonthlyProfit ? 'جارٍ التحميل...' : 'عرض' }}
+            </button>
+          </div>
+        </div>
+
+        <ng-container *ngIf="monthlyProfitData">
+          <!-- بطاقات الإحصائيات -->
+          <div class="cards-grid four">
+            <div class="stat-card stat-income">
+              <span class="stat-icon"><svg class="icon"><use href="#icon-trend-up"></use></svg></span>
+              <div class="stat-body">
+                <span class="stat-label">إيرادات الحصص</span>
+                <span class="stat-value">{{ monthlyProfitData.income.classPayments.total | number:'1.0-0' }}</span>
+              </div>
+            </div>
+            <div class="stat-card stat-income">
+              <span class="stat-icon"><svg class="icon"><use href="#icon-file-invoice"></use></svg></span>
+              <div class="stat-body">
+                <span class="stat-label">رسوم التسجيل</span>
+                <span class="stat-value">{{ monthlyProfitData.income.registrationFees.total | number:'1.0-0' }}</span>
+              </div>
+            </div>
+            <div class="stat-card stat-expense">
+              <span class="stat-icon"><svg class="icon"><use href="#icon-briefcase"></use></svg></span>
+              <div class="stat-body">
+                <span class="stat-label">عمولات الأساتذة</span>
+                <span class="stat-value">{{ monthlyProfitData.commissions.total | number:'1.0-0' }}</span>
+                <span class="stat-sub" *ngIf="!monthlyProfitData.commissions.allPaid" style="color: var(--rose);">
+                  ⚠️ {{ monthlyProfitData.commissions.unpaid.length }} عمولة غير مدفوعة
+                </span>
+              </div>
+            </div>
+            <div class="stat-card" [class.stat-profit]="monthlyProfitData.profitCalculated && (monthlyProfitData.netProfit || 0) >= 0" [class.stat-expense]="monthlyProfitData.profitCalculated && (monthlyProfitData.netProfit || 0) < 0">
+              <span class="stat-icon"><svg class="icon"><use href="#icon-coins"></use></svg></span>
+              <div class="stat-body">
+                <span class="stat-label">صافي الربح</span>
+                <span class="stat-value" *ngIf="monthlyProfitData.profitCalculated">
+                  {{ monthlyProfitData.netProfit | number:'1.0-0' }}
+                </span>
+                <span class="stat-value" *ngIf="!monthlyProfitData.profitCalculated" style="color: var(--amber); font-size: 14px;">
+                  ⚠️ غير محسوب
+                </span>
+                <span class="stat-sub" *ngIf="!monthlyProfitData.profitCalculated" style="color: var(--text-muted); font-size: 11px;">
+                  يلزم دفع جميع العمولات
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ملخص الدفعات -->
+          <div class="sub-panel">
+            <h3 class="panel-subtitle">ملخص الدفعات</h3>
+            <div class="cards-grid four">
+              <div class="stat-card stat-neutral">
+                <span class="stat-label">مدفوعة</span>
+                <span class="stat-value" style="color: var(--emerald);">{{ monthlyProfitData.paymentSummary.paid.count }}</span>
+                <span class="stat-sub">{{ monthlyProfitData.paymentSummary.paid.total | number:'1.0-0' }}</span>
+              </div>
+              <div class="stat-card stat-neutral">
+                <span class="stat-label">معلقة</span>
+                <span class="stat-value" style="color: var(--amber);">{{ monthlyProfitData.paymentSummary.pending.count }}</span>
+                <span class="stat-sub">{{ monthlyProfitData.paymentSummary.pending.total | number:'1.0-0' }}</span>
+              </div>
+              <div class="stat-card stat-neutral">
+                <span class="stat-label">متأخرة</span>
+                <span class="stat-value" style="color: var(--rose);">{{ monthlyProfitData.paymentSummary.late.count }}</span>
+                <span class="stat-sub">{{ monthlyProfitData.paymentSummary.late.total | number:'1.0-0' }}</span>
+              </div>
+              <div class="stat-card stat-neutral">
+                <span class="stat-label">الإجمالي</span>
+                <span class="stat-value">{{ monthlyProfitData.income.totalIncome | number:'1.0-0' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- العمولات غير المدفوعة -->
+          <div class="sub-panel" *ngIf="monthlyProfitData.commissions.unpaid.length > 0">
+            <h3 class="panel-subtitle" style="color: var(--rose);">⚠️ عمولات غير مدفوعة</h3>
+            <div class="list-card" *ngFor="let c of monthlyProfitData.commissions.unpaid">
+              <div class="list-card-body">
+                <span class="list-card-title">{{ c.teacher }}</span>
+                <span class="list-card-sub">المبلغ: {{ c.amount | number:'1.0-0' }} | الحالة: <span class="badge" [ngClass]="'badge-' + c.status">{{ c.status }}</span></span>
+              </div>
+              <button class="btn btn-sm btn-success" (click)="payCommission(c._id)">دفع</button>
+            </div>
+          </div>
+
+          <!-- رسالة حالة صافي الربح -->
+          <div class="profit-status" [class.profit-ready]="monthlyProfitData.profitCalculated" [class.profit-pending]="!monthlyProfitData.profitCalculated">
+            <p>{{ monthlyProfitData.profitMessage }}</p>
+          </div>
+        </ng-container>
+        <p class="empty-hint" *ngIf="!monthlyProfitData && !isLoadingMonthlyProfit">اختر شهراً ثم اضغط عرض</p>
+      </section>
+
     </main>
   </div>
 
-  <!-- ==================== المودالات ==================== -->
-
+  <!-- ==================== المودالات (نفس المودالات السابقة) ==================== -->
   <!-- مودال معاملة سريعة -->
   <div class="modal-overlay" *ngIf="showTransactionModal" (click)="closeTransactionModal()">
     <div class="modal-box" (click)="$event.stopPropagation()">
@@ -988,21 +1242,18 @@ interface TeacherPaymentDetails {
     </div>
   </div>
 
-  <!-- مودال إنشاء العمولات المتعددة (Bulk) -->
+  <!-- مودال إنشاء العمولات المتعددة -->
   <div class="modal-overlay" *ngIf="showBulkCommissionModal" (click)="closeBulkCommissionModal()">
     <div class="modal-box modal-box-lg" (click)="$event.stopPropagation()">
       <h3 class="modal-title">إنشاء عمولات الشهر</h3>
       <p class="modal-hint">اختر الحصص التي تريد إنشاء عمولات لها. يمكنك تعديل نسبة كل أستاذ قبل الإنشاء.</p>
-
       <div class="loading-row" *ngIf="isLoadingAvailableCommissions">جارٍ تحميل الحصص المتاحة...</div>
-
       <div *ngIf="!isLoadingAvailableCommissions">
         <div class="bulk-commission-controls">
           <button class="btn btn-sm btn-outline" (click)="selectAllAvailableCommissions()">تحديد الكل</button>
           <button class="btn btn-sm btn-outline" (click)="deselectAllAvailableCommissions()">إلغاء التحديد</button>
           <span class="selected-count">المحدد: {{ selectedAvailableCommissions.length }}</span>
         </div>
-
         <div class="available-commission-item" *ngFor="let item of availableCommissions; let i = index">
           <div class="commission-select">
             <input type="checkbox" [(ngModel)]="item.selected" (change)="updateSelectedCommissions()" />
@@ -1022,7 +1273,6 @@ interface TeacherPaymentDetails {
           </div>
         </div>
       </div>
-
       <div class="modal-actions">
         <button class="btn btn-primary" (click)="submitBulkCommissions()" [disabled]="isSubmittingBulk || selectedAvailableCommissions.length === 0">
           {{ isSubmittingBulk ? 'جارٍ الإنشاء...' : 'إنشاء العمولات' }}
@@ -1037,7 +1287,6 @@ interface TeacherPaymentDetails {
     <div class="modal-box modal-box-lg" (click)="$event.stopPropagation()">
       <h3 class="modal-title">تفاصيل العمولة</h3>
       <div class="loading-row" *ngIf="commissionDetailsLoading">جارٍ التحميل...</div>
-
       <ng-container *ngIf="commissionDetails && !commissionDetailsLoading">
         <div class="commission-summary-strip">
           <span>الأستاذ: {{ commissionDetails.commission?.teacher?.name }}</span>
@@ -1045,7 +1294,6 @@ interface TeacherPaymentDetails {
           <span>الإجمالي: {{ commissionDetails.commission?.totalAmount | number:'1.0-0' }}</span>
           <span>الحالة: <span class="badge" [ngClass]="'badge-' + commissionDetails.commission?.status">{{ commissionDetails.commission?.status }}</span></span>
         </div>
-
         <div class="bulk-percentage-bar">
           <span class="bulk-percentage-label">تطبيق نسبة موحدة على كل الطلاب:</span>
           <button class="btn btn-sm btn-primary" (click)="openBulkPercentageModal()"><svg class="icon"><use href="#icon-target"></use></svg> تحديد النسبة تلقائيا</button>
@@ -1053,7 +1301,6 @@ interface TeacherPaymentDetails {
             <svg class="icon"><use href="#icon-trash"></use></svg> إلغاء العمولة
           </button>
         </div>
-
         <div class="table-wrap">
           <table class="data-table">
             <thead>
@@ -1090,7 +1337,6 @@ interface TeacherPaymentDetails {
             </tbody>
           </table>
         </div>
-
         <div class="modal-actions">
           <button class="btn btn-success" (click)="payCommission(commissionDetails.commission?._id)" *ngIf="commissionDetails.commission?.status !== 'paid' && commissionDetails.commission?.status !== 'cancelled'">
             <svg class="icon"><use href="#icon-cash"></use></svg> دفع العمولة
@@ -1135,17 +1381,13 @@ interface TeacherPaymentDetails {
     </div>
   </div>
 
-  <!-- مودال تعديل الحصص المحضورة (جديد) -->
+  <!-- مودال تعديل الحصص المحضورة -->
   <div class="modal-overlay" *ngIf="showSessionsAdjustmentModal" (click)="closeSessionsAdjustmentModal()">
     <div class="modal-box" (click)="$event.stopPropagation()">
       <h3 class="modal-title">تعديل عدد الحصص المحضورة</h3>
-      <p class="modal-hint">
-        قم بتحديد عدد الحصص التي حضرها الطالب. سيتم حساب حصة الأستاذ تلقائياً بناءً على سعر الحصة ونسبة الأستاذ.
-      </p>
-      
+      <p class="modal-hint">قم بتحديد عدد الحصص التي حضرها الطالب. سيتم حساب حصة الأستاذ تلقائياً بناءً على سعر الحصة ونسبة الأستاذ.</p>
       <label class="field-label">الطالب</label>
       <input type="text" class="input-field" [value]="selectedCommissionStudent?.name || selectedCommissionStudent?.student?.name" disabled />
-      
       <label class="field-label">عدد الحصص المحضورة</label>
       <div class="sessions-adjustment-controls">
         <button class="btn btn-sm btn-outline" (click)="decrementSessions()" [disabled]="studentAttendedSessions <= 0">-</button>
@@ -1153,7 +1395,6 @@ interface TeacherPaymentDetails {
         <button class="btn btn-sm btn-outline" (click)="incrementSessions()" [disabled]="studentAttendedSessions >= totalSessionsInMonth">+</button>
         <span class="sessions-total">/ {{ totalSessionsInMonth }}</span>
       </div>
-      
       <div class="sessions-info-box">
         <div class="info-row">
           <span>سعر الحصة:</span>
@@ -1168,10 +1409,8 @@ interface TeacherPaymentDetails {
           <span>{{ getCalculatedTeacherShare() | number:'1.0-0' }}</span>
         </div>
       </div>
-      
       <label class="field-label">سبب التعديل (اختياري)</label>
       <input type="text" class="input-field" [(ngModel)]="studentShareReason" placeholder="مثال: تعديل بناءً على سجل الحضور" />
-      
       <div class="modal-actions">
         <button class="btn btn-primary" (click)="submitSessionsAdjustment()" [disabled]="isSubmittingSessionsAdjustment">
           {{ isSubmittingSessionsAdjustment ? 'جارٍ الحفظ...' : 'حفظ التعديل' }}
@@ -1255,18 +1494,11 @@ interface TeacherPaymentDetails {
     </div>
   </div>
 
-  <!-- ================================================================ -->
-  <!-- ===== مودال الفاتورة الاحترافية (مستقلة للطباعة) ===== -->
-  <!-- ================================================================ -->
+  <!-- مودال الفاتورة الاحترافية -->
   <div class="modal-overlay" *ngIf="showInvoiceModal" (click)="closeInvoiceModal()">
     <div class="modal-box modal-box-lg invoice-modal" (click)="$event.stopPropagation()">
-      
-      <!-- ===== محتوى الفاتورة القابل للطباعة ===== -->
       <div class="invoice-print-area" id="invoicePrintArea" *ngIf="invoiceData as inv">
-        
-        <!-- ===== هيدر الفاتورة المحترف ===== -->
         <div class="invoice-header">
-          <!-- الصف العلوي: المدرسة + رقم الفاتورة -->
           <div class="invoice-header-row">
             <div class="school-brand">
               <div class="school-brand-icon">
@@ -1291,14 +1523,10 @@ interface TeacherPaymentDetails {
               <div class="invoice-id-date">{{ inv.date }}</div>
             </div>
           </div>
-
-          <!-- الفاصل الأنعم -->
           <div class="invoice-divider-clean"></div>
-
-          <!-- الصف السفلي: معلومات أساسية -->
           <div class="invoice-info-grid">
             <div class="info-item">
-              <svg class="info-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg class="info-icon" viewBox="0 0 20 20" fill="none">
                 <circle cx="10" cy="6" r="3.5" stroke="currentColor" stroke-width="1.4"/>
                 <path d="M3 16.5C3 13.5 6 11.5 10 11.5C14 11.5 17 13.5 17 16.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
               </svg>
@@ -1308,7 +1536,7 @@ interface TeacherPaymentDetails {
               </div>
             </div>
             <div class="info-item">
-              <svg class="info-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg class="info-icon" viewBox="0 0 20 20" fill="none">
                 <rect x="3" y="4" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
                 <path d="M3 8H17" stroke="currentColor" stroke-width="1.2"/>
                 <path d="M7 11H11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
@@ -1319,7 +1547,7 @@ interface TeacherPaymentDetails {
               </div>
             </div>
             <div class="info-item">
-              <svg class="info-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg class="info-icon" viewBox="0 0 20 20" fill="none">
                 <rect x="3" y="4.5" width="14" height="12" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
                 <path d="M3 8H17" stroke="currentColor" stroke-width="1.2"/>
                 <path d="M6 3V6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
@@ -1331,7 +1559,7 @@ interface TeacherPaymentDetails {
               </div>
             </div>
             <div class="info-item">
-              <svg class="info-icon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg class="info-icon" viewBox="0 0 20 20" fill="none">
                 <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.4"/>
                 <path d="M10 6V10L12.5 12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
               </svg>
@@ -1346,12 +1574,10 @@ interface TeacherPaymentDetails {
           </div>
         </div>
 
-        <!-- عدد الحصص -->
         <div class="sessions-banner">
           📚 عدد الحصص في الشهر: <strong>{{ inv.totalSessions }}</strong>
         </div>
 
-        <!-- جدول الطلاب -->
         <table class="invoice-table">
           <thead>
             <tr>
@@ -1377,14 +1603,12 @@ interface TeacherPaymentDetails {
           </tbody>
         </table>
 
-        <!-- الإجماليات -->
         <div class="invoice-totals">
           <div class="total-row"><span>الإجمالي المستحق</span><span>{{ inv.totalAmount | number:'1.0-0' }}</span></div>
           <div class="total-row"><span>المدفوع</span><span>{{ inv.totalPaid | number:'1.0-0' }}</span></div>
           <div class="total-row final"><span>المتبقي</span><span>{{ inv.remainingAmount | number:'1.0-0' }}</span></div>
         </div>
 
-        <!-- تذييل -->
         <div class="invoice-footer">
           <p>تم إصدار هذه الفاتورة إلكترونياً عبر النظام المحاسبي لـ {{ inv.school?.name || 'المؤسسة التعليمية' }}</p>
           <div class="signature-line">
@@ -1393,8 +1617,6 @@ interface TeacherPaymentDetails {
           </div>
         </div>
       </div>
-
-      <!-- أزرار التحكم (تظهر فقط في الواجهة، وتختفي عند الطباعة) -->
       <div class="modal-actions no-print">
         <button class="btn btn-primary" (click)="printInvoice()">
           <svg class="icon"><use href="#icon-printer"></use></svg> طباعة الفاتورة
@@ -1406,7 +1628,7 @@ interface TeacherPaymentDetails {
 
 </div>
   `,
-  styles: [`
+  styles: [`/* ... جميع الأنماط السابقة ... */
     /* ================================================================ */
     /* ===== الأنماط الأساسية ===== */
     /* ================================================================ */
@@ -1454,39 +1676,10 @@ interface TeacherPaymentDetails {
     /* ===== شاشة الرمز السري ===== */
     /* ================================================================ */
 
-    .gate-screen {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      overflow: hidden;
-      background: radial-gradient(circle at 20% 0%, #223252 0%, var(--ink) 55%, #0a1120 100%);
-      padding: 24px;
-    }
-    .gate-ledger-lines {
-      position: absolute; inset: 0; pointer-events: none;
-      background-image: repeating-linear-gradient(180deg, rgba(207,159,94,0.05) 0px, rgba(207,159,94,0.05) 1px, transparent 1px, transparent 42px);
-    }
-    .gate-glow {
-      position: absolute; width: 520px; height: 520px; border-radius: 50%;
-      background: radial-gradient(circle, rgba(207,159,94,0.20) 0%, transparent 70%);
-      top: 50%; left: 50%; transform: translate(-50%, -50%);
-      pointer-events: none;
-    }
-    .gate-card {
-      position: relative;
-      background: var(--surface);
-      border-radius: var(--radius-lg);
-      padding: 44px 34px 36px;
-      max-width: 400px;
-      width: 100%;
-      text-align: center;
-      box-shadow: var(--shadow-lg);
-      border: 1px solid rgba(207,159,94,0.25);
-      animation: gate-in .5s cubic-bezier(.2,.8,.2,1);
-      transition: transform .4s ease, opacity .4s ease;
-    }
+    .gate-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; background: radial-gradient(circle at 20% 0%, #223252 0%, var(--ink) 55%, #0a1120 100%); padding: 24px; }
+    .gate-ledger-lines { position: absolute; inset: 0; pointer-events: none; background-image: repeating-linear-gradient(180deg, rgba(207,159,94,0.05) 0px, rgba(207,159,94,0.05) 1px, transparent 1px, transparent 42px); }
+    .gate-glow { position: absolute; width: 520px; height: 520px; border-radius: 50%; background: radial-gradient(circle, rgba(207,159,94,0.20) 0%, transparent 70%); top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+    .gate-card { position: relative; background: var(--surface); border-radius: var(--radius-lg); padding: 44px 34px 36px; max-width: 400px; width: 100%; text-align: center; box-shadow: var(--shadow-lg); border: 1px solid rgba(207,159,94,0.25); animation: gate-in .5s cubic-bezier(.2,.8,.2,1); transition: transform .4s ease, opacity .4s ease; }
     .gate-card-unlocking { transform: scale(0.98); opacity: 0.85; }
     @keyframes gate-in { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
@@ -1494,10 +1687,7 @@ interface TeacherPaymentDetails {
     .gate-seal-ring { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--brass-light); opacity: .55; }
     .gate-seal-ring-2 { inset: 9px; border-style: dashed; opacity: .4; }
     .gate-seal-icon { width: 26px; height: 26px; color: var(--brass-deep); position: relative; z-index: 1; }
-    .gate-seal::before {
-      content: ''; position: absolute; inset: -2px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--brass-tint), var(--surface));
-    }
+    .gate-seal::before { content: ''; position: absolute; inset: -2px; border-radius: 50%; background: linear-gradient(135deg, var(--brass-tint), var(--surface)); }
     .gate-seal-spin .gate-seal-ring { animation: seal-spin 1.1s linear infinite; }
     .gate-seal-spin .gate-seal-ring-2 { animation: seal-spin-rev .9s linear infinite; }
     @keyframes seal-spin { to { transform: rotate(360deg); } }
@@ -1507,90 +1697,31 @@ interface TeacherPaymentDetails {
     .gate-title { font-family: 'Cairo', sans-serif; font-size: 24px; font-weight: 900; margin: 0 0 6px; color: var(--ink); }
     .gate-subtitle { font-size: 13.5px; color: var(--text-muted); margin: 0 0 26px; }
     .gate-input-wrap { margin-bottom: 8px; }
-    .gate-input {
-      width: 100%;
-      padding: 15px 16px;
-      font-size: 22px;
-      letter-spacing: 8px;
-      text-align: center;
-      border: 1.5px solid var(--border);
-      border-radius: 12px;
-      outline: none;
-      transition: border-color .2s, box-shadow .2s;
-      font-family: inherit;
-      background: var(--surface-alt);
-      color: var(--ink);
-    }
+    .gate-input { width: 100%; padding: 15px 16px; font-size: 22px; letter-spacing: 8px; text-align: center; border: 1.5px solid var(--border); border-radius: 12px; outline: none; transition: border-color .2s, box-shadow .2s; font-family: inherit; background: var(--surface-alt); color: var(--ink); }
     .gate-input:focus { border-color: var(--brass); box-shadow: 0 0 0 4px var(--brass-tint); }
     .gate-input-error { border-color: var(--rose); animation: shake .3s; }
     @keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-6px);} 75%{transform:translateX(6px);} }
     .gate-error { color: var(--rose); font-size: 12.5px; margin: 8px 0 4px; font-weight: 600; }
-    .gate-btn {
-      width: 100%;
-      padding: 15px;
-      background: linear-gradient(135deg, var(--brass), var(--brass-deep));
-      color: #fff;
-      border: none;
-      border-radius: 12px;
-      font-size: 15px;
-      font-weight: 700;
-      font-family: inherit;
-      cursor: pointer;
-      transition: filter .2s, transform .1s;
-      margin-top: 18px;
-      box-shadow: 0 10px 24px rgba(169,122,60,0.35);
-    }
+    .gate-btn { width: 100%; padding: 15px; background: linear-gradient(135deg, var(--brass), var(--brass-deep)); color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer; transition: filter .2s, transform .1s; margin-top: 18px; box-shadow: 0 10px 24px rgba(169,122,60,0.35); }
     .gate-btn:hover:not(:disabled) { filter: brightness(1.06); }
     .gate-btn:active:not(:disabled) { transform: scale(0.98); }
     .gate-btn:disabled { opacity: .75; cursor: default; }
-    .gate-back {
-      width: 100%;
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-family: inherit;
-      font-size: 12.5px;
-      margin-top: 16px;
-      cursor: pointer;
-      text-decoration: underline;
-    }
+    .gate-back { width: 100%; background: none; border: none; color: var(--text-muted); font-family: inherit; font-size: 12.5px; margin-top: 16px; cursor: pointer; text-decoration: underline; }
 
     /* ================================================================ */
     /* ===== الهيكل العام ===== */
     /* ================================================================ */
 
     .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
-
-    .app-header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 13px 22px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 30;
-      box-shadow: var(--shadow);
-    }
+    .app-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 13px 22px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 30; box-shadow: var(--shadow); }
     .header-left, .header-right { display: flex; align-items: center; gap: 10px; }
     .brand { display: flex; align-items: center; gap: 11px; }
-    .brand-mark {
-      width: 40px; height: 40px; border-radius: 11px;
-      background: linear-gradient(135deg, var(--ink), var(--ink-2));
-      display: flex; align-items: center; justify-content: center;
-      color: var(--brass-light);
-    }
+    .brand-mark { width: 40px; height: 40px; border-radius: 11px; background: linear-gradient(135deg, var(--ink), var(--ink-2)); display: flex; align-items: center; justify-content: center; color: var(--brass-light); }
     .brand-mark .icon { width: 19px; height: 19px; }
     .brand-text { display: flex; flex-direction: column; line-height: 1.3; }
     .brand-title { font-family: 'Cairo', sans-serif; font-weight: 800; font-size: 15.5px; color: var(--ink); }
     .brand-sub { font-size: 10.5px; color: var(--text-muted); letter-spacing: .3px; }
-    .icon-btn {
-      width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border);
-      background: var(--surface-alt); cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: background .15s, border-color .15s; color: var(--ink);
-    }
+    .icon-btn { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-alt); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s, border-color .15s; color: var(--ink); }
     .icon-btn:hover { background: var(--border); }
     .icon-btn-accent { background: var(--ink); color: var(--brass-light); border-color: var(--ink); }
     .icon-btn-accent:hover { background: var(--ink-2); }
@@ -1604,24 +1735,9 @@ interface TeacherPaymentDetails {
     /* ===== التنقل الجانبي ===== */
     /* ================================================================ */
 
-    .side-nav {
-      width: 226px;
-      flex-shrink: 0;
-      background: var(--surface);
-      border-inline-end: 1px solid var(--border);
-      padding: 16px 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-    }
+    .side-nav { width: 226px; flex-shrink: 0; background: var(--surface); border-inline-end: 1px solid var(--border); padding: 16px 10px; display: flex; flex-direction: column; gap: 3px; }
     .side-nav-head { display: none; }
-    .nav-item {
-      display: flex; align-items: center; gap: 11px;
-      padding: 11px 14px; border-radius: 10px; border: none;
-      background: transparent; cursor: pointer; font-family: inherit;
-      font-size: 13.5px; font-weight: 600; color: var(--text-muted); text-align: right;
-      transition: background .15s, color .15s;
-    }
+    .nav-item { display: flex; align-items: center; gap: 11px; padding: 11px 14px; border-radius: 10px; border: none; background: transparent; cursor: pointer; font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--text-muted); text-align: right; transition: background .15s, color .15s; }
     .nav-item:hover { background: var(--surface-alt); color: var(--ink); }
     .nav-item-active { background: var(--ink); color: #fff; }
     .nav-item-active .nav-icon { color: var(--brass-light); }
@@ -1629,14 +1745,10 @@ interface TeacherPaymentDetails {
     .nav-overlay { display: none; }
 
     .app-content { flex: 1; padding: 22px; min-width: 0; }
-
     .tab-panel { animation: fade-in .25s ease; }
     @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
-    .panel-toolbar {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 18px; gap: 12px; flex-wrap: wrap;
-    }
+    .panel-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
     .panel-toolbar.wrap { align-items: flex-start; }
     .panel-title { font-family: 'Cairo', sans-serif; font-size: 21px; font-weight: 800; margin: 0; color: var(--ink); }
     .panel-subtitle { font-size: 15.5px; font-weight: 700; margin: 0; color: var(--ink); }
@@ -1646,11 +1758,7 @@ interface TeacherPaymentDetails {
     .search-field .icon { position: absolute; right: 11px; color: var(--text-muted); }
     .search-field .input-field { padding-right: 34px; }
 
-    .input-field {
-      padding: 9px 13px; border: 1px solid var(--border); border-radius: 9px;
-      font-family: inherit; font-size: 13px; background: var(--surface);
-      color: var(--text); outline: none; transition: border-color .15s, box-shadow .15s;
-    }
+    .input-field { padding: 9px 13px; border: 1px solid var(--border); border-radius: 9px; font-family: inherit; font-size: 13px; background: var(--surface); color: var(--text); outline: none; transition: border-color .15s, box-shadow .15s; }
     .input-field:focus { border-color: var(--brass); box-shadow: 0 0 0 3px var(--brass-tint); }
     .input-sm { padding: 4px 8px; font-size: 12px; width: 62px; }
     .field-label { display: block; font-size: 12px; color: var(--text-muted); margin: 12px 0 5px; font-weight: 600; }
@@ -1659,11 +1767,7 @@ interface TeacherPaymentDetails {
     /* ===== الأزرار ===== */
     /* ================================================================ */
 
-    .btn {
-      padding: 9px 16px; border-radius: 9px; border: none; font-family: inherit;
-      font-weight: 700; font-size: 13px; cursor: pointer; transition: filter .15s, transform .1s, opacity .15s;
-      display: inline-flex; align-items: center; gap: 6px;
-    }
+    .btn { padding: 9px 16px; border-radius: 9px; border: none; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; transition: filter .15s, transform .1s, opacity .15s; display: inline-flex; align-items: center; gap: 6px; }
     .btn:active { transform: scale(0.97); }
     .btn:disabled { opacity: 0.55; cursor: not-allowed; }
     .btn-primary { background: var(--ink); color: #fff; }
@@ -1684,24 +1788,15 @@ interface TeacherPaymentDetails {
     /* ===== البطاقات والإحصائيات ===== */
     /* ================================================================ */
 
-    .cards-grid {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px;
-    }
+    .cards-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
     .cards-grid.four { grid-template-columns: repeat(4, 1fr); }
-    .stat-card {
-      background: var(--surface); border-radius: var(--radius); padding: 17px;
-      display: flex; align-items: center; gap: 13px; box-shadow: var(--shadow);
-      border: 1px solid var(--border);
-    }
-    .stat-icon {
-      width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      background: var(--surface-alt); color: var(--ink);
-    }
+    .stat-card { background: var(--surface); border-radius: var(--radius); padding: 17px; display: flex; align-items: center; gap: 13px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+    .stat-icon { width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--surface-alt); color: var(--ink); }
     .stat-icon .icon { width: 19px; height: 19px; }
     .stat-body { display: flex; flex-direction: column; gap: 3px; }
     .stat-label { font-size: 11.5px; color: var(--text-muted); font-weight: 600; }
     .stat-value { font-family: 'Cairo', sans-serif; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); }
+    .stat-sub { font-size: 10px; color: var(--text-muted); font-weight: 500; }
     .stat-income .stat-icon { background: var(--emerald-tint); color: var(--emerald); }
     .stat-income .stat-value, .income-icon { color: var(--emerald); }
     .stat-expense .stat-icon { background: var(--rose-tint); color: var(--rose); }
@@ -1717,131 +1812,36 @@ interface TeacherPaymentDetails {
     /* ===== مستحقات الأساتذة ===== */
     /* ================================================================ */
 
-    .teacher-dues-section {
-      background: var(--surface);
-      border-radius: var(--radius);
-      padding: 18px;
-      margin-bottom: 22px;
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow);
-    }
-    .section-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 14px;
-    }
-    .section-title {
-      font-family: 'Cairo', sans-serif;
-      font-size: 15.5px;
-      font-weight: 800;
-      margin: 0;
-      display: flex; align-items: center; gap: 8px;
-      color: var(--ink);
-    }
+    .teacher-dues-section { background: var(--surface); border-radius: var(--radius); padding: 18px; margin-bottom: 22px; border: 1px solid var(--border); box-shadow: var(--shadow); }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .section-title { font-family: 'Cairo', sans-serif; font-size: 15.5px; font-weight: 800; margin: 0; display: flex; align-items: center; gap: 8px; color: var(--ink); }
     .section-title .icon { color: var(--brass-deep); }
-    .section-badge {
-      background: var(--surface-alt);
-      padding: 5px 15px;
-      border-radius: 20px;
-      font-weight: 800;
-      font-size: 13.5px;
-      color: var(--text-muted);
-      font-variant-numeric: tabular-nums;
-    }
-    .section-badge.has-dues {
-      background: var(--amber-tint);
-      color: var(--amber);
-    }
-    .dues-cards-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .dues-stat-card {
-      background: var(--surface-alt);
-      border-radius: 10px;
-      padding: 12px;
-      text-align: center;
-    }
-    .dues-stat-label {
-      font-size: 11px;
-      color: var(--text-muted);
-      display: block;
-      margin-bottom: 4px;
-    }
-    .dues-stat-value {
-      font-size: 17px;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      color: var(--ink);
-    }
+    .section-badge { background: var(--surface-alt); padding: 5px 15px; border-radius: 20px; font-weight: 800; font-size: 13.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .section-badge.has-dues { background: var(--amber-tint); color: var(--amber); }
+    .dues-cards-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+    .dues-stat-card { background: var(--surface-alt); border-radius: 10px; padding: 12px; text-align: center; }
+    .dues-stat-label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px; }
+    .dues-stat-value { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); }
     .dues-stat-value.paid { color: var(--emerald); }
     .dues-stat-value.unpaid { color: var(--rose); }
-
-    .teacher-dues-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .teacher-dues-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 9px 12px;
-      background: var(--surface-alt);
-      border-radius: 8px;
-    }
-    .teacher-dues-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .teacher-name {
-      font-weight: 700;
-      font-size: 13px;
-      color: var(--ink);
-    }
-    .teacher-status {
-      font-size: 11px;
-      padding: 3px 10px;
-      border-radius: 12px;
-      font-weight: 700;
-    }
+    .teacher-dues-list { display: flex; flex-direction: column; gap: 6px; }
+    .teacher-dues-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; background: var(--surface-alt); border-radius: 8px; }
+    .teacher-dues-info { display: flex; align-items: center; gap: 12px; }
+    .teacher-name { font-weight: 700; font-size: 13px; color: var(--ink); }
+    .teacher-status { font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 700; }
     .status-paid { background: var(--emerald-tint); color: var(--emerald); }
     .status-unpaid { background: var(--rose-tint); color: var(--rose); }
     .status-partial { background: var(--amber-tint); color: var(--amber); }
-    .teacher-dues-amounts {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .dues-amount {
-      font-weight: 800;
-      font-size: 14px;
-      color: var(--rose);
-      font-variant-numeric: tabular-nums;
-    }
-    .dues-total {
-      font-size: 12px;
-      color: var(--text-muted);
-      font-variant-numeric: tabular-nums;
-    }
+    .teacher-dues-amounts { display: flex; align-items: center; gap: 10px; }
+    .dues-amount { font-weight: 800; font-size: 14px; color: var(--rose); font-variant-numeric: tabular-nums; }
+    .dues-total { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
     /* ================================================================ */
     /* ===== قوائم العناصر ===== */
     /* ================================================================ */
 
-    .list-card {
-      display: flex; align-items: center; gap: 12px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; margin-bottom: 8px;
-      box-shadow: var(--shadow);
-    }
-    .list-card-icon {
-      width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center;
-      justify-content: center; background: var(--surface-alt); flex-shrink: 0; color: var(--ink);
-    }
+    .list-card { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; margin-bottom: 8px; box-shadow: var(--shadow); }
+    .list-card-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--surface-alt); flex-shrink: 0; color: var(--ink); }
     .list-card-icon.income-tint { background: var(--emerald-tint); color: var(--emerald); }
     .list-card-icon.expense-tint { background: var(--rose-tint); color: var(--rose); }
     .list-card-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
@@ -1859,10 +1859,7 @@ interface TeacherPaymentDetails {
     /* ===== الشارات ===== */
     /* ================================================================ */
 
-    .badge {
-      display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 700;
-      background: var(--surface-alt); color: var(--text-muted);
-    }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 700; background: var(--surface-alt); color: var(--text-muted); }
     .badge-paid { background: var(--emerald-tint); color: var(--emerald); }
     .badge-pending { background: var(--amber-tint); color: var(--amber); }
     .badge-partial { background: var(--amber-tint); color: var(--amber); }
@@ -1882,29 +1879,9 @@ interface TeacherPaymentDetails {
     /* ===== مودال إنشاء العمولات المتعددة ===== */
     /* ================================================================ */
 
-    .bulk-commission-controls {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-    .selected-count {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-right: auto;
-      font-weight: 600;
-    }
-    .available-commission-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 11px 12px;
-      background: var(--surface-alt);
-      border-radius: 8px;
-      margin-bottom: 6px;
-      border: 1px solid var(--border);
-    }
+    .bulk-commission-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .selected-count { font-size: 13px; color: var(--text-muted); margin-right: auto; font-weight: 600; }
+    .available-commission-item { display: flex; align-items: center; gap: 12px; padding: 11px 12px; background: var(--surface-alt); border-radius: 8px; margin-bottom: 6px; border: 1px solid var(--border); }
     .commission-select { flex-shrink: 0; }
     .commission-select input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--brass); }
     .commission-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
@@ -1919,23 +1896,8 @@ interface TeacherPaymentDetails {
     /* ===== تفاصيل الأستاذ ===== */
     /* ================================================================ */
 
-    .teacher-profile-header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 18px;
-      background: var(--surface);
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      margin-bottom: 18px;
-    }
-    .teacher-avatar {
-      width: 60px; height: 60px;
-      display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, var(--ink), var(--ink-2));
-      color: var(--brass-light);
-      border-radius: 50%;
-    }
+    .teacher-profile-header { display: flex; align-items: center; gap: 16px; padding: 18px; background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 18px; }
+    .teacher-avatar { width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--ink), var(--ink-2)); color: var(--brass-light); border-radius: 50%; }
     .teacher-avatar .icon { width: 26px; height: 26px; }
     .teacher-info h3 { margin: 0 0 4px; font-size: 17px; font-family: 'Cairo', sans-serif; color: var(--ink); }
     .teacher-info p { margin: 2px 0; font-size: 12.5px; color: var(--text-muted); }
@@ -1950,22 +1912,14 @@ interface TeacherPaymentDetails {
     .chart-card { background: var(--surface); border-radius: var(--radius); padding: 17px; box-shadow: var(--shadow); border: 1px solid var(--border); }
     .chart-title { font-size: 13.5px; font-weight: 700; margin: 0 0 10px; color: var(--ink); }
     .chart-canvas-wrap { height: 220px; position: relative; }
-
     .sub-panel { background: var(--surface); border-radius: var(--radius); padding: 17px; border: 1px solid var(--border); }
 
     /* ================================================================ */
     /* ===== تفاصيل العمولة ===== */
     /* ================================================================ */
 
-    .commission-summary-strip {
-      display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--text-muted);
-      margin-bottom: 14px; font-weight: 600;
-    }
-    .bulk-percentage-bar {
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      background: var(--brass-tint); border: 1px dashed var(--brass-light);
-      border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; flex-wrap: wrap;
-    }
+    .commission-summary-strip { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--text-muted); margin-bottom: 14px; font-weight: 600; }
+    .bulk-percentage-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--brass-tint); border: 1px dashed var(--brass-light); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; flex-wrap: wrap; }
     .bulk-percentage-label { font-size: 13px; font-weight: 700; color: var(--brass-deep); }
 
     /* ================================================================ */
@@ -1981,79 +1935,21 @@ interface TeacherPaymentDetails {
     /* ===== أنماط تعديل الحصص ===== */
     /* ================================================================ */
 
-    .sessions-badge {
-      display: inline-block;
-      padding: 2px 10px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 700;
-      background: var(--brass-tint);
-      color: var(--brass-deep);
-    }
-
-    .sessions-adjustment-controls {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 0;
-    }
-
-    .sessions-count {
-      font-size: 24px;
-      font-weight: 800;
-      font-family: 'Cairo', sans-serif;
-      min-width: 40px;
-      text-align: center;
-      color: var(--ink);
-    }
-
-    .sessions-total {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text-muted);
-    }
-
-    .sessions-info-box {
-      background: var(--surface-alt);
-      border-radius: 10px;
-      padding: 14px;
-      margin: 10px 0;
-    }
-
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 4px 0;
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-
-    .info-row.highlight {
-      font-weight: 800;
-      color: var(--ink);
-      border-top: 1px solid var(--border);
-      margin-top: 4px;
-      padding-top: 8px;
-      font-size: 15px;
-    }
-
-    .info-row.highlight span:last-child {
-      color: var(--brass-deep);
-    }
+    .sessions-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; background: var(--brass-tint); color: var(--brass-deep); }
+    .sessions-adjustment-controls { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+    .sessions-count { font-size: 24px; font-weight: 800; font-family: 'Cairo', sans-serif; min-width: 40px; text-align: center; color: var(--ink); }
+    .sessions-total { font-size: 16px; font-weight: 600; color: var(--text-muted); }
+    .sessions-info-box { background: var(--surface-alt); border-radius: 10px; padding: 14px; margin: 10px 0; }
+    .info-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; color: var(--text-muted); }
+    .info-row.highlight { font-weight: 800; color: var(--ink); border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; font-size: 15px; }
+    .info-row.highlight span:last-child { color: var(--brass-deep); }
 
     /* ================================================================ */
     /* ===== المودالات ===== */
     /* ================================================================ */
 
-    .modal-overlay {
-      position: fixed; inset: 0; background: rgba(16, 25, 43, 0.6);
-      display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px;
-      backdrop-filter: blur(3px);
-    }
-    .modal-box {
-      background: var(--surface); border-radius: 18px; padding: 26px; width: 100%; max-width: 420px;
-      max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); animation: gate-in .25s ease;
-    }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(16, 25, 43, 0.6); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; backdrop-filter: blur(3px); }
+    .modal-box { background: var(--surface); border-radius: 18px; padding: 26px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); animation: gate-in .25s ease; }
     .modal-box-lg { max-width: 720px; }
     .modal-title { font-family: 'Cairo', sans-serif; font-size: 17.5px; font-weight: 800; margin: 0 0 6px; color: var(--ink); }
     .modal-hint { font-size: 12px; color: var(--text-muted); margin: 0 0 6px; line-height: 1.6; }
@@ -2063,546 +1959,98 @@ interface TeacherPaymentDetails {
     /* ===== الفاتورة الاحترافية ===== */
     /* ================================================================ */
 
-    .invoice-modal .modal-box {
-      max-width: 820px;
-      padding: 12px 16px;
-    }
-
-    .invoice-print-area {
-      background: #ffffff;
-      padding: 2mm 3mm;
-      border-radius: 6px;
-      font-family: 'IBM Plex Sans Arabic', 'Cairo', sans-serif;
-      color: #1b2436;
-      direction: rtl;
-    }
-
-    /* ===== هيدر الفاتورة المحترف ===== */
-    .invoice-header {
-      background: #ffffff;
-      border-radius: 8px;
-      padding: 18px 20px 14px;
-      margin-bottom: 14px;
-      border: 1px solid #e8e3d8;
-      box-shadow: 0 2px 8px rgba(16, 25, 43, 0.04);
-    }
-
-    .invoice-header-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 12px;
-    }
-
-    .school-brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .school-brand-icon {
-      width: 40px;
-      height: 40px;
-      flex-shrink: 0;
-      color: #a97a3c;
-      background: #f6f3ea;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .school-brand-icon svg {
-      width: 22px;
-      height: 22px;
-    }
-
-    .school-brand-text h2 {
-      font-size: 15px;
-      font-weight: 800;
-      color: #1b2436;
-      margin: 0 0 1px;
-      font-family: 'Cairo', sans-serif;
-      letter-spacing: -0.2px;
-    }
-
-    .school-brand-sub {
-      font-size: 9.5px;
-      color: #8a8276;
-      font-weight: 500;
-      letter-spacing: 0.3px;
-    }
-
-    .invoice-id {
-      text-align: left;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 1px;
-    }
-
-    .invoice-id-label {
-      font-size: 9px;
-      font-weight: 700;
-      color: #a97a3c;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      background: #f6f3ea;
-      padding: 2px 12px;
-      border-radius: 10px;
-    }
-
-    .invoice-id-number {
-      font-size: 16px;
-      font-weight: 800;
-      color: #1b2436;
-      font-family: 'Cairo', sans-serif;
-      letter-spacing: -0.5px;
-    }
-
-    .invoice-id-number .id-prefix {
-      color: #a97a3c;
-      font-weight: 700;
-    }
-
-    .invoice-id-date {
-      font-size: 10px;
-      color: #8a8276;
-      font-weight: 500;
-    }
-
-    .invoice-divider-clean {
-      height: 1px;
-      background: linear-gradient(to right, transparent, #e8e3d8 20%, #e8e3d8 80%, transparent);
-      margin: 10px 0 12px;
-    }
-
-    .invoice-info-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 4px;
-    }
-
-    .info-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 6px 10px;
-      border-radius: 6px;
-      background: #faf9f6;
-      border: 1px solid #f0ebe2;
-    }
-
-    .info-icon {
-      width: 18px;
-      height: 18px;
-      flex-shrink: 0;
-      color: #8a8276;
-      stroke: currentColor;
-      fill: none;
-      stroke-width: 1.6;
-    }
-
-    .info-item div {
-      display: flex;
-      flex-direction: column;
-      line-height: 1.2;
-      min-width: 0;
-    }
-
-    .info-label {
-      font-size: 8.5px;
-      font-weight: 600;
-      color: #8a8276;
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-    }
-
-    .info-value {
-      font-size: 11px;
-      font-weight: 700;
-      color: #1b2436;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .info-status {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      padding: 1px 0;
-    }
-
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      display: inline-block;
-      flex-shrink: 0;
-    }
-
-    .status-paid {
-      color: #1f6f56;
-    }
-
-    .status-paid .status-dot {
-      background: #1f6f56;
-    }
-
-    .status-pending {
-      color: #b1802b;
-    }
-
-    .status-pending .status-dot {
-      background: #b1802b;
-    }
-
-    /* ===== عدد الحصص ===== */
-    .sessions-banner {
-      text-align: center;
-      background: linear-gradient(135deg, #f5ead6, #f6f3ea);
-      border: 1.5px solid #a97a3c;
-      border-radius: 6px;
-      padding: 3px 0;
-      margin-bottom: 5px;
-      font-size: 12px;
-      font-weight: 700;
-      color: #86602c;
-    }
-
-    .sessions-banner strong {
-      font-size: 18px;
-      color: #1b2436;
-      background: #ffffff;
-      padding: 0 10px;
-      border-radius: 4px;
-      margin: 0 4px;
-    }
-
-    /* ===== جدول الفاتورة ===== */
-    .invoice-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 10.5px;
-      margin-bottom: 5px;
-    }
-
-    .invoice-table thead th {
-      background: #1b2436;
-      color: #ffffff;
-      padding: 4px 6px;
-      text-align: center;
-      font-weight: 700;
-      font-size: 9.5px;
-      letter-spacing: 0.3px;
-    }
-
-    .invoice-table tbody td {
-      padding: 3px 6px;
-      border-bottom: 1px solid #e5ddc9;
-      text-align: center;
-      vertical-align: middle;
-    }
-
-    .invoice-table tbody tr:last-child td {
-      border-bottom: none;
-    }
-
-    .invoice-table tbody tr:hover {
-      background: #faf8f4;
-    }
-
-    .student-name {
-      text-align: right;
-      font-weight: 600;
-      padding-right: 8px !important;
-    }
-
-    .sessions-cell {
-      font-weight: 700;
-      color: #1b2436;
-    }
-
-    .attendance-cell {
-      font-weight: 600;
-    }
-
-    .attendance-rate {
-      display: inline-block;
-      padding: 1px 8px;
-      border-radius: 12px;
-      font-size: 9.5px;
-      font-weight: 700;
-    }
-
-    .attendance-rate.high {
-      background: #e2efe8;
-      color: #1f6f56;
-    }
-
-    .attendance-rate.medium {
-      background: #f6ecd8;
-      color: #b1802b;
-    }
-
-    .attendance-rate.low {
-      background: #f5e5e4;
-      color: #a8434a;
-    }
-
-    .amount-cell {
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-      color: #1b2436;
-    }
-
-    /* ===== الإجماليات ===== */
-    .invoice-totals {
-      max-width: 260px;
-      margin-right: auto;
-      margin-top: 4px;
-      margin-bottom: 4px;
-      border-top: 1.5px solid #e5ddc9;
-      padding-top: 4px;
-    }
-
-    .total-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 1.5px 0;
-      font-size: 10.5px;
-      font-weight: 600;
-      color: #1b2436;
-    }
-
-    .total-row.final {
-      font-size: 13px;
-      font-weight: 900;
-      color: #86602c;
-      border-top: 2px solid #a97a3c;
-      margin-top: 2px;
-      padding-top: 4px;
-    }
-
-    /* ===== تذييل الفاتورة ===== */
-    .invoice-footer {
-      text-align: center;
-      border-top: 1.5px solid #e5ddc9;
-      padding-top: 4px;
-      margin-top: 4px;
-    }
-
-    .invoice-footer p {
-      font-size: 8.5px;
-      color: #6b6357;
-      margin: 2px 0;
-    }
-
-    .signature-line {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 10px;
-      font-size: 10px;
-      font-weight: 700;
-      color: #6b6357;
-      padding: 0 20px;
-    }
-
-    .signature-line span {
-      border-top: 1.5px solid #a97a3c;
-      padding-top: 4px;
-      min-width: 120px;
-      text-align: center;
-    }
-
-    /* ===== أزرار التحكم (تظهر فقط في الواجهة) ===== */
-    .no-print {
-      margin-top: 12px;
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-    }
+    .invoice-modal .modal-box { max-width: 820px; padding: 12px 16px; }
+    .invoice-print-area { background: #ffffff; padding: 2mm 3mm; border-radius: 6px; font-family: 'IBM Plex Sans Arabic', 'Cairo', sans-serif; color: #1b2436; direction: rtl; }
+    .invoice-header { background: #ffffff; border-radius: 8px; padding: 18px 20px 14px; margin-bottom: 14px; border: 1px solid #e8e3d8; box-shadow: 0 2px 8px rgba(16, 25, 43, 0.04); }
+    .invoice-header-row { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; }
+    .school-brand { display: flex; align-items: center; gap: 12px; }
+    .school-brand-icon { width: 40px; height: 40px; flex-shrink: 0; color: #a97a3c; background: #f6f3ea; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+    .school-brand-icon svg { width: 22px; height: 22px; }
+    .school-brand-text h2 { font-size: 15px; font-weight: 800; color: #1b2436; margin: 0 0 1px; font-family: 'Cairo', sans-serif; letter-spacing: -0.2px; }
+    .school-brand-sub { font-size: 9.5px; color: #8a8276; font-weight: 500; letter-spacing: 0.3px; }
+    .invoice-id { text-align: left; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+    .invoice-id-label { font-size: 9px; font-weight: 700; color: #a97a3c; text-transform: uppercase; letter-spacing: 0.8px; background: #f6f3ea; padding: 2px 12px; border-radius: 10px; }
+    .invoice-id-number { font-size: 16px; font-weight: 800; color: #1b2436; font-family: 'Cairo', sans-serif; letter-spacing: -0.5px; }
+    .invoice-id-number .id-prefix { color: #a97a3c; font-weight: 700; }
+    .invoice-id-date { font-size: 10px; color: #8a8276; font-weight: 500; }
+    .invoice-divider-clean { height: 1px; background: linear-gradient(to right, transparent, #e8e3d8 20%, #e8e3d8 80%, transparent); margin: 10px 0 12px; }
+    .invoice-info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .info-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 6px; background: #faf9f6; border: 1px solid #f0ebe2; }
+    .info-icon { width: 18px; height: 18px; flex-shrink: 0; color: #8a8276; stroke: currentColor; fill: none; stroke-width: 1.6; }
+    .info-item div { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+    .info-label { font-size: 8.5px; font-weight: 600; color: #8a8276; text-transform: uppercase; letter-spacing: 0.4px; }
+    .info-value { font-size: 11px; font-weight: 700; color: #1b2436; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .info-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; padding: 1px 0; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .status-paid { color: #1f6f56; }
+    .status-paid .status-dot { background: #1f6f56; }
+    .status-pending { color: #b1802b; }
+    .status-pending .status-dot { background: #b1802b; }
+    .sessions-banner { text-align: center; background: linear-gradient(135deg, #f5ead6, #f6f3ea); border: 1.5px solid #a97a3c; border-radius: 6px; padding: 3px 0; margin-bottom: 5px; font-size: 12px; font-weight: 700; color: #86602c; }
+    .sessions-banner strong { font-size: 18px; color: #1b2436; background: #ffffff; padding: 0 10px; border-radius: 4px; margin: 0 4px; }
+    .invoice-table { width: 100%; border-collapse: collapse; font-size: 10.5px; margin-bottom: 5px; }
+    .invoice-table thead th { background: #1b2436; color: #ffffff; padding: 4px 6px; text-align: center; font-weight: 700; font-size: 9.5px; letter-spacing: 0.3px; }
+    .invoice-table tbody td { padding: 3px 6px; border-bottom: 1px solid #e5ddc9; text-align: center; vertical-align: middle; }
+    .invoice-table tbody tr:last-child td { border-bottom: none; }
+    .invoice-table tbody tr:hover { background: #faf8f4; }
+    .student-name { text-align: right; font-weight: 600; padding-right: 8px !important; }
+    .sessions-cell { font-weight: 700; color: #1b2436; }
+    .attendance-cell { font-weight: 600; }
+    .attendance-rate { display: inline-block; padding: 1px 8px; border-radius: 12px; font-size: 9.5px; font-weight: 700; }
+    .attendance-rate.high { background: #e2efe8; color: #1f6f56; }
+    .attendance-rate.medium { background: #f6ecd8; color: #b1802b; }
+    .attendance-rate.low { background: #f5e5e4; color: #a8434a; }
+    .amount-cell { font-weight: 800; font-variant-numeric: tabular-nums; color: #1b2436; }
+    .invoice-totals { max-width: 260px; margin-right: auto; margin-top: 4px; margin-bottom: 4px; border-top: 1.5px solid #e5ddc9; padding-top: 4px; }
+    .total-row { display: flex; justify-content: space-between; padding: 1.5px 0; font-size: 10.5px; font-weight: 600; color: #1b2436; }
+    .total-row.final { font-size: 13px; font-weight: 900; color: #86602c; border-top: 2px solid #a97a3c; margin-top: 2px; padding-top: 4px; }
+    .invoice-footer { text-align: center; border-top: 1.5px solid #e5ddc9; padding-top: 4px; margin-top: 4px; }
+    .invoice-footer p { font-size: 8.5px; color: #6b6357; margin: 2px 0; }
+    .signature-line { display: flex; justify-content: space-between; margin-top: 10px; font-size: 10px; font-weight: 700; color: #6b6357; padding: 0 20px; }
+    .signature-line span { border-top: 1.5px solid #a97a3c; padding-top: 4px; min-width: 120px; text-align: center; }
+    .no-print { margin-top: 12px; display: flex; gap: 10px; justify-content: center; }
 
     /* ================================================================ */
-    /* ===== أنماط الطباعة - إخفاء الأزرار والحواف ===== */
+    /* ===== أنماط الطباعة ===== */
     /* ================================================================ */
 
     @media print {
-      body * {
-        visibility: hidden !important;
-      }
-      
-      .invoice-print-area,
-      .invoice-print-area * {
-        visibility: visible !important;
-      }
-      
-      .invoice-print-area {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-        padding: 4mm 5mm !important;
-        margin: 0 !important;
-        background: #ffffff !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        z-index: 999999 !important;
-        overflow: visible !important;
-      }
-
-      .modal-actions,
-      .modal-actions *,
-      .no-print,
-      .no-print *,
-      button,
-      .btn,
-      .btn-primary,
-      .btn-outline,
-      .btn-success,
-      .btn-danger,
-      .btn-accent,
-      .icon-btn,
-      .modal-overlay .modal-box .modal-actions,
-      .modal-overlay .modal-box .no-print {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-        width: 0 !important;
-        height: 0 !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        border: none !important;
-        overflow: hidden !important;
-        position: absolute !important;
-        top: -9999px !important;
-        left: -9999px !important;
-      }
-
-      .modal-overlay {
-        background: transparent !important;
-        backdrop-filter: none !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        z-index: 999998 !important;
-        display: block !important;
-      }
-
-      .modal-box {
-        box-shadow: none !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        background: transparent !important;
-        max-width: 100% !important;
-        width: 100% !important;
-        max-height: none !important;
-        overflow: visible !important;
-        border-radius: 0 !important;
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-      }
-
-      .invoice-header {
-        background: #faf8f4 !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-        border-color: #d4c9b8 !important;
-      }
-
-      .school-brand-icon {
-        background: #f6f3ea !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-
-      .invoice-id-label {
-        background: #f6f3ea !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-
-      .info-item {
-        background: #faf9f6 !important;
-        border-color: #f0ebe2 !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-
-      .status-paid {
-        color: #1f6f56 !important;
-      }
-
-      .status-paid .status-dot {
-        background: #1f6f56 !important;
-      }
-
-      .status-pending {
-        color: #b1802b !important;
-      }
-
-      .status-pending .status-dot {
-        background: #b1802b !important;
-      }
-
-      .invoice-divider-clean {
-        background: linear-gradient(to right, transparent, #d4c9b8 20%, #d4c9b8 80%, transparent) !important;
-      }
-
-      .attendance-rate.high {
-        background: #e2efe8 !important;
-        color: #1f6f56 !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-
-      .attendance-rate.medium {
-        background: #f6ecd8 !important;
-        color: #b1802b !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-
-      .attendance-rate.low {
-        background: #f5e5e4 !important;
-        color: #a8434a !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-
-      .invoice-print-area {
-        page-break-after: avoid !important;
-        page-break-inside: avoid !important;
-      }
-
-      @page {
-        margin: 2mm 3mm 2mm 3mm !important;
-        size: A4 portrait !important;
-      }
+      body * { visibility: hidden !important; }
+      .invoice-print-area, .invoice-print-area * { visibility: visible !important; }
+      .invoice-print-area { position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; width: 100% !important; height: 100% !important; padding: 4mm 5mm !important; margin: 0 !important; background: #ffffff !important; box-shadow: none !important; border-radius: 0 !important; z-index: 999999 !important; overflow: visible !important; }
+      .modal-actions, .modal-actions *, .no-print, .no-print *, button, .btn, .btn-primary, .btn-outline, .btn-success, .btn-danger, .btn-accent, .icon-btn, .modal-overlay .modal-box .modal-actions, .modal-overlay .modal-box .no-print { display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; width: 0 !important; height: 0 !important; padding: 0 !important; margin: 0 !important; border: none !important; overflow: hidden !important; position: absolute !important; top: -9999px !important; left: -9999px !important; }
+      .modal-overlay { background: transparent !important; backdrop-filter: none !important; padding: 0 !important; margin: 0 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; z-index: 999998 !important; display: block !important; }
+      .modal-box { box-shadow: none !important; padding: 0 !important; margin: 0 !important; background: transparent !important; max-width: 100% !important; width: 100% !important; max-height: none !important; overflow: visible !important; border-radius: 0 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; }
+      .invoice-header { background: #faf8f4 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; border-color: #d4c9b8 !important; }
+      .school-brand-icon { background: #f6f3ea !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .invoice-id-label { background: #f6f3ea !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .info-item { background: #faf9f6 !important; border-color: #f0ebe2 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .status-paid { color: #1f6f56 !important; }
+      .status-paid .status-dot { background: #1f6f56 !important; }
+      .status-pending { color: #b1802b !important; }
+      .status-pending .status-dot { background: #b1802b !important; }
+      .invoice-divider-clean { background: linear-gradient(to right, transparent, #d4c9b8 20%, #d4c9b8 80%, transparent) !important; }
+      .attendance-rate.high { background: #e2efe8 !important; color: #1f6f56 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .attendance-rate.medium { background: #f6ecd8 !important; color: #b1802b !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .attendance-rate.low { background: #f5e5e4 !important; color: #a8434a !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .invoice-print-area { page-break-after: avoid !important; page-break-inside: avoid !important; }
+      @page { margin: 2mm 3mm 2mm 3mm !important; size: A4 portrait !important; }
     }
+    @media print and (display-mode: browser) { .no-print, .modal-actions, button, .btn { display: none !important; visibility: hidden !important; } }
 
-    @media print and (display-mode: browser) {
-      .no-print,
-      .modal-actions,
-      button,
-      .btn {
-        display: none !important;
-        visibility: hidden !important;
-      }
-    }
+    /* ================================================================ */
+    /* ===== الأنماط الجديدة ===== */
+    /* ================================================================ */
+
+    .progress-section { background: var(--surface); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 18px; border: 1px solid var(--border); }
+    .progress-label { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text-muted); }
+    .progress-bar { width: 100%; height: 10px; background: var(--surface-alt); border-radius: 10px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--emerald), var(--brass)); border-radius: 10px; transition: width 0.6s ease; }
+
+    .profit-status { padding: 14px 18px; border-radius: var(--radius); margin-top: 14px; text-align: center; font-weight: 600; font-size: 14px; }
+    .profit-status p { margin: 0; }
+    .profit-ready { background: var(--emerald-tint); color: var(--emerald); border: 1px solid var(--emerald); }
+    .profit-pending { background: var(--amber-tint); color: var(--amber); border: 1px solid var(--amber); }
 
     /* ================================================================ */
     /* ===== الاستجابة للهواتف ===== */
@@ -2618,135 +2066,51 @@ interface TeacherPaymentDetails {
     @media (max-width: 768px) {
       .hamburger { display: flex; }
       .brand-sub { display: none; }
-
       .app-body { position: relative; }
-      .side-nav {
-        position: fixed; top: 0; right: 0; height: 100%; width: 80%; max-width: 300px;
-        z-index: 60; transform: translateX(100%); transition: transform .28s cubic-bezier(.2,.8,.2,1);
-        box-shadow: var(--shadow-lg); padding: 0 12px 16px;
-        background: var(--surface);
-      }
+      .side-nav { position: fixed; top: 0; right: 0; height: 100%; width: 80%; max-width: 300px; z-index: 60; transform: translateX(100%); transition: transform .28s cubic-bezier(.2,.8,.2,1); box-shadow: var(--shadow-lg); padding: 0 12px 16px; background: var(--surface); }
       .side-nav-open { transform: translateX(0); }
-      .side-nav-head {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 18px 6px 14px; font-family: 'Cairo', sans-serif; font-weight: 800; color: var(--ink); font-size: 14px;
-        border-bottom: 1px solid var(--border); margin-bottom: 8px;
-      }
+      .side-nav-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 6px 14px; font-family: 'Cairo', sans-serif; font-weight: 800; color: var(--ink); font-size: 14px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
       .nav-close { width: 32px; height: 32px; }
       .nav-overlay { display: block; position: fixed; inset: 0; background: rgba(16,25,43,0.55); z-index: 50; backdrop-filter: blur(2px); }
       .nav-item { font-size: 14.5px; padding: 13px 14px; }
-
       .app-content { padding: 14px; }
       .cards-grid, .cards-grid.four { grid-template-columns: repeat(2, 1fr); gap: 10px; }
       .dues-cards-grid { grid-template-columns: repeat(2, 1fr); }
       .stat-card { padding: 13px; gap: 10px; }
       .stat-icon { width: 36px; height: 36px; }
       .stat-value { font-size: 16px; }
-
       .panel-toolbar { flex-direction: column; align-items: stretch; }
       .toolbar-actions { flex-direction: column; align-items: stretch; }
       .toolbar-actions .input-field, .toolbar-actions .btn, .toolbar-actions .search-field { width: 100%; }
-
       .list-card { flex-wrap: wrap; }
       .commission-actions, .commission-amounts { width: 100%; justify-content: space-between; }
-
       .data-table thead { display: none; }
       .data-table, .data-table tbody, .data-table tr, .data-table td { display: block; width: 100%; }
       .data-table tr { border-top: 1px solid var(--border); padding: 8px 0; }
       .data-table td { border: none; padding: 6px 4px; display: flex; justify-content: space-between; font-size: 13px; }
       .data-table td::before { content: attr(data-label); font-weight: 700; color: var(--text-muted); margin-inline-end: 10px; }
       .table-actions { justify-content: flex-end; }
-
       .attendance-grid { grid-template-columns: 1fr; }
       .modal-box { padding: 20px; border-radius: 16px; }
-
-      .invoice-header {
-        padding: 14px 14px 12px;
-      }
-
-      .invoice-header-row {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-        padding-bottom: 8px;
-      }
-
-      .school-brand {
-        gap: 10px;
-      }
-
-      .school-brand-icon {
-        width: 34px;
-        height: 34px;
-      }
-
-      .school-brand-icon svg {
-        width: 18px;
-        height: 18px;
-      }
-
-      .school-brand-text h2 {
-        font-size: 13px;
-      }
-
-      .school-brand-sub {
-        font-size: 8.5px;
-      }
-
-      .invoice-id {
-        align-items: flex-start;
-        flex-direction: row;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 4px;
-      }
-
-      .invoice-id-label {
-        font-size: 8px;
-        padding: 1px 10px;
-      }
-
-      .invoice-id-number {
-        font-size: 14px;
-      }
-
-      .invoice-id-date {
-        font-size: 9px;
-      }
-
-      .invoice-divider-clean {
-        margin: 6px 0 8px;
-      }
-
-      .invoice-info-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 4px;
-      }
-
-      .info-item {
-        padding: 4px 8px;
-        gap: 8px;
-      }
-
-      .info-icon {
-        width: 15px;
-        height: 15px;
-      }
-
-      .info-label {
-        font-size: 7.5px;
-      }
-
-      .info-value {
-        font-size: 10px;
-      }
-
-      .info-status {
-        font-size: 10px;
-      }
-
+      .invoice-header { padding: 14px 14px 12px; }
+      .invoice-header-row { flex-direction: column; align-items: stretch; gap: 10px; padding-bottom: 8px; }
+      .school-brand { gap: 10px; }
+      .school-brand-icon { width: 34px; height: 34px; }
+      .school-brand-icon svg { width: 18px; height: 18px; }
+      .school-brand-text h2 { font-size: 13px; }
+      .school-brand-sub { font-size: 8.5px; }
+      .invoice-id { align-items: flex-start; flex-direction: row; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+      .invoice-id-label { font-size: 8px; padding: 1px 10px; }
+      .invoice-id-number { font-size: 14px; }
+      .invoice-id-date { font-size: 9px; }
+      .invoice-divider-clean { margin: 6px 0 8px; }
+      .invoice-info-grid { grid-template-columns: repeat(2, 1fr); gap: 4px; }
+      .info-item { padding: 4px 8px; gap: 8px; }
+      .info-icon { width: 15px; height: 15px; }
+      .info-label { font-size: 7.5px; }
+      .info-value { font-size: 10px; }
+      .info-status { font-size: 10px; }
       .gate-card { padding: 34px 24px; }
-
       .teacher-profile-header { flex-direction: column; text-align: center; }
       .available-commission-item { flex-wrap: wrap; }
       .commission-percentage { width: 100%; justify-content: center; }
@@ -2754,14 +2118,8 @@ interface TeacherPaymentDetails {
     }
 
     @media (max-width: 400px) {
-      .invoice-info-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 3px;
-      }
-
-      .info-item {
-        padding: 3px 6px;
-      }
+      .invoice-info-grid { grid-template-columns: 1fr 1fr; gap: 3px; }
+      .info-item { padding: 3px 6px; }
     }
 
     @media (min-width: 769px) {
@@ -2796,7 +2154,9 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
     { id: 'expenses', label: 'المصروفات', icon: 'receipt' },
     { id: 'transactions-status', label: 'حالة المعاملات', icon: 'clipboard' },
     { id: 'students-attendance', label: 'الطلاب والحضور', icon: 'users' },
-    { id: 'teacher-details', label: 'تفاصيل الأستاذ', icon: 'user-tie' }
+    { id: 'teacher-details', label: 'تفاصيل الأستاذ', icon: 'user-tie' },
+    { id: 'class-revenue', label: 'إيرادات الحصص', icon: 'coins' },
+    { id: 'monthly-profit', label: 'صافي الربح الشهري', icon: 'trend-up' }
   ];
 
   // ==================== Dates ====================
@@ -2819,6 +2179,7 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
   commissionStatus: string = 'all';
   isGeneratingCommissions: boolean = false;
   hasPendingCommissions: boolean = false;
+  isRefreshingCommissions: boolean = false;
 
   // ==================== Bulk Commission ====================
   showBulkCommissionModal: boolean = false;
@@ -2869,6 +2230,17 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
   isLoadingTeacherDetails: boolean = false;
   teacherPaymentDetails: TeacherPaymentDetails | null = null;
 
+  // ==================== TAB 8: Class Revenue ====================
+  selectedRevenueClassId: string = '';
+  selectedRevenueMonth: string = '';
+  classRevenueData: ClassRevenueData | null = null;
+  isLoadingRevenue: boolean = false;
+
+  // ==================== TAB 9: Monthly Net Profit ====================
+  selectedProfitMonth: string = '';
+  monthlyProfitData: MonthlyNetProfitData | null = null;
+  isLoadingMonthlyProfit: boolean = false;
+
   // ==================== Auto Calculate ====================
   isAutoCalculating: boolean = false;
 
@@ -2884,39 +2256,39 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
   // Modal: Student Attendance
   showStudentAttendanceModal: boolean = false;
 
-  // ==================== Modal: Commission Details ====================
+  // Modal: Commission Details
   showCommissionDetailsModal: boolean = false;
   commissionDetails: any = null;
   commissionDetailsLoading: boolean = false;
 
-  // ==================== Modal: Student Share Adjustment ====================
+  // Modal: Student Share Adjustment
   showStudentShareModal: boolean = false;
   selectedCommissionStudent: any = null;
   studentShareAmount: number = 0;
   studentShareReason: string = '';
 
-  // ==================== Modal: Sessions Adjustment (جديد) ====================
+  // Modal: Sessions Adjustment
   showSessionsAdjustmentModal: boolean = false;
   studentAttendedSessions: number = 0;
   totalSessionsInMonth: number = 4;
   isSubmittingSessionsAdjustment: boolean = false;
 
-  // ==================== Modal: Bulk Percentage ====================
+  // Modal: Bulk Percentage
   showBulkPercentageModal: boolean = false;
   bulkPercentage: number = 70;
   isApplyingBulkPercentage: boolean = false;
 
-  // ==================== Modal: Student Attendance from Commission ====================
+  // Modal: Student Attendance from Commission
   showCommissionStudentAttendanceModal: boolean = false;
 
-  // ==================== Modal: الفاتورة الاحترافية ====================
+  // Modal: Invoice
   showInvoiceModal: boolean = false;
   invoiceData: InvoiceData | null = null;
 
-  // ==================== Net Profit Data ====================
+  // Net Profit Data
   netProfitData: NetProfitData | null = null;
 
-  // ==================== General Modal Variables ====================
+  // General Modal Variables
   showTransactionModal: boolean = false;
   isSubmittingTx: boolean = false;
   newTx = {
@@ -2927,14 +2299,14 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
     date: new Date().toISOString().split('T')[0]
   };
 
-  // ==================== Charts ====================
+  // Charts
   @ViewChild('incomeExpenseChart') incomeExpenseChartRef!: ElementRef;
   @ViewChild('transactionsChart') transactionsChartRef!: ElementRef;
   private ieChart: any;
   private tChart: any;
   private refreshInterval: any;
 
-  // ==================== الصوتيات ====================
+  // Audio
   private audioCtx: AudioContext | null = null;
 
   constructor(private router: Router) {}
@@ -3059,6 +2431,8 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
     this.statusMonth = today.toISOString().slice(0, 7);
     this.attendanceMonth = today.toISOString().slice(0, 7);
     this.teacherDetailsMonth = today.toISOString().slice(0, 7);
+    this.selectedRevenueMonth = today.toISOString().slice(0, 7);
+    this.selectedProfitMonth = today.toISOString().slice(0, 7);
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
     this.selectedMonth = `${today.getFullYear()}-${month}`;
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -3126,6 +2500,7 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
       this.loadTransactionsByStatus();
       this.loadTeacherDuesSummary();
       this.loadTeachersList();
+      this.loadClassesForSelect();
     } catch (error) {
       console.error('Session data error:', error);
       this.router.navigate(['/login']);
@@ -3168,6 +2543,10 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
       if (this.selectedTeacherId) {
         this.loadTeacherDetails();
       }
+    } else if (tab === 'class-revenue') {
+      this.loadClassesForSelect();
+    } else if (tab === 'monthly-profit') {
+      // لا شيء
     }
   }
 
@@ -3412,6 +2791,49 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
     }
   }
 
+  // ==================== Refresh Commissions ====================
+  async refreshCommissions(): Promise<void> {
+    const result = await Swal.fire({
+      title: 'تحديث العمولات',
+      text: 'سيتم تحديث عمولات الأساتذة بناءً على عدد الطلاب الحالي في كل حصة',
+      icon: 'info',
+      showCancelButton: true,
+      confirmButtonText: 'نعم، تحديث',
+      cancelButtonText: 'إلغاء'
+    });
+
+    if (!result.isConfirmed) return;
+
+    this.isRefreshingCommissions = true;
+    try {
+      const response = await fetch(`${this.apiUrl}/accounting/refresh-commissions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          schoolId: this.schoolId,
+          month: this.commissionMonth || new Date().toISOString().slice(0, 7)
+        })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        this.playSuccessChime();
+        Swal.fire('نجاح', data.message, 'success');
+        this.loadCommissionsEnhanced();
+        this.loadTeacherDuesSummary();
+      } else {
+        throw new Error(data.error || 'فشل في تحديث العمولات');
+      }
+    } catch (error: any) {
+      this.playErrorTone();
+      Swal.fire('خطأ', error.message, 'error');
+    } finally {
+      this.isRefreshingCommissions = false;
+    }
+  }
+
   // ==================== TAB 7: Teacher Details ====================
   async loadTeachersList(): Promise<void> {
     try {
@@ -3588,7 +3010,6 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
       const data = await response.json();
       if (response.ok && data.success) {
         this.commissionDetails = data.data;
-        // تحديث totalSessionsInMonth من البيانات المحملة
         this.totalSessionsInMonth = this.commissionDetails?.summary?.totalSessions || 4;
         this.showCommissionDetailsModal = true;
       } else {
@@ -3737,7 +3158,7 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
     }
   }
 
-  // ==================== Sessions Adjustment Methods (جديد) ====================
+  // ==================== Sessions Adjustment Methods ====================
   openSessionsAdjustmentModal(student: any): void {
     this.selectedCommissionStudent = student;
     this.studentAttendedSessions = student.attendedSessions || student.attendanceCount || 0;
@@ -4038,6 +3459,20 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
       console.log(`✅ Loaded ${this.studentsList.length} students and ${this.classesList.length} classes`);
     } catch (error) {
       console.error('Error loading students and classes:', error);
+    }
+  }
+
+  async loadClassesForSelect(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiUrl}/classes?schoolId=${this.schoolId}`, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      });
+      const data = await response.json();
+      if (response.ok) {
+        this.classesList = Array.isArray(data) ? data : (data.data || data.classes || []);
+      }
+    } catch (error) {
+      console.error('Error loading classes for select:', error);
     }
   }
 
@@ -4548,6 +3983,60 @@ export class ComprehensiveAccountingComponent implements OnInit, AfterViewInit, 
       total,
       attendanceRate: total > 0 ? Math.round((present / total) * 100) : 0
     };
+  }
+
+  // ==================== TAB 8: Class Revenue Methods ====================
+  async loadClassRevenue(): Promise<void> {
+    if (!this.selectedRevenueClassId || !this.selectedRevenueMonth) {
+      Swal.fire('تنبيه', 'يرجى اختيار الحصة والشهر', 'warning');
+      return;
+    }
+
+    this.isLoadingRevenue = true;
+    try {
+      const url = `${this.apiUrl}/accounting/class-revenue-by-month?schoolId=${this.schoolId}&classId=${this.selectedRevenueClassId}&month=${this.selectedRevenueMonth}`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        this.classRevenueData = data.data;
+      } else {
+        Swal.fire('خطأ', data.error || 'فشل في تحميل البيانات', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error loading class revenue:', error);
+      Swal.fire('خطأ', error.message, 'error');
+    } finally {
+      this.isLoadingRevenue = false;
+    }
+  }
+
+  // ==================== TAB 9: Monthly Net Profit Methods ====================
+  async loadMonthlyNetProfitWithCommissions(): Promise<void> {
+    if (!this.selectedProfitMonth) {
+      Swal.fire('تنبيه', 'يرجى اختيار الشهر', 'warning');
+      return;
+    }
+
+    this.isLoadingMonthlyProfit = true;
+    try {
+      const url = `${this.apiUrl}/accounting/monthly-net-profit-with-commissions?schoolId=${this.schoolId}&month=${this.selectedProfitMonth}`;
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        this.monthlyProfitData = data.data;
+      } else {
+        Swal.fire('خطأ', data.error || 'فشل في تحميل البيانات', 'error');
+      }
+    } catch (error: any) {
+      console.error('Error loading monthly profit:', error);
+      Swal.fire('خطأ', error.message, 'error');
+    } finally {
+      this.isLoadingMonthlyProfit = false;
+    }
   }
 
   // ==================== General Modal Methods ====================

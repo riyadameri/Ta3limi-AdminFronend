@@ -1876,13 +1876,13 @@ private async printReceiptWithCredentials(paymentResponse: any): Promise<void> {
 
     const receiptData: ReceiptData = {
       receiptNumber: paymentResponse.receiptNumber || `R${Date.now()}`,
-      date: new Date().toLocaleDateString('ar-EG'),
+      date: new Date().toLocaleDateString('en-US'),
       time: new Date().toLocaleTimeString('en-US', { hour12: false }),
       studentName: this.selectedStudent?.name || 'Unknown',
       studentId: this.selectedStudent?.studentId || 'N/A',
       studentObjectId: studentObjectId,
       className: this.getAcademicYearName(this.selectedStudent?.academicYear),
-      month: new Date().toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }),
+      month: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
       amount: this.paymentData.amount,
       paymentMethod: this.paymentData.method,
       academicYear: this.selectedStudent?.academicYear,
